@@ -2,10 +2,10 @@ from game.blocks import Obstacle
 from game.gem import Gem
 
 class ObjectPool:
-    \"\"\"
+    """
     ระบบ Object Pooling สำหรับ Obstacle และ Gem 
     ลดปัญหา Framerate ตกจากการใช้ Garbage Collector บ่อยเกินไปในเกมแนววิ่ง
-    \"\"\"
+    """
     def __init__(self, create_func, initial_size=20):
         self.create_func = create_func
         self.pool = [self.create_func() for _ in range(initial_size)]

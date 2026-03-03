@@ -1,7 +1,7 @@
 class Gem:
-    \"\"\"
+    """
     ไอเทมเพชรสำหรับเก็บสะสม
-    \"\"\"
+    """
     def __init__(self):
         self.active = True
         

@@ -2,10 +2,10 @@ import random
 from game.pool import Pools
 
 class ObstacleFactory:
-    \"\"\"
+    """
     ตัวนำวัตถุดิบจาก Object Pool มาประกอบสร้างและส่งให้ตัวเกม
     หน้าที่หลัก: สุ่มระดับความยาก (Size 1-5) ตามระยะทางที่ผู้เล่นวิ่งมา
-    \"\"\"
+    """
     @staticmethod
     def spawn_obstacle(distance_m, col_position, row_position):
         # 1. ขอบล็อกที่ไม่ได้ถูกใช้งานจาก Pool
