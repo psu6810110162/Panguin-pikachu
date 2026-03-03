@@ -197,8 +197,8 @@ class GamePlayScreen(Screen):
             # ผิดทาง: เดินออกนอก path → ตาย
             self.penguin.is_dead = True
             logger.info(f"ตก! ระยะ {self.grid.get_distance_m()} m")
-            # เปลี่ยนไป GameOver:
-            # self.manager.current = 'gameover'
+            # เปลี่ยนไป GameOver
+            self.manager.current = 'gameover'
 
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
