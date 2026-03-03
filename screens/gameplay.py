@@ -1,22 +1,23 @@
 import random
 from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
+from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
 from kivy.core.window import Window
 from kivy.core.image import Image as CoreImage
 
 from core.logger import logger
-from core.config import TARGET_FPS
+from core.config import TARGET_FPS, INITIAL_SPEED, SPEED_MULTIPLIER, MAX_SPEED
 from game.grid import GridManager
 from game.penguin import Penguin
 
 # ============================
 # ตั้งค่าขนาดบล็อกตามภาพจริง
 # ============================
-TILE_IMG_SIZE = 128          # ขนาดภาพ (px) ของแต่ละบล็อก
+TILE_IMG_SIZE = 128
 TILE_HALF_W   = TILE_IMG_SIZE // 2   # 64
-TILE_HALF_H   = TILE_IMG_SIZE // 4   # 32 (Isometric = กว้าง 2: สูง 1)
+TILE_HALF_H   = TILE_IMG_SIZE // 4   # 32
 
 # ============================
 # จับคู่ภาพกับหน้าที่ใช้งานในเกม
@@ -50,75 +51,86 @@ DIRT_TILES = [
 
 
 class KivyRenderer(Widget):
-    """ตัวรับหน้าที่วาดภาพ Grid ลงหน้าจอโดยใช้ Asset จริง"""
+    """ตัววาดภาพ Grid ลงหน้าจอโดยใช้ Asset จริง พร้อมกล้องไล่ตาม"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # สุ่มเลือกภาพหญ้าให้แต่ละ tile ตอนเริ่มเกม เพื่อไม่ให้ซ้ำกันทุกช่อง
         self.tile_textures = {}
+        # โหลด texture ล่วงหน้าเพื่อลดภาระ CPU
+        self._grass_textures = [CoreImage(p).texture for p in GRASS_TILES]
+        self._stone_textures = [CoreImage(p).texture for p in STONE_TILES]
+        self._dirt_textures  = [CoreImage(p).texture for p in DIRT_TILES]
+
+        # ตำแหน่งกล้อง (เลื่อนตามตัวละคร)
+        self.cam_x = 0
+        self.cam_y = 0
 
     def _get_tile_texture(self, col, row):
         """ดึง texture ที่เคยสุ่มไว้ หรือสุ่มใหม่ถ้ายังไม่มี"""
         key = (col, row)
         if key not in self.tile_textures:
-            img_path = random.choice(GRASS_TILES)
-            self.tile_textures[key] = CoreImage(img_path).texture
+            self.tile_textures[key] = random.choice(self._grass_textures)
         return self.tile_textures[key]
 
-    def draw(self, grid_manager, penguin, obstacles=None):
+    def draw(self, grid_manager, penguin, path_index):
+        # คำนวณตำแหน่งกล้องให้ตามตัวเพนกวิน
+        target_x, target_y = self.iso_to_screen_raw(penguin.col, penguin.row)
+        self.cam_x += (target_x - self.cam_x) * 0.1  # Smooth camera
+        self.cam_y += (target_y - self.cam_y) * 0.1
+
+        # Offset = จุดศูนย์กลางหน้าจอ - ตำแหน่งกล้อง
+        ox = Window.width / 2 - self.cam_x
+        oy = Window.height / 2 - self.cam_y
+
         self.canvas.clear()
         with self.canvas:
-            # === พื้นหลัง (ท้องฟ้า) ===
+            # === พื้นหลังท้องฟ้า ===
             Color(0.53, 0.81, 0.92, 1)
             Rectangle(pos=(0, 0), size=Window.size)
 
-            # === วาดบล็อกทางเดินด้วยภาพหญ้า (grass) ===
-            Color(1, 1, 1, 1)  # รีเซ็ตสีเป็นขาว เพื่อให้ภาพแสดงสีจริง
-            for col, row in grid_manager.path:
+            # === วาดบล็อกทางเดิน (เฉพาะที่อยู่ใกล้กล้อง) ===
+            Color(1, 1, 1, 1)
+            visible_range = 30  # จำนวน tile รอบตัวละครที่จะวาด
+            start_idx = max(0, path_index - visible_range)
+            end_idx = min(len(grid_manager.path), path_index + visible_range)
+
+            for i in range(start_idx, end_idx):
+                col, row = grid_manager.path[i]
                 tex = self._get_tile_texture(col, row)
-                x, y = self.iso_to_screen(col, row)
+                sx, sy = self.iso_to_screen_raw(col, row)
                 Rectangle(
                     texture=tex,
-                    pos=(x, y),
+                    pos=(sx + ox - TILE_HALF_W, sy + oy - TILE_HALF_H),
                     size=(TILE_IMG_SIZE, TILE_IMG_SIZE),
                 )
 
-            # === วาดตัวละครเพนกวิน (กล่องสีดำชั่วคราว) ===
+            # === วาดตัวละครเพนกวิน ===
             if not penguin.is_dead:
                 Color(0.1, 0.1, 0.1, 1)
-                px, py = self.iso_to_screen(penguin.col, penguin.row)
+                px, py = self.iso_to_screen_raw(penguin.col, penguin.row)
                 Rectangle(
-                    pos=(px + 30, py + 40),
-                    size=(60, 60),
+                    pos=(px + ox - 20, py + oy),
+                    size=(40, 50),
                 )
-
-            # === วาด Obstacle ด้วยภาพหิน (stone) ===
-            if obstacles:
+                # หัวเพนกวินสีขาว
                 Color(1, 1, 1, 1)
-                for obs in obstacles:
-                    if obs.active:
-                        stone_tex = CoreImage(random.choice(STONE_TILES)).texture
-                        ox, oy = self.iso_to_screen(obs.col, obs.row)
-                        # ซ้อนหินหลายก้อนตามขนาด (Size 1-5)
-                        for layer in range(obs.size):
-                            Rectangle(
-                                texture=stone_tex,
-                                pos=(ox, oy + layer * 20),
-                                size=(TILE_IMG_SIZE, TILE_IMG_SIZE),
-                            )
+                Rectangle(
+                    pos=(px + ox - 10, py + oy + 30),
+                    size=(20, 20),
+                )
+            else:
+                # แสดงข้อความ Game Over
+                pass
 
-    def iso_to_screen(self, col, row):
-        """แปลงพิกัดตาราง (col, row) ให้กลายเป็นพิกัดหน้าจอ Isometric"""
-        offset_x = Window.width / 2
-        offset_y = 100
-
-        screen_x = (col - row) * TILE_HALF_W + offset_x
-        screen_y = (col + row) * TILE_HALF_H + offset_y
+    def iso_to_screen_raw(self, col, row):
+        """แปลงพิกัดตาราง → Isometric (ไม่รวม offset กล้อง)"""
+        screen_x = (col - row) * TILE_HALF_W
+        screen_y = (col + row) * TILE_HALF_H
         return screen_x, screen_y
 
 
 class GamePlayScreen(Screen):
-    """หน้าจอหลักตอนวิ่ง: เชื่อมการกดปุ่ม ขยับภาพ และวาดลูป"""
+    """หน้าจอหลักตอนวิ่ง: เพนกวินวิ่งอัตโนมัติ ผู้เล่นกด ← → เลี้ยวตามทาง"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -126,11 +138,34 @@ class GamePlayScreen(Screen):
         self.penguin = Penguin()
         self.game_event = None
 
-        # สร้างเส้นทางตั้งต้น
+        # ตำแหน่งปัจจุบันของเพนกวินใน path (index)
+        self.path_index = 0
+
+        # ความเร็ว (ก้าว/วินาที) เริ่มต้น
+        self.speed = INITIAL_SPEED
+        self.move_timer = 0.0
+
+        # สร้างเส้นทาง
         self.grid.reset()
+
+        # ตั้งเพนกวินที่จุดเริ่มต้นของ path
+        start = self.grid.path[0]
+        self.penguin.col = start[0]
+        self.penguin.row = start[1]
 
         self.renderer = KivyRenderer()
         self.add_widget(self.renderer)
+
+        # HUD แสดงระยะทาง
+        self.hud_label = Label(
+            text="0 m",
+            font_size='24sp',
+            bold=True,
+            pos_hint={'right': 0.98, 'top': 0.98},
+            size_hint=(0.2, 0.05),
+            color=(1, 1, 1, 1),
+        )
+        self.add_widget(self.hud_label)
 
         # ผูกอีเวนต์คีย์บอร์ด
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
@@ -147,14 +182,49 @@ class GamePlayScreen(Screen):
             self.game_event.cancel()
 
     def update(self, dt):
-        """Game Loop ทำงานทุกเฟรม"""
-        if not self.penguin.is_dead:
-            if not self.grid.is_on_path(self.penguin.col, self.penguin.row):
-                self.penguin.die()
-                logger.info(f"Game Over! วิ่งได้ {self.grid.get_distance_m()} เมตร")
+        """Game Loop: เพนกวินวิ่งอัตโนมัติไปข้างหน้าตามเส้นทาง"""
+        if self.penguin.is_dead:
+            self.renderer.draw(self.grid, self.penguin, self.path_index)
+            return
 
-        # วาดภาพใหม่ทุกเฟรม
-        self.renderer.draw(self.grid, self.penguin)
+        # จำกัด dt เพื่อป้องกันเกมเร็วผิดปกติตอน lag
+        dt = min(dt, 0.05)
+
+        # นับเวลาเพื่อขยับตัวละครตามความเร็ว
+        self.move_timer += dt
+        step_interval = 1.0 / self.speed  # เช่น speed=2 → ขยับทุก 0.5 วินาที
+
+        while self.move_timer >= step_interval:
+            self.move_timer -= step_interval
+            self._auto_move()
+
+        # อัปเดต HUD
+        dist = self.grid.get_distance_m()
+        if dist >= 1000:
+            self.hud_label.text = f"{dist / 1000:.1f} km"
+        else:
+            self.hud_label.text = f"{dist} m"
+
+        # วาดภาพ
+        self.renderer.draw(self.grid, self.penguin, self.path_index)
+
+    def _auto_move(self):
+        """ขยับเพนกวินไปตำแหน่งถัดไปใน path โดยอัตโนมัติ"""
+        next_idx = self.path_index + 1
+
+        if next_idx >= len(self.grid.path):
+            # หมดทาง → สร้างเพิ่ม
+            self.grid.generate_path(num_segments=20)
+
+        if next_idx < len(self.grid.path):
+            next_pos = self.grid.path[next_idx]
+            self.penguin.col = next_pos[0]
+            self.penguin.row = next_pos[1]
+            self.path_index = next_idx
+            self.grid.step_forward()
+
+            # เพิ่มความเร็วตามระยะทาง
+            self.speed = min(MAX_SPEED, INITIAL_SPEED + (self.grid.forward_tiles * 0.01))
 
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
@@ -164,19 +234,10 @@ class GamePlayScreen(Screen):
         if self.penguin.is_dead:
             return False
 
-        if keycode[1] == 'left':
-            self.penguin.turn_left()
-            self.penguin.move_forward()
-            self.grid.step_forward()
-            return True
-        elif keycode[1] == 'right':
-            self.penguin.turn_right()
-            self.penguin.move_forward()
-            self.grid.step_forward()
-            return True
-        elif keycode[1] == 'up':
-            self.penguin.move_forward()
-            self.grid.step_forward()
+        # ในตอนนี้เพนกวินวิ่งอัตโนมัติตามเส้นทาง
+        # ปุ่ม ← → จะใช้เพิ่มเติมเมื่อมีระบบเลี้ยวแบบเลือกทางแยก
+        if keycode[1] == 'escape':
+            # Pause placeholder
             return True
 
         return False
