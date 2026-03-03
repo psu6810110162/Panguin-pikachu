@@ -12,6 +12,11 @@ from core.logger import logger
 
 # โหลด Screens
 from screens.gameplay import GamePlayScreen
+from screens.menu import MenuScreen
+from screens.gameover import GameOverScreen
+from screens.history import HistoryScreen
+from screens.shop import ShopScreen
+from screens.pause import PauseScreen
 
 # โหลดไฟล์ออกแบบ KV
 Builder.load_file('style.kv')
@@ -25,7 +30,12 @@ class PenguinDashApp(App):
         sm = ScreenManager()
         
         # เพิ่มหน้าจอต่างๆ
+        sm.add_widget(MenuScreen(name='menu'))
         sm.add_widget(GamePlayScreen(name='gameplay'))
+        sm.add_widget(GameOverScreen(name='gameover'))
+        sm.add_widget(HistoryScreen(name='history'))
+        sm.add_widget(ShopScreen(name='shop'))
+        sm.add_widget(PauseScreen(name='pause'))
         
         logger.info("เริ่มเปิดเข้าสู่เกม Penguin Dash")
         return sm
