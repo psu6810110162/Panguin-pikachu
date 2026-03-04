@@ -82,10 +82,15 @@ class KivyRenderer(Widget):
             Color(0.53, 0.81, 0.92, 1)
             Rectangle(pos=(0, 0), size=Window.size)
 
-            visible_range = 40
-            start_idx = max(0, path_index - visible_range)
-            end_idx   = min(len(grid_manager.path), path_index + visible_range)
-            visible_tiles = [grid_manager.path[i] for i in range(start_idx, end_idx)]
+            # กำหนดระยะมองเห็นรอบตัว (รัศมีการมองเห็น)
+            view_radius = 15
+            visible_tiles = []
+            
+            # ค้นหาแผ่นกระเบื้องที่อยู่ในรัศมีการมองเห็นจาก path_set
+            for col, row in grid_manager.path_set:
+                if (penguin.col - view_radius <= col <= penguin.col + view_radius) and \
+                   (penguin.row - view_radius <= row <= penguin.row + view_radius):
+                    visible_tiles.append((col, row))
 
             # Painter's Algorithm: col+row มาก = วาดก่อน (ข้างหลัง)
             visible_tiles.sort(key=lambda t: t[0] + t[1], reverse=True)
@@ -191,8 +196,11 @@ class GamePlayScreen(Screen):
             idx = self.grid.get_path_index(new_col, new_row)
             if idx >= 0:
                 self.path_index = idx
-            if self.path_index >= len(self.grid.path) - 20:
-                self.grid.generate_path(num_segments=20)
+            
+            # เช็คว่าเดินไปถึงจุดสุดท้ายของแผนที่แล้วหรือยัง
+            if self.path_index == len(self.grid.path) - 1:
+                logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
+                self.manager.current = 'gameover'
         else:
             # ผิดทาง: เดินออกนอก path → ตาย
             self.penguin.is_dead = True

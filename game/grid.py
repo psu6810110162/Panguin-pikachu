@@ -1,4 +1,3 @@
-import random
 from core.config import TILE_TO_METER
 
 class GridManager:
@@ -16,7 +15,20 @@ class GridManager:
         self.path = []          # ลิสต์ตำแหน่ง (col, row) ของทางเดินทั้งหมด
         self.path_set = set()   # set สำหรับเช็คตำแหน่งเร็วๆ
         self.turn_points = []   # จุดหักเลี้ยว (col, row) ที่ผู้เล่นต้องกด ← / →
-        self.current_dir = self.DIR_A  # ทิศปัจจุบันของเส้นทาง
+        
+        # ── LEVEL DESIGN (TEXT MAP) ──
+        # S = Start (จุดเริ่มต้น)
+        # 1 = Path (ทางเดิน)
+        # . = Empty (ช่องว่าง)
+        # 
+        # การวางแผนผังให้มองเป็น Grid 2D (แถว, คอลัมน์) 
+        # โดยให้เดินพาดไปตามตัวเลข 1 จนสุดทาง การหาเส้นทางจะใช้วิธีไล่ไปตามจุดที่ติดกัน
+        self.level_map = [
+            "..1",
+            "SSS",
+            "SSS",
+            "SSS"
+        ]
 
     def reset(self):
         """เริ่มเกมใหม่ สร้างเส้นทางตั้งต้น"""
@@ -24,36 +36,74 @@ class GridManager:
         self.path.clear()
         self.path_set.clear()
         self.turn_points.clear()
-        self.current_dir = self.DIR_A
-        self.generate_path(num_segments=30)
+        
+        # สร้างเส้นทางจากไฟล์แผนที่
+        self.generate_path()
 
-    def generate_path(self, num_segments=30):
-        """สร้างเส้นทาง Zigzag สุ่มความยาวแต่ละช่วง"""
-        if not self.path:
-            # จุดเริ่มต้น
-            self.path.append((0, 0))
-            self.path_set.add((0, 0))
+    def generate_path(self):
+        """อ่าน text map และแปลงเป็น path ตามลำดับ"""
+        if self.path:
+            return  # สร้างไปแล้ว
+            
+        start_candidates = []
+        path_tiles = set()
+        
+        # 1. หาจุด 'S' และช่อง '1' ทั้งหมด
+        for r, row_str in enumerate(self.level_map):
+            for c, char in enumerate(row_str):
+                # (คอลัมน์จากซ้ายไปขวา, แถวจากล่างขึ้นบน) เพื่อให้เข้ากับ Isometric Grid
+                # แปลง r จากบนลงล่าง ให้เป็นจากล่างขึ้นบน (ตรงกับแกน row ในเกม)
+                grid_col = c
+                grid_row = len(self.level_map) - 1 - r 
+                
+                if char == 'S':
+                    start_candidates.append((grid_col, grid_row))
+                    path_tiles.add((grid_col, grid_row))
+                elif char == '1':
+                    path_tiles.add((grid_col, grid_row))
+                    
+        if start_candidates:
+            # เลือกจุด S ที่อยู่ล่างสุดในมุมมอง Isometric (คือจุดที่ col + row น้อยที่สุด)
+            start_pos = min(start_candidates, key=lambda t: t[0] + t[1])
+        else:
+            start_pos = (0, 0)
+            path_tiles.add(start_pos)
+            
+        # 2. เรียงลำดับ path จาก 'S' ไปหาทางที่เชื่อมต่อกัน (Pathfinding ง่ายๆ)
+        current = start_pos
+        self.path.append(current)
+        self.path_set.add(current)
+        path_tiles.remove(current)
 
-        for _ in range(num_segments):
-            # สุ่มความยาวช่วงนี้ (3-8 ช่อง)
-            segment_len = random.randint(3, 8)
-
-            last = self.path[-1]
-            for step in range(segment_len):
-                new_pos = (last[0] + self.current_dir[0],
-                           last[1] + self.current_dir[1])
-                self.path.append(new_pos)
-                self.path_set.add(new_pos)
-                last = new_pos
-
-            # เก็บจุดหักเลี้ยว (ตำแหน่งสุดท้ายของช่วงนี้)
-            self.turn_points.append(last)
-
-            # สลับทิศทาง (Zigzag)
-            if self.current_dir == self.DIR_A:
-                self.current_dir = self.DIR_B
-            else:
-                self.current_dir = self.DIR_A
+        while path_tiles:
+            found_next = False
+            # หา tile ที่ติดกัน (เดินขึ้น, ลง, ซ้าย, ขวา)
+            for neighbor in [
+                (current[0] + 1, current[1]),
+                (current[0] - 1, current[1]),
+                (current[0], current[1] + 1),
+                (current[0], current[1] - 1)
+            ]:
+                if neighbor in path_tiles:
+                    current = neighbor
+                    self.path.append(current)
+                    self.path_set.add(current)
+                    path_tiles.remove(current)
+                    found_next = True
+                    break
+            
+            if not found_next:
+                # ถ้าหาทางไปต่อไม่เจอ ให้หยุด (แสดงว่าแผนที่ขาด)
+                break
+                
+        # 3. คำนวณจุดหักเลี้ยวจากการเปลี่ยนทิศทาง
+        if len(self.path) > 2:
+            prev_dir = (self.path[1][0] - self.path[0][0], self.path[1][1] - self.path[0][1])
+            for i in range(1, len(self.path) - 1):
+                curr_dir = (self.path[i+1][0] - self.path[i][0], self.path[i+1][1] - self.path[i][1])
+                if curr_dir != prev_dir:
+                    self.turn_points.append(self.path[i])
+                    prev_dir = curr_dir
 
     def step_forward(self):
         """ถูกเรียกเมื่อเกมเลื่อนไปข้างหน้า 1 ช่อง"""
