@@ -198,6 +198,7 @@ class GamePlayScreen(Screen):
             idx = self.grid.get_path_index(new_col, new_row)
             if idx >= 0:
                 self.path_index = idx
+                AudioManager().play_sfx('Jump')
             
             # เช็คว่าเดินไปถึงจุดสุดท้ายของแผนที่แล้วหรือยัง
             if self.path_index == len(self.grid.path) - 1:
@@ -206,6 +207,7 @@ class GamePlayScreen(Screen):
         else:
             # ผิดทาง: เดินออกนอก path → ตาย
             self.penguin.is_dead = True
+            AudioManager().play_sfx('Down')
             logger.info(f"ตก! ระยะ {self.grid.get_distance_m()} m")
             # เปลี่ยนไป GameOver
             self.manager.current = 'gameover'
