@@ -21,6 +21,8 @@ class AudioManager:
             'clink'    : SoundLoader.load('assets/Component_UI/Sounds/clink-a.ogg'),
             'tab'     : SoundLoader.load('assets/Component_UI/Sounds/tap-a.ogg'),
             'switch'     : SoundLoader.load('assets/Component_UI/Sounds/switch-a.ogg'),
+            'Jump'     : SoundLoader.load('assets/Component_UI/Sounds/Jump.ogg'),
+            'Down'     : SoundLoader.load('assets/Component_UI/Sounds/Down.ogg'),
         }
 
     def play_bgm(self, filename, loop=True): #หยุดเล่นเพลงเดิมก่อนเล่นเพลงใหม่
