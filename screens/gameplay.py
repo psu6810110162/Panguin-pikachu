@@ -9,6 +9,7 @@ from kivy.graphics import Color, Rectangle
 from kivy.core.window import Window
 from kivy.core.image import Image as CoreImage
 
+from core.audio import AudioManager
 from core.logger import logger
 from core.config import TARGET_FPS, TILE_W, TILE_H, TILE_IMG_H
 from game.grid import GridManager
@@ -164,6 +165,7 @@ class GamePlayScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้า GamePlay")
         self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
+        AudioManager().play_bgm('Bgm.gameplay.mp3')
 
     def on_leave(self):
         if self.game_event:
