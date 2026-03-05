@@ -43,7 +43,7 @@
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
             border: (30, 30, 30, 30)
-            on_release: app.root.current = 'shop'
+            on_release: root.go_to_shop()
             
         Button:
             text: 'HISTORY'
@@ -55,7 +55,7 @@
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
             border: (30, 30, 30, 30)
-            on_release: app.root.current = 'history'
+            on_release: root.go_to_history()
 
         Button:
             text: 'EXIT'
@@ -67,7 +67,7 @@
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
             border: (30, 30, 30, 30)
-            on_release: app.stop()
+            on_release: root.exit_game()
             
 <GamePlayScreen>:
     # เนื้อหาเดิมของ Gameplay จะถูกย้ายมาที่นี่ในภายหลังถ้าย้ายออกจาก python

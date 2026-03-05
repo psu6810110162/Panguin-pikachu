@@ -18,7 +18,7 @@ class AudioManager:
         self.bgm_volume = 0.5   # ระดับเสียง 0.0 - 1.0
         self.sfx_volume = 0.8
         self.sfx = {
-            'clink'    : SoundLoader.load('assets/Component_UI/Sounds/clink-a.ogg'),
+            'click'    : SoundLoader.load('assets/Component_UI/Sounds/click-b.ogg'),
             'tab'     : SoundLoader.load('assets/Component_UI/Sounds/tap-a.ogg'),
             'switch'     : SoundLoader.load('assets/Component_UI/Sounds/switch-a.ogg'),
             'Jump'     : SoundLoader.load('assets/Component_UI/Sounds/Jump.ogg'),
