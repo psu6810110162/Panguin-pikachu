@@ -21,52 +21,48 @@
             outline_color: 0, 0, 0, 2
             outline_width: 3
             
-        Button:
+        HoverButton:
             text: 'START GAME'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '24sp'
-            size_hint_y: 0.10
-            size_hint_x: 0.8
+            size_hint: (0.8, 0.12)
             pos_hint: {'center_x': 0.5}
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
-            border: (30, 30, 30, 30)
+            border: (10, 10, 10, 10)
             on_release: root.start_game()
             
-        Button:
+        HoverButton:
             text: 'SHOP'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '20sp'
-            size_hint_y: 0.10
-            size_hint_x: 0.8
+            size_hint: (0.8, 0.12)
             pos_hint: {'center_x': 0.5}
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
-            border: (30, 30, 30, 30)
+            border: (10, 10, 10, 10)
             on_release: root.go_to_shop()
             
-        Button:
+        HoverButton:
             text: 'HISTORY'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '20sp'
-            size_hint_y: 0.10
-            size_hint_x: 0.8
+            size_hint: (0.8, 0.12)
             pos_hint: {'center_x': 0.5}
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
-            border: (30, 30, 30, 30)
+            border: (10, 10, 10, 10)
             on_release: root.go_to_history()
-
-        Button:
+ 
+        HoverButton:
             text: 'EXIT'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '20sp'
-            size_hint_y: 0.10
-            size_hint_x: 0.8
+            size_hint: (0.8, 0.12)
             pos_hint: {'center_x': 0.5}
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
-            border: (30, 30, 30, 30)
+            border: (10, 10, 10, 10)
             on_release: root.exit_game()
             
 <GamePlayScreen>:
@@ -159,11 +155,15 @@
                     size_hint_y: None
                     height: 50
                     
-        Button:
+        HoverButton:
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            text: 'BACK TO MENU'
+            text: 'BACK'
             font_size: '20sp'
-            size_hint_y: 0.2
+            size_hint: (0.6, 0.12)
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (10, 10, 10, 10)
             on_release: root.go_back()
 
 <ShopScreen>:
@@ -214,26 +214,42 @@
                 BoxLayout:
                     orientation: 'vertical'
                     size_hint_y: None
-                    height: 150
+                    height: 220
+                    padding: 15
+                    spacing: 12
                     canvas.before:
                         Color:
-                            rgba: 0.8, 0.8, 0.8, 1
-                        Rectangle:
+                            rgba: 0.2, 0.2, 0.3, 0.9
+                        RoundedRectangle:
                             pos: self.pos
                             size: self.size
-                    Label:
-                        text: 'Ninja Penguin'
-                        color: 0,0,0,1
+                            radius: [15,]
+                    
+                    Image:
+                        source: 'assets/Skin/penguin_ninja.png' # เปลี่ยนเป็น path จริง
+                        size_hint_y: 0.5
                     Label:
                         text: '💎 50'
-                        color: 0,0,0,1
-                    Button:
+                        font_size: '18sp'
+                        size_hint_y: 0.2
+                        color: 0.2, 0.8, 1, 1
+                    HoverButton:
                         text: 'BUY'
-                        background_color: 0.2, 0.6, 1, 1
+                        font_size: '16sp'
+                        size_hint: (0.9, 0.25)
+                        pos_hint: {'center_x': 0.5}
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
                         on_release: root.buy_item('ninja')
                         
-        Button:
-            text: 'BACK TO MENU'
+        HoverButton:
+            text: 'BACK'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '20sp'
-            size_hint_y: 0.2
+            size_hint: (0.6, 0.12)
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (10, 10, 10, 10)
             on_release: root.go_back()
