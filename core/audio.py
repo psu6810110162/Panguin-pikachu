@@ -16,23 +16,20 @@ class AudioManager:
             return
         self._initialized = True
 
-        self.bgm = None          # เพลงที่กำลังเล่นอยู่
-        self.bgm_volume = 0.5   # ระดับเสียง 0.0 - 1.0
+        self.bgm        = None
+        self.bgm_volume = 0.5
         self.sfx_volume = 0.8
-        self.sfx = {
-            'click'    : SoundLoader.load(f'{SOUND_DIR}click.ogg'),
-            'tab'     : SoundLoader.load(f'{SOUND_DIR}tap-a.ogg'),
-            'switch'     : SoundLoader.load(f'{SOUND_DIR}switch-a.ogg'),
-            'Jump'     : SoundLoader.load(f'{SOUND_DIR}Jump.ogg'),
-            'Down'     : SoundLoader.load(f'{SOUND_DIR}Down.ogg'),
-        }
-        for name, sound in self.sfx.items():
-            if sound is None:
-                print(f"[AudioManager] ⚠️ โหลด SFX ไม่ได้: {name}")
-            else:
-                print(f"[AudioManager] ✅ โหลด SFX สำเร็จ: {name}")
+        self._sfx_ref   = None  
 
-    def play_bgm(self, filename, loop=True): #หยุดเล่นเพลงเดิมก่อนเล่นเพลงใหม่
+        self.sfx_paths = {
+            'click'  : f'{SOUND_DIR}click-b.ogg',
+            'tab'    : f'{SOUND_DIR}tap-a.ogg',
+            'switch' : f'{SOUND_DIR}switch-a.ogg',
+            'jump'   : f'{SOUND_DIR}Jump.ogg',
+            'down'   : f'{SOUND_DIR}Down.ogg',
+        }
+
+    def play_bgm(self, filename, loop=True):
         self.stop_bgm()
         path = f'{SOUND_DIR}{filename}'
         self.bgm = SoundLoader.load(path)
@@ -44,18 +41,26 @@ class AudioManager:
         else:
             print(f"[AudioManager] ⚠️ โหลด BGM ไม่ได้: {filename}")
 
-    def stop_bgm(self):#หยุดเพลงที่กำลังเล่นอยู่ก่อนที่จะเล่นเพลงใหม่
+    def stop_bgm(self):
         if self.bgm:
             self.bgm.stop()
             self.bgm = None
 
-    def play_sfx(self, name):#เล่นเสียงเอฟเฟกต์ตามชื่อที่กำหนดไว้ใน self.sfx
-        sound = self.sfx.get(name)
-        if sound:
-            sound.volume = self.sfx_volume
-            sound.play()
+    def play_sfx(self, name):
+        path = self.sfx_paths.get(name.lower())
+        if not path:
+            print(f"[AudioManager] ⚠️ ไม่พบ SFX: {name}")
+            return
 
-    def set_bgm_volume(self, volume):#ปรับระดับเสียง BGM (0.0 - 1.0)
+        self._sfx_ref = SoundLoader.load(path)  
+        if self._sfx_ref:
+            self._sfx_ref.volume = self.sfx_volume
+            self._sfx_ref.play()
+            print(f"[AudioManager] ✅ เล่น SFX: {name}")
+        else:
+            print(f"[AudioManager] ⚠️ โหลด SFX ไม่ได้: {path}")
+
+    def set_bgm_volume(self, volume):
         self.bgm_volume = volume
         if self.bgm:
             self.bgm.volume = volume
