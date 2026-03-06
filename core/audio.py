@@ -1,5 +1,7 @@
 from kivy.core.audio import SoundLoader
 
+SOUND_DIR = 'assets/Component_UI/Sounds/'
+
 class AudioManager:
     _instance = None
 
@@ -18,20 +20,29 @@ class AudioManager:
         self.bgm_volume = 0.5   # ระดับเสียง 0.0 - 1.0
         self.sfx_volume = 0.8
         self.sfx = {
-            'click'    : SoundLoader.load('assets/Component_UI/Sounds/click-b.ogg'),
-            'tab'     : SoundLoader.load('assets/Component_UI/Sounds/tap-a.ogg'),
-            'switch'     : SoundLoader.load('assets/Component_UI/Sounds/switch-a.ogg'),
-            'Jump'     : SoundLoader.load('assets/Component_UI/Sounds/Jump.ogg'),
-            'Down'     : SoundLoader.load('assets/Component_UI/Sounds/Down.ogg'),
+            'click'    : SoundLoader.load(f'{SOUND_DIR}click.ogg'),
+            'tab'     : SoundLoader.load(f'{SOUND_DIR}tap-a.ogg'),
+            'switch'     : SoundLoader.load(f'{SOUND_DIR}switch-a.ogg'),
+            'Jump'     : SoundLoader.load(f'{SOUND_DIR}Jump.ogg'),
+            'Down'     : SoundLoader.load(f'{SOUND_DIR}Down.ogg'),
         }
+        for name, sound in self.sfx.items():
+            if sound is None:
+                print(f"[AudioManager] ⚠️ โหลด SFX ไม่ได้: {name}")
+            else:
+                print(f"[AudioManager] ✅ โหลด SFX สำเร็จ: {name}")
 
     def play_bgm(self, filename, loop=True): #หยุดเล่นเพลงเดิมก่อนเล่นเพลงใหม่
         self.stop_bgm()
-        self.bgm = SoundLoader.load(f'assets/Component_UI/Sounds/{filename}')
+        path = f'{SOUND_DIR}{filename}'
+        self.bgm = SoundLoader.load(path)
         if self.bgm:
             self.bgm.volume = self.bgm_volume
             self.bgm.loop   = loop
             self.bgm.play()
+            print(f"[AudioManager] ✅ เล่น BGM: {filename}")
+        else:
+            print(f"[AudioManager] ⚠️ โหลด BGM ไม่ได้: {filename}")
 
     def stop_bgm(self):#หยุดเพลงที่กำลังเล่นอยู่ก่อนที่จะเล่นเพลงใหม่
         if self.bgm:
