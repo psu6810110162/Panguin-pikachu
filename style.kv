@@ -1,0 +1,239 @@
+#:kivy 2.1.0
+
+<MenuScreen>:
+    canvas.before:
+        Rectangle:
+            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
+            pos: self.pos
+            size: self.size
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 50
+        spacing: 20
+        
+        Label:
+            text: 'Penguin Dash'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '64sp'
+            bold: True
+            size_hint_y: 0.3
+            color: 1, 1, 1, 2
+            outline_color: 0, 0, 0, 2
+            outline_width: 3
+            
+        Button:
+            text: 'START GAME'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '24sp'
+            size_hint_y: 0.10
+            size_hint_x: 0.8
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (30, 30, 30, 30)
+            on_release: root.start_game()
+            
+        Button:
+            text: 'SHOP'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '20sp'
+            size_hint_y: 0.10
+            size_hint_x: 0.8
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (30, 30, 30, 30)
+            on_release: root.go_to_shop()
+            
+        Button:
+            text: 'HISTORY'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '20sp'
+            size_hint_y: 0.10
+            size_hint_x: 0.8
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (30, 30, 30, 30)
+            on_release: root.go_to_history()
+
+        Button:
+            text: 'EXIT'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '20sp'
+            size_hint_y: 0.10
+            size_hint_x: 0.8
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (30, 30, 30, 30)
+            on_release: root.exit_game()
+            
+<GamePlayScreen>:
+    # เนื้อหาเดิมของ Gameplay จะถูกย้ายมาที่นี่ในภายหลังถ้าย้ายออกจาก python
+    Label:
+        text: 'Game is running... (Press Left/Right)'
+
+<GameOverScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 50
+        spacing: 20
+        
+        Label:
+            text: 'GAME OVER'
+            font_size: '48sp'
+            bold: True
+            color: 1, 0.2, 0.2, 1
+            size_hint_y: 0.3
+            
+        Label:
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            text: 'Distance: 120 m' # ตัวอย่างใส่หลอกไว้ก่อน
+            font_size: '32sp'
+            size_hint_y: 0.2
+            
+        TextInput:
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            hint_text: 'Enter your name'
+            font_size: '24sp'
+            multiline: False
+            size_hint_y: 0.15
+            
+        Button:
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            text: 'RETRY'
+            font_size: '24sp'
+            size_hint_y: 0.2
+            background_color: 0.2, 0.8, 0.2, 1
+            on_release: root.retry_game()
+            
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint_y: 0.2
+            spacing: 10
+            
+            Button:
+                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                text: 'VIEW HISTORY'
+                font_size: '20sp'
+                on_release: root.view_history()
+                
+            Button:
+                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                text: 'HOME'
+                font_size: '20sp'
+                on_release: root.go_home()
+<HistoryScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 50
+        spacing: 20
+        
+        Label:
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            text: 'LEADERBOARD & HISTORY'
+            font_size: '36sp'
+            bold: True
+            size_hint_y: 0.2
+            
+        ScrollView:
+            size_hint_y: 0.6
+            BoxLayout:
+                orientation: 'vertical'
+                size_hint_y: None
+                height: self.minimum_height
+                
+                # Placeholder for History Rows
+                Label:
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    text: '1. 24/02/2569: 120 m (5 Gems) 🏆'
+                    font_size: '20sp'
+                    size_hint_y: None
+                    height: 50
+                    
+                Label:
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    text: '2. 24/02/2569: 80 m (3 Gems)'
+                    font_size: '20sp'
+                    size_hint_y: None
+                    height: 50
+                    
+        Button:
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            text: 'BACK TO MENU'
+            font_size: '20sp'
+            size_hint_y: 0.2
+            on_release: root.go_back()
+
+<ShopScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 50
+        spacing: 20
+        
+        BoxLayout:
+            size_hint_y: 0.2
+            Label:
+                text: 'SHOP'
+                font_size: '36sp'
+                bold: True
+                size_hint_x: 0.7
+            Label:
+                text: 'Gems: 💎 100' # ตัวอย่างใส่หลอกไว้ก่อน
+                font_size: '24sp'
+                color: 0.2, 0.8, 1, 1
+                size_hint_x: 0.3
+                
+        ScrollView:
+            size_hint_y: 0.6
+            GridLayout:
+                cols: 2
+                spacing: 20
+                size_hint_y: None
+                height: self.minimum_height
+                
+                # Placeholder for Shop Items
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint_y: None
+                    height: 150
+                    canvas.before:
+                        Color:
+                            rgba: 0.8, 0.8, 0.8, 1
+                        Rectangle:
+                            pos: self.pos
+                            size: self.size
+                    Label:
+                        text: 'Default Penguin'
+                        color: 0,0,0,1
+                    Button:
+                        text: 'EQUIPPED'
+                        background_color: 0.5, 0.5, 0.5, 1
+                
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint_y: None
+                    height: 150
+                    canvas.before:
+                        Color:
+                            rgba: 0.8, 0.8, 0.8, 1
+                        Rectangle:
+                            pos: self.pos
+                            size: self.size
+                    Label:
+                        text: 'Ninja Penguin'
+                        color: 0,0,0,1
+                    Label:
+                        text: '💎 50'
+                        color: 0,0,0,1
+                    Button:
+                        text: 'BUY'
+                        background_color: 0.2, 0.6, 1, 1
+                        on_release: root.buy_item('ninja')
+                        
+        Button:
+            text: 'BACK TO MENU'
+            font_size: '20sp'
+            size_hint_y: 0.2
+            on_release: root.go_back()
