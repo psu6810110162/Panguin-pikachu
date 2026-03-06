@@ -98,6 +98,12 @@ class KivyRenderer(Widget):
 
             Color(1, 1, 1, 1)
             for col, row in visible_tiles:
+                # เช็คว่าเป็น fork tile หรือไม่ เพื่อ render สีต่าง
+                if grid_manager.is_fork_tile(col, row):
+                    Color(1, 0.9, 0.4, 1) # สีทอง/เหลืองอ่อน
+                else:
+                    Color(1, 1, 1, 1)
+
                 tex    = self._get_tile_texture(col, row)
                 sx, sy = self.grid_to_screen(col, row)
                 draw_x = sx + ox - (TILE_W // 2)
@@ -198,6 +204,7 @@ class GamePlayScreen(Screen):
             idx = self.grid.get_path_index(new_col, new_row)
             if idx >= 0:
                 self.path_index = idx
+                self.grid.extend_if_needed(self.path_index)
                 AudioManager().play_sfx('Jump')
             
             # เช็คว่าเดินไปถึงจุดสุดท้ายของแผนที่แล้วหรือยัง
