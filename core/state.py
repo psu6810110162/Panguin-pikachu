@@ -18,6 +18,7 @@ class StateManager:
         if cls._instance is None:
             cls._instance = super(StateManager, cls).__new__(cls)
             cls._instance.current_state = GameState.MENU
+            cls._instance.selected_skin = 'Ninja Frog'
         return cls._instance
     
     def change_state(self, new_state: GameState):

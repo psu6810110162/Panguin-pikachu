@@ -13,10 +13,28 @@ class Penguin:
         self.direction = (0, 1)  # ปกติให้พุ่งตามแกน Row ให้เป็น forward
         
         # ระบบ Skin
-        self.skin = 'default'
+        self.skin = 'Ninja Frog'
+        self.facing_left = False  # ทิศทางการหัน (False = ขวา, True = ซ้าย)
+        
+        # Mapping skin_id -> Folder Name ใน Pixel Adventure
+        self.SKIN_ASSETS = {
+            'Mask Dude': 'Mask Dude',
+            'Ninja Frog': 'Ninja Frog',
+            'Pink Man': 'Pink Man',
+            'Virtual Guy': 'Virtual Guy'
+        }
         
     def equip_skin(self, skin_id):
-        self.skin = skin_id
+        if skin_id in self.SKIN_ASSETS:
+            self.skin = skin_id
+
+    def get_skin_path(self, action='Idle'):
+        folder = self.SKIN_ASSETS.get(self.skin, 'Ninja Frog')
+        if action == 'Idle':
+            return f'assets/pixelAdventure/Free/Main Characters/{folder}/Idle (32x32).png'
+        elif action == 'Fall':
+            return f'assets/pixelAdventure/Free/Main Characters/{folder}/Fall (32x32).png'
+        return f'assets/pixelAdventure/Free/Main Characters/{folder}/Idle (32x32).png'
 
     def move_forward(self):
         """วิ่งตรงต่อไปข้างหน้า 1 หน่วยบนเส้นทางในเกม"""

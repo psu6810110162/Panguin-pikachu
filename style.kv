@@ -270,24 +270,7 @@
                 size_hint_y: None
                 height: self.minimum_height
                 
-                # Placeholder for Shop Items
-                BoxLayout:
-                    orientation: 'vertical'
-                    size_hint_y: None
-                    height: 150
-                    canvas.before:
-                        Color:
-                            rgba: 0.8, 0.8, 0.8, 1
-                        Rectangle:
-                            pos: self.pos
-                            size: self.size
-                    Label:
-                        text: 'Default Penguin'
-                        color: 0,0,0,1
-                    Button:
-                        text: 'EQUIPPED'
-                        background_color: 0.5, 0.5, 0.5, 1
-                
+                # ─── Skin 1: Ninja Frog ───
                 BoxLayout:
                     orientation: 'vertical'
                     size_hint_y: None
@@ -301,24 +284,119 @@
                             pos: self.pos
                             size: self.size
                             radius: [15,]
-                    
-                    Image:
-                        source: 'assets/Skin/penguin_ninja.png' # เปลี่ยนเป็น path จริง
+                    AnimatedSkin:
+                        source: 'assets/pixelAdventure/Free/Main Characters/Ninja Frog/Idle (32x32).png'
                         size_hint_y: 0.5
                     Label:
-                        text: '💎 50'
-                        font_size: '18sp'
+                        text: 'NINJA FROG'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '14sp'
                         size_hint_y: 0.2
-                        color: 0.2, 0.8, 1, 1
                     HoverButton:
-                        text: 'BUY'
-                        font_size: '16sp'
+                        text: 'EQUIP'
+                        font_size: '14sp'
                         size_hint: (0.9, 0.25)
                         pos_hint: {'center_x': 0.5}
                         background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
                         background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
                         border: (10, 10, 10, 10)
-                        on_release: root.buy_item('ninja')
+                        on_release: root.buy_item('Ninja Frog')
+
+                # ─── Skin 2: Mask Dude ───
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint_y: None
+                    height: 220
+                    padding: 15
+                    spacing: 12
+                    canvas.before:
+                        Color:
+                            rgba: 0.2, 0.2, 0.3, 0.9
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [15,]
+                    AnimatedSkin:
+                        source: 'assets/pixelAdventure/Free/Main Characters/Mask Dude/Idle (32x32).png'
+                        size_hint_y: 0.5
+                    Label:
+                        text: 'MASK DUDE'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '14sp'
+                        size_hint_y: 0.2
+                    HoverButton:
+                        text: 'EQUIP'
+                        font_size: '14sp'
+                        size_hint: (0.9, 0.25)
+                        pos_hint: {'center_x': 0.5}
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.buy_item('Mask Dude')
+
+                # ─── Skin 3: Pink Man ───
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint_y: None
+                    height: 220
+                    padding: 15
+                    spacing: 12
+                    canvas.before:
+                        Color:
+                            rgba: 0.2, 0.2, 0.3, 0.9
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [15,]
+                    AnimatedSkin:
+                        source: 'assets/pixelAdventure/Free/Main Characters/Pink Man/Idle (32x32).png'
+                        size_hint_y: 0.5
+                    Label:
+                        text: 'PINK MAN'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '14sp'
+                        size_hint_y: 0.2
+                    HoverButton:
+                        text: 'EQUIP'
+                        font_size: '14sp'
+                        size_hint: (0.9, 0.25)
+                        pos_hint: {'center_x': 0.5}
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.buy_item('Pink Man')
+
+                # ─── Skin 4: Virtual Guy ───
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint_y: None
+                    height: 220
+                    padding: 15
+                    spacing: 12
+                    canvas.before:
+                        Color:
+                            rgba: 0.2, 0.2, 0.3, 0.9
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [15,]
+                    AnimatedSkin:
+                        source: 'assets/pixelAdventure/Free/Main Characters/Virtual Guy/Idle (32x32).png'
+                        size_hint_y: 0.5
+                    Label:
+                        text: 'VIRTUAL GUY'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '14sp'
+                        size_hint_y: 0.2
+                    HoverButton:
+                        text: 'EQUIP'
+                        font_size: '14sp'
+                        size_hint: (0.9, 0.25)
+                        pos_hint: {'center_x': 0.5}
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.buy_item('Virtual Guy')
                         
         HoverButton:
             text: 'BACK'
