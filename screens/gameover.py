@@ -1,3 +1,7 @@
+from kivy.uix.screenmanager import Screen
+from core.logger import logger
+from core.audio import AudioManager
+from kivy.clock import Clock
 from core.database import DatabaseManager
 
 class GameOverScreen(Screen):
