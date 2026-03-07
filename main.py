@@ -18,12 +18,14 @@ from screens.gameover import GameOverScreen
 from screens.history import HistoryScreen
 from screens.shop import ShopScreen
 from screens.pause import PauseScreen
+from core.database import DatabaseManager
 
 # โหลดไฟล์ออกแบบ KV
 Builder.load_file('style.kv')
 
 class PenguinDashApp(App):
     def build(self):
+        DatabaseManager().init_db()  # เตรียมฐานข้อมูลก่อนเริ่มเกม
         # ตั้งค่าขนาดหน้าจอให้เหมาะกับการทดสอบบน Desktop
         Window.size = (WINDOW_WIDTH, WINDOW_HEIGHT)
         
