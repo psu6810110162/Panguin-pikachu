@@ -9,6 +9,7 @@ from kivy.lang import Builder
 # โหลดค่าคอนฟิกขนาดหน้าจอ
 from core.config import WINDOW_WIDTH, WINDOW_HEIGHT
 from core.logger import logger
+from ui.components import HoverButton # noqa: F401
 
 # โหลด Screens
 from screens.gameplay import GamePlayScreen

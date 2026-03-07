@@ -6,26 +6,25 @@ from core.logger import logger
 class MenuScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ MenuScreen")
-        AudioManager().play_bgm('Bgm.gameplay.mp3')
+        Clock.schedule_once(lambda dt: AudioManager().play_bgm('Bgm.gameplay.mp3'), 0.5)
 
     def start_game(self):
-        AudioManager().play_sfx('tab')
-        # ✅ หน่วง 0.2 วินาที รอให้เสียงดังก่อนค่อยเปลี่ยนหน้า
+        AudioManager().play_sfx('click')
         Clock.schedule_once(lambda dt: self._go_gameplay(), 0.2)
 
     def go_to_shop(self):
-        AudioManager().play_sfx('tab')
+        AudioManager().play_sfx('click')
         Clock.schedule_once(lambda dt: self._go_shop(), 0.2)
 
     def go_to_history(self):
-        AudioManager().play_sfx('tab')
+        AudioManager().play_sfx('click')
         Clock.schedule_once(lambda dt: self._go_history(), 0.2)
 
     def exit_game(self):
-        AudioManager().play_sfx('tab')
+        AudioManager().play_sfx('click')
         Clock.schedule_once(lambda dt: self._exit(), 0.2)
 
-    # ── private methods เปลี่ยนหน้า ──
+    # private methods เปลี่ยนหน้า
     def _go_gameplay(self):
         logger.info("กำลังเริ่มต้นเกม...")
         self.manager.current = 'gameplay'

@@ -1,11 +1,15 @@
 from kivy.uix.screenmanager import Screen
 from core.logger import logger
+from core.audio import AudioManager
+from kivy.clock import Clock
 
 class HistoryScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ History")
         
     def go_back(self):
-        logger.info("กลับหน้าก่อนหน้า...")
-        # กลับไปหน้าเมนูเป็นค่าเริ่มต้น (อาจจะต้องแก้ให้กลับไปหน้า GameOver ได้ด้วยหากมาจากหน้านั้น)
+        AudioManager().play_sfx('click')
+        Clock.schedule_once(lambda dt: self._go_menu(), 0.2)
+
+    def _go_menu(self):
         self.manager.current = 'menu'
