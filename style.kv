@@ -66,6 +66,11 @@
             on_release: root.exit_game()
             
 <GamePlayScreen>:
+    canvas.before:
+        Rectangle:
+            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
+            pos: self.pos
+            size: self.size
     # เนื้อหาเดิมของ Gameplay จะถูกย้ายมาที่นี่ในภายหลังถ้าย้ายออกจาก python
     Label:
         text: 'Game is running... (Press Left/Right)'
