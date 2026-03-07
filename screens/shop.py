@@ -43,6 +43,15 @@ class ShopScreen(Screen):
 
         # อัปเดต StateManager
         StateManager().selected_skin = item_id
+
+    def go_back(self):
+        from core.audio import AudioManager
+        from kivy.clock import Clock
+        AudioManager().play_sfx('click')
+        Clock.schedule_once(lambda dt: self._go_menu(), 0.2)
+
+    def _go_menu(self):
+        self.manager.current = 'menu'
         
     def _go_menu(self):
         self.manager.current = 'menu'
