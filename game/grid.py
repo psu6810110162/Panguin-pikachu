@@ -33,6 +33,7 @@ class GridManager:
         self.path_set       = set() # ทุก tile รวม width
         self.turn_points    = []    # จุดที่ต้องกดเปลี่ยนทิศ
         self.obstacles      = {}    # (col, row) -> Obstacle
+        self.gems           = {}    # (col, row) -> Gem
         self.fork_tiles     = set() # tile ที่เป็นส่วน fork (ใช้ render สีต่าง)
         self.merge_points   = []    # จุดบรรจบของแต่ละ fork
 
@@ -50,6 +51,7 @@ class GridManager:
         self.path_set.clear()
         self.turn_points.clear()
         self.obstacles.clear()
+        self.gems.clear()
         self.fork_tiles.clear()
         self.merge_points.clear()
         self._last_pos  = (0, 0)
@@ -74,6 +76,13 @@ class GridManager:
                 if (p_col - view_radius <= pos[0] <= p_col + view_radius) and \
                    (p_row - view_radius <= pos[1] <= p_row + view_radius):
                     obs.update(dt)
+        
+        # อัปเดต Gem
+        for pos, gem in self.gems.items():
+            if gem.active:
+                if (p_col - view_radius <= pos[0] <= p_col + view_radius) and \
+                   (p_row - view_radius <= pos[1] <= p_row + view_radius):
+                    gem.update(dt)
 
     def is_on_path(self, col, row):
         return (col, row) in self.path_set
@@ -82,6 +91,12 @@ class GridManager:
         obs = self.obstacles.get((col, row))
         if obs and obs.active:
             return obs
+        return None
+
+    def get_gem_at(self, col, row):
+        gem = self.gems.get((col, row))
+        if gem and gem.active:
+            return gem
         return None
 
     def get_path_index(self, col, row):
@@ -156,12 +171,14 @@ class GridManager:
             
             # สุ่มวาง Obstacle บน centerline (ยกเว้นช่วงแรกๆ)
             # ปรับโอกาสเหลือ 0.2 เพื่อไม่ให้รกเกินไปเมื่อซิกแซกถี่ขึ้น
-            if self._seg_count > 0 and random.random() < 0.2 and not mark_fork:
-                # เช็คไม่ให้วางทับพิกัดเดิมที่มีกล่องอยู่แล้ว (กันการเจนซ้ำซ้อน)
-                if (col, row) not in self.obstacles:
-                    dist = self.get_distance_m()
                     obs = ObstacleFactory.spawn_obstacle(dist, col, row)
                     self.obstacles[(col, row)] = obs
+            
+            # สุ่มวาง Gem บน centerline (ถ้าไม่มีกล่อง)
+            elif self._seg_count > 0 and random.random() < 0.4 and not mark_fork:
+                if (col, row) not in self.obstacles and (col, row) not in self.gems:
+                    gem = ObstacleFactory.spawn_gem(col, row)
+                    self.gems[(col, row)] = gem
 
         self._last_pos = (col, row)
 
