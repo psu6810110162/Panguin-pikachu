@@ -32,8 +32,8 @@ GRASS_TILES = [
     'assets/isometric-nature-pack/grass10.png',
 ]
 
-ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_right.png'  
-ARROW_LEFT_IMG  = 'assets/Component_UI/Vector/arrow_left.png'
+ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_right_normal.png'  
+ARROW_LEFT_IMG  = 'assets/Component_UI/Vector/arrow_left_normal.png'
 
 DIR_LEFT  = (0, 1)   # iso ซ้าย
 DIR_RIGHT = (1, 0)   # iso ขวา
@@ -125,10 +125,13 @@ class ArrowButton(ButtonBehavior, Image):
         self._move_callback = move_callback      # รับ callback ผ่าน __init__
         self.bind(on_press=self.handle_press)
         self.bind(on_release=self.handle_release)
+    
+    def collide_point(self, x, y):
+        return (self.x <= x <= self.right and self.y <= y <= self.top)
 
     def handle_press(self, *args):
         Animation(
-            size=(600, 600),
+            size=(150, 150),
             duration=0.08,
             t='out_back'
         ).start(self)
@@ -174,14 +177,14 @@ class GamePlayScreen(Screen):
         self.btn_left = ArrowButton(
             move_callback=lambda: self._move(DIR_LEFT),  # ส่ง callback ผ่าน __init__
             source=ARROW_LEFT_IMG, size_hint=(None, None),
-            size=(120, 120), pos_hint={'center_x': 0.5 - OFFSET, 'center_y': 0.08},
+            size=(120, 120), allow_stretch=True, keep_ratio=True, pos_hint={'center_x': 0.5 - OFFSET, 'center_y': 0.08},
         )
         self.add_widget(self.btn_left)
 
         self.btn_right = ArrowButton(
             move_callback=lambda: self._move(DIR_RIGHT), # ส่ง callback ผ่าน __init__
             source=ARROW_RIGHT_IMG, size_hint=(None, None),
-            size=(120, 120), pos_hint={'center_x': 0.5 + OFFSET, 'center_y': 0.08},
+            size=(120, 120), allow_stretch=True, keep_ratio=True, pos_hint={'center_x': 0.5 + OFFSET, 'center_y': 0.08},
         )
         self.add_widget(self.btn_right)
 
