@@ -7,6 +7,7 @@ class MenuScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ MenuScreen")
         Clock.schedule_once(lambda dt: AudioManager().play_bgm('Bgm.gameplay.mp3'), 0.5)
+        Clock.schedule_once(lambda dt: self._sync_sound_button(), 0.1)
 
     def start_game(self):
         AudioManager().play_sfx('click')
@@ -41,4 +42,18 @@ class MenuScreen(Screen):
 
     def toggle_sound(self):
         AudioManager().play_sfx('click')
-        logger.info("toggle sound")
+        bgm_muted = AudioManager().toggle_mute()
+        logger.info( f"เสียง {'ปิด' if bgm_muted else 'เปิด'}แล้ว")
+        self._sync_sound_button()
+
+    def _sync_sound_button(self):
+        sound_btn = self.ids.get('sound_btn')
+        if sound_btn:
+            if AudioManager().bgm_muted:
+                sound_btn.background_normal = 'assets/Component_UI/Button Sounds/volume_down.png'
+                sound_btn.background_down   = 'assets/Component_UI/Button Sounds/volume_down.png'
+            else:
+                sound_btn.background_normal = 'assets/Component_UI/Button Sounds/volume_up.png'
+                sound_btn.background_down   = 'assets/Component_UI/Button Sounds/volume_up.png'
+
+    
