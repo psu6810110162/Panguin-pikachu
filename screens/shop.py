@@ -52,6 +52,3 @@ class ShopScreen(Screen):
 
     def _go_menu(self):
         self.manager.current = 'menu'
-        
-    def _go_menu(self):
-        self.manager.current = 'menu'
