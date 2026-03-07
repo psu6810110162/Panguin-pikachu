@@ -1,15 +1,23 @@
-from kivy.uix.screenmanager import Screen
-from core.logger import logger
-from core.audio import AudioManager
-from kivy.clock import Clock
+from core.database import DatabaseManager
 
 class GameOverScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ GameOver")
-        # ดึงระยะทางจากหน้า gameplay มาแสดง
+        # ดึงข้อมูลจากหน้า gameplay
         gameplay = self.manager.get_screen('gameplay')
-        distance = gameplay.grid.get_distance_m()
+        distance = int(gameplay.grid.get_distance_m())
+        gems = gameplay.gems_collected
+        
+        # แสดงผลคะแนน
         self.ids.score_label.text = f"DISTANCE: {distance} M"
+        
+        # บันทึกลง Database
+        try:
+            db = DatabaseManager()
+            db.save_game_session("Penguin", distance=distance, gems=gems)
+            logger.info(f"บันทึกข้อมูลเรียบร้อย: {distance}m, {gems} gems")
+        except Exception as e:
+            logger.error(f"Error saving session: {e}")
 
     def retry_game(self):
         AudioManager().play_sfx('click')
