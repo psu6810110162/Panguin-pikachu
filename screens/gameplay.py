@@ -31,8 +31,8 @@ GRASS_TILES = [
     'assets/isometric-nature-pack/grass10.png',
 ]
 
-ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_left.png'  
-ARROW_LEFT_IMG  = 'assets/Component_UI/Vector/arrow_right.png'
+ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_right.png'  
+ARROW_LEFT_IMG  = 'assets/Component_UI/Vector/arrow_left.png'
 
 DIR_LEFT  = (0, 1)   # iso ซ้าย
 DIR_RIGHT = (1, 0)   # iso ขวา
