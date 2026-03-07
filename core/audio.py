@@ -24,8 +24,10 @@ class AudioManager:
         self.sfx_paths = {
             'click'  : f'{SOUND_DIR}click-b.ogg',
             'tab'    : f'{SOUND_DIR}tap-a.ogg',
+            'hit'    : f'{SOUND_DIR}tap-b.ogg',
             'switch' : f'{SOUND_DIR}switch-a.ogg',
             'jump'   : f'{SOUND_DIR}Jump.ogg',
+            'jump2'  : f'{SOUND_DIR}Jump 2.ogg',
             'down'   : f'{SOUND_DIR}Down.ogg',
         }
 

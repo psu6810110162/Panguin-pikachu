@@ -3,7 +3,7 @@ from kivy.core.window import Window
 from kivy.animation import Animation
 from kivy.uix.image import Image
 from kivy.clock import Clock
-from kivy.properties import BooleanProperty, NumericProperty
+from kivy.properties import BooleanProperty, StringProperty, NumericProperty
 
 class HoverButton(Button):
     """
@@ -69,11 +69,12 @@ class AnimatedSkin(Image):
     รองรับ Spritesheet 11 เฟรม (352x32)
     """
     frame_index = NumericProperty(0)
-
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.allow_stretch = True
         self.keep_ratio = True
+        # เริ่มต้นแอนิเมชัน
         Clock.schedule_interval(self.update_animation, 1.0 / 12.0)
 
     def on_source(self, instance, value):
@@ -87,9 +88,14 @@ class AnimatedSkin(Image):
     def update_texture(self):
         if not self.source:
             return
+        
+        # ตัดรูป (Region) จาก Spritesheet หลัก
+        # สมมติว่าเฟรมละ 32x32
         try:
             from kivy.core.image import Image as CoreImage
+            # โหลด texture หลัก
             full_texture = CoreImage(self.source).texture
+            # ตัดเฉพาะเฟรมปัจจุบัน
             self.texture = full_texture.get_region(self.frame_index * 32, 0, 32, 32)
         except Exception as e:
             print(f"Error updating animated skin texture: {e}")
