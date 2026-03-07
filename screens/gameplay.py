@@ -54,6 +54,9 @@ class KivyRenderer(Widget):
             'Break': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Break.png').texture
         }
 
+        # โหลด Sprite ของ Gem (16x16, 4 frames)
+        self.gem_texture = CoreImage('assets/Gem/Coin_Gems/spr_coin_strip4.png').texture
+
         # ── FIX 1: ตั้ง cam เป็น None
         # เฟรมแรกจะ snap ทันที ไม่ lerp จาก (0,0)
         # ซึ่งเป็นสาเหตุที่กล้องวิ่งหนีไปขวาตอนเริ่ม
@@ -120,6 +123,11 @@ class KivyRenderer(Widget):
                 obs = grid_manager.get_obstacle_at(col, row)
                 if obs and obs.active:
                     self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+
+                # วาด Gem บน Tile นี้ (ถ้ามี)
+                gem = grid_manager.get_gem_at(col, row)
+                if gem and gem.active:
+                    self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
 
                 # วาดตัวละคร (Animated Skin) เมื่อถึงแผ่นที่ยืนอยู่
                 # เพื่อให้ Z-index ถูกต้อง (อยู่หลังแผ่นที่อยู่ถัดไป)
@@ -190,6 +198,23 @@ class KivyRenderer(Widget):
                 pos=(tx + (TILE_W - bw) // 2, ty + y_offset),
                 size=(bw, bh)
             )
+
+    def _draw_gem(self, gem, tx, ty, ox, oy):
+        """วาด Gem แบบอนิเมชัน"""
+        # คำนวณ Region จากเฟรมปัจจุบัน (16x16 ต่อเฟรม)
+        frame_idx = gem.anim_frame
+        tex = self.gem_texture.get_region(frame_idx * 16, 0, 16, 16)
+        
+        # วาด Gem ให้ลอยอยู่เหนือพื้นนิดหน่อย
+        float_offset = 12 
+        gw, gh = 32, 32 # ขยายจาก 16x16
+        
+        Color(1, 1, 1, 1)
+        Rectangle(
+            texture=tex, 
+            pos=(tx + (TILE_W - gw) // 2, ty + float_offset), 
+            size=(gw, gh)
+        )
 
 
 class ArrowButton(ButtonBehavior, Image):
