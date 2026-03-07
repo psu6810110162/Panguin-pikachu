@@ -8,6 +8,7 @@ from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
 from kivy.core.window import Window
 from kivy.core.image import Image as CoreImage
+from kivy.animation import Animation
 
 from core.audio import AudioManager
 from core.logger import logger
@@ -31,8 +32,8 @@ GRASS_TILES = [
     'assets/isometric-nature-pack/grass10.png',
 ]
 
-ARROW_RIGHT_IMG = 'assets/Component_UI/arrow_right.png'
-ARROW_LEFT_IMG  = 'assets/Component_UI/arrow_left.png'
+ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_right.png'  
+ARROW_LEFT_IMG  = 'assets/Component_UI/Vector/arrow_left.png'
 
 DIR_LEFT  = (0, 1)   # iso ซ้าย
 DIR_RIGHT = (1, 0)   # iso ขวา
@@ -118,7 +119,28 @@ class KivyRenderer(Widget):
 
 
 class ArrowButton(ButtonBehavior, Image):
-    pass
+
+    def __init__(self, move_callback=None, **kwargs):
+        super().__init__(**kwargs)
+        self._move_callback = move_callback      # รับ callback ผ่าน __init__
+        self.bind(on_press=self.handle_press)
+        self.bind(on_release=self.handle_release)
+
+    def handle_press(self, *args):
+        Animation(
+            size=(600, 600),
+            duration=0.08,
+            t='out_back'
+        ).start(self)
+        if self._move_callback: # เรียก callback เอง ไม่ผูกกับ on_press ใน GamePlayScreen
+            self._move_callback()
+
+    def handle_release(self, *args):
+        Animation(
+            size=(120, 120),
+            duration=0.1,
+            t='out_quad'
+        ).start(self)
 
 
 class GamePlayScreen(Screen):
@@ -148,22 +170,24 @@ class GamePlayScreen(Screen):
         self.add_widget(self.hud_label)
 
         # ปุ่ม
+        OFFSET = 0.2
         self.btn_left = ArrowButton(
+            move_callback=lambda: self._move(DIR_LEFT),  # ส่ง callback ผ่าน __init__
             source=ARROW_LEFT_IMG, size_hint=(None, None),
-            size=(120, 120), pos_hint={'x': 0.03, 'y': 0.03},
+            size=(120, 120), pos_hint={'center_x': 0.5 - OFFSET, 'center_y': 0.08},
         )
-        self.btn_left.bind(on_press=lambda _: self._move(DIR_LEFT))
         self.add_widget(self.btn_left)
 
         self.btn_right = ArrowButton(
+            move_callback=lambda: self._move(DIR_RIGHT), # ส่ง callback ผ่าน __init__
             source=ARROW_RIGHT_IMG, size_hint=(None, None),
-            size=(120, 120), pos_hint={'right': 0.97, 'y': 0.03},
+            size=(120, 120), pos_hint={'center_x': 0.5 + OFFSET, 'center_y': 0.08},
         )
-        self.btn_right.bind(on_press=lambda _: self._move(DIR_RIGHT))
         self.add_widget(self.btn_right)
 
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
+        self._keyboard.bind(on_key_up=self._on_keyboard_up)
 
     def on_enter(self):
         logger.info("เข้าสู่หน้า GamePlay")
@@ -224,9 +248,19 @@ class GamePlayScreen(Screen):
         if self.penguin.is_dead:
             return False
         if keycode[1] == 'left':
-            self._move(DIR_LEFT)
+            self.btn_left.handle_press()
             return True
         elif keycode[1] == 'right':
-            self._move(DIR_RIGHT)
+            self.btn_right.handle_press()
+            return True
+        return False
+    
+
+    def _on_keyboard_up(self, keyboard, keycode):
+        if keycode[1] == 'left':
+            self.btn_left.handle_release()
+            return True
+        elif keycode[1] == 'right':
+            self.btn_right.handle_release()
             return True
         return False
