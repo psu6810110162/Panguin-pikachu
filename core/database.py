@@ -116,6 +116,25 @@ class DatabaseManager:
         
         self.conn.commit()
 
+    def get_gem_balance(self, player_name: str) -> int:
+        """ เช็คจำนวน Gem ที่มีในกระเป๋าปัจจุบัน """
+        self.connect()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT gem_balance FROM players WHERE name = ?", (player_name,))
+        row = cursor.fetchone()
+        return row['gem_balance'] if row else 0
+
+    def deduct_gems(self, player_name: str, amount: int) -> bool:
+        """ หัก Gem จากกระเป๋าหลัก (ใช้ในหน้า Shop) """
+        current_balance = self.get_gem_balance(player_name)
+        if current_balance < amount:
+            return False
+            
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE players SET gem_balance = gem_balance - ? WHERE name = ?", (amount, player_name))
+        self.conn.commit()
+        return True
+
     def get_personal_best(self, player_name: str) -> int:
         """ ดึงคะแนนสูงสุด (Personal Best) ของผู้เล่นชื่อนี้ """
         self.connect()
@@ -131,8 +150,8 @@ class DatabaseManager:
         row = cursor.fetchone()
         return row['pb'] if row and row['pb'] else 0
 
-    def get_history(self, player_name: str, limit: int = 50) -> List[Dict]:
-        """ ดึงประวัติการวิ่งย้อนหลัง ไว้แสดงผลในหน้า History """
+    def get_history(self, player_name: str, limit: int = 100) -> List[Dict]:
+        """ ดึงประวัติการวิ่งย้อนหลัง ไว้แสดงผลในหน้า History - เพิ่มขีดจำกัดเป็น 100 """
         self.connect()
         cursor = self.conn.cursor()
         cursor.execute('''
