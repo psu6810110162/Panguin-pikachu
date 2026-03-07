@@ -8,7 +8,6 @@ from kivy.properties import BooleanProperty, StringProperty, NumericProperty
 class HoverButton(Button):
     """
     ปุ่มกดที่ขยายขนาดขึ้นเล็กน้อยเมื่อเอาเมาส์ไปวาง (Hover Effect)
-    อย่างเสถียร โดยเก็บค่าขนาดเริ่มต้นไว้
     """
     hovering = BooleanProperty(False)
 
@@ -16,39 +15,53 @@ class HoverButton(Button):
         super().__init__(**kwargs)
         Window.bind(mouse_pos=self.on_mouse_pos)
         self.original_size_hint = None
+        self.original_size = None
 
     def on_mouse_pos(self, window, pos):
         if not self.get_root_window():
             return
-            
-        # ตรวจสอบว่าเมาส์อยู่ในอาณาเขตของปุ่มหรือไม่
-        if self.collide_point(*self.to_widget(*pos)):
-            if not self.hovering:
-                self.on_enter()
-        else:
-            if self.hovering:
-                self.on_leave()
+        inside = self.collide_point(*self.to_widget(*pos))
+        if inside and not self.hovering:
+            self.on_enter()
+        elif not inside and self.hovering:
+            self.on_leave()
 
     def on_enter(self):
         if self.hovering: return
         self.hovering = True
-        
-        # เก็บค่าขนาดเดิมไว้ถ้าเป็นครั้งแรก
-        if self.original_size_hint is None:
-            self.original_size_hint = (self.size_hint_x, self.size_hint_y)
-            
-        # ขยายจากขนาดเริ่มต้นเสมอ (เพื่อความเท่ากัน)
-        target_x = self.original_size_hint[0] * 1.05
-        target_y = self.original_size_hint[1] * 1.05
-        Animation(size_hint=(target_x, target_y), duration=0.1, t='out_quad').start(self)
+
+        if self.size_hint_x is None or self.size_hint_y is None:
+            if self.original_size is None:
+                self.original_size = (self.width, self.height)
+            Animation(
+                size=(self.original_size[0] * 1.05, self.original_size[1] * 1.05),
+                duration=0.1, t='out_quad'
+            ).start(self)
+        else:
+            if self.original_size_hint is None:
+                self.original_size_hint = (self.size_hint_x, self.size_hint_y)
+            Animation(
+                size_hint=(self.original_size_hint[0] * 1.05, self.original_size_hint[1] * 1.05),
+                duration=0.1, t='out_quad'
+            ).start(self)
 
     def on_leave(self):
         if not self.hovering: return
         self.hovering = False
-        
-        if self.original_size_hint:
-            # กลับสู่ขนาดเริ่มต้นที่แท้จริง
-            Animation(size_hint=self.original_size_hint, duration=0.1, t='out_quad').start(self)
+
+        if self.size_hint_x is None or self.size_hint_y is None:
+            if self.original_size:
+                Animation(
+                    size=self.original_size,
+                    duration=0.1, t='out_quad'
+                ).start(self)
+        else:
+            if self.original_size_hint:
+                Animation(
+                    size_hint=self.original_size_hint,
+                    duration=0.1, t='out_quad'
+                ).start(self)
+
 
 class AnimatedSkin(Image):
     """

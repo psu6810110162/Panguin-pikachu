@@ -38,3 +38,7 @@ class MenuScreen(Screen):
     def _exit(self):
         from kivy.app import App
         App.get_running_app().stop()
+
+    def toggle_sound(self):
+        AudioManager().play_sfx('click')
+        logger.info("toggle sound")
