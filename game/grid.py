@@ -2,9 +2,9 @@ from core.config import TILE_TO_METER
 import random
 from game.obstacle_factory import ObstacleFactory
 
-PATH_WIDTH       = 3    # กว้าง 3 tile
-SEGMENT_LEN_MIN  = 6    # ความยาวตรงต่อ segment (สั้นสุด)
-SEGMENT_LEN_MAX  = 12   # ความยาวตรงต่อ segment (ยาวสุด)
+PATH_WIDTH       = 1    # กว้าง 1 tile (ผอมลงตามสั่ง)
+SEGMENT_LEN_MIN  = 2    # สั้นลงเพื่อให้ซิกแซกถี่ขึ้น (ตามสั่ง)
+SEGMENT_LEN_MAX  = 6    # สั้นลงเพื่อให้ซิกแซกถี่ขึ้น
 PRELOAD_SEGMENTS = 8    # สร้างล่วงหน้าตอนเริ่ม
 VISIBLE_BUFFER   = 60   # extend_if_needed threshold
 FORK_CHANCE      = 0.30 # 30% โอกาสเกิดทางแยก
@@ -65,6 +65,16 @@ class GridManager:
     def get_distance_m(self):
         return self.forward_tiles * TILE_TO_METER
 
+    def update_obstacles(self, dt, view_radius, penguin_pos):
+        """อัปเดตแอนิเมชันของอุปสรรคที่อยู่ในระยะมองเห็น"""
+        p_col, p_row = penguin_pos
+        for pos, obs in self.obstacles.items():
+            if obs.active:
+                # เช็คระยะแบบหยาบๆ (Bounding Box)
+                if (p_col - view_radius <= pos[0] <= p_col + view_radius) and \
+                   (p_row - view_radius <= pos[1] <= p_row + view_radius):
+                    obs.update(dt)
+
     def is_on_path(self, col, row):
         return (col, row) in self.path_set
 
@@ -105,11 +115,11 @@ class GridManager:
     # ═══════════════════════════════════════════
 
     def _build_start_platform(self):
-        """Platform 5×5 สำหรับจุดเริ่ม"""
-        for c in range(5):
-            for r in range(5):
+        """Platform 3×3 สำหรับจุดเริ่ม (ตามสั่ง)"""
+        for c in range(3):
+            for r in range(3):
                 self.path_set.add((c, r))
-        center = (2, 2)
+        center = (1, 1) # กึ่งกลาง 3x3
         self.path.append(center)
         self._last_pos = center
 
@@ -145,10 +155,13 @@ class GridManager:
                 self.fork_tiles.add((col, row))
             
             # สุ่มวาง Obstacle บน centerline (ยกเว้นช่วงแรกๆ)
-            if self._seg_count > 0 and random.random() < 0.3 and not mark_fork:
-                dist = self.get_distance_m()
-                obs = ObstacleFactory.spawn_obstacle(dist, col, row)
-                self.obstacles[(col, row)] = obs
+            # ปรับโอกาสเหลือ 0.2 เพื่อไม่ให้รกเกินไปเมื่อซิกแซกถี่ขึ้น
+            if self._seg_count > 0 and random.random() < 0.2 and not mark_fork:
+                # เช็คไม่ให้วางทับพิกัดเดิมที่มีกล่องอยู่แล้ว (กันการเจนซ้ำซ้อน)
+                if (col, row) not in self.obstacles:
+                    dist = self.get_distance_m()
+                    obs = ObstacleFactory.spawn_obstacle(dist, col, row)
+                    self.obstacles[(col, row)] = obs
 
         self._last_pos = (col, row)
 
@@ -190,7 +203,7 @@ class GridManager:
         # ── Branch Long (อ้อมด้านข้าง) ──
         # ออกทาง perp 2 ก้าว → วิ่ง cur_dir FORK_LONG_LEN → กลับ perp(-2)
         lc, lr = start_col, start_row
-        SIDE_OFFSET = 2 + PATH_WIDTH  # ระยะออกด้านข้างให้ไม่ทับ branch short
+        SIDE_OFFSET = 2  # ระยะห่างสำหรับ 1-tile path
 
         # ออกด้านข้าง
         for _ in range(SIDE_OFFSET):
@@ -205,10 +218,7 @@ class GridManager:
             lr += cur_dir[1]
             self.path_set.add((lc, lr))
             self.fork_tiles.add((lc, lr))
-            # เพิ่ม width ของ branch long
-            for sign in [1, -1]:
-                self.path_set.add((lc + perp[0]*sign, lr + perp[1]*sign))
-                self.fork_tiles.add((lc + perp[0]*sign, lr + perp[1]*sign))
+            # ไม่ต้องเพิ่ม width เพราะ PATH_WIDTH = 1
 
         # กลับเข้า merge point
         for _ in range(SIDE_OFFSET):
@@ -216,10 +226,6 @@ class GridManager:
             lr -= perp[1]
             self.path_set.add((lc, lr))
             self.fork_tiles.add((lc, lr))
-
-        # เติม width ที่จุดบรรจบ
-        for sign in [1, -1]:
-            self.path_set.add((merge_col + perp[0]*sign, merge_row + perp[1]*sign))
 
         # บันทึก merge point
         self.merge_points.append((merge_col, merge_row))
@@ -240,12 +246,10 @@ class GridManager:
         # บันทึกจุดหักเลี้ยว
         self.turn_points.append((col, row))
 
-        for _ in range(PATH_WIDTH):
-            col += nxt_dir[0]
-            row += nxt_dir[1]
-            self._add_center(col, row)
-            self._add_width(col, row, cur_dir)
-            self._add_width(col, row, nxt_dir)
+        # สำหรับ 1 tile เลี้ยวทันทีโดยไม่ต้องเผื่อความกว้าง
+        col += nxt_dir[0]
+        row += nxt_dir[1]
+        self._add_center(col, row)
 
         self._last_pos = (col, row)
         self._last_dir = nxt_dir
@@ -260,7 +264,10 @@ class GridManager:
             self.path_set.add(pos)
 
     def _add_width(self, col, row, direction):
-        """ขยาย PATH_WIDTH ตั้งฉากกับ direction"""
+        """ขยาย PATH_WIDTH ตั้งฉากกับ direction (ถ้ามากกว่า 1)"""
+        if PATH_WIDTH <= 1:
+            return
+            
         perp = (0, 1) if direction == self.DIR_A else (1, 0)
         half = PATH_WIDTH // 2
         for sign in [1, -1]:

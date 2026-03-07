@@ -8,6 +8,7 @@ from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
 from kivy.core.window import Window
 from kivy.core.image import Image as CoreImage
+from kivy.animation import Animation
 
 from core.audio import AudioManager
 from core.logger import logger
@@ -31,8 +32,8 @@ GRASS_TILES = [
     'assets/isometric-nature-pack/grass10.png',
 ]
 
-ARROW_RIGHT_IMG = 'assets/Component_UI/arrow_right.png'
-ARROW_LEFT_IMG  = 'assets/Component_UI/arrow_left.png'
+ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_right_normal.png'  
+ARROW_LEFT_IMG  = 'assets/Component_UI/Vector/arrow_left_normal.png'
 
 DIR_LEFT  = (0, 1)   # iso ซ้าย
 DIR_RIGHT = (1, 0)   # iso ขวา
@@ -43,7 +44,15 @@ class KivyRenderer(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.tile_textures = {}
+        self.anim_frame = 0  # เฟรมแอนิเมชันปัจจุบัน
         self._grass_textures = [CoreImage(p).texture for p in GRASS_TILES]
+        
+        # โหลด Sprite ของอุปสรรค (Box2)
+        self.box_assets = {
+            'Idle': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Idle.png').texture,
+            'Hit': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Hit (28x24).png').texture,
+            'Break': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Break.png').texture
+        }
 
         # ── FIX 1: ตั้ง cam เป็น None
         # เฟรมแรกจะ snap ทันที ไม่ lerp จาก (0,0)
@@ -80,9 +89,6 @@ class KivyRenderer(Widget):
 
         self.canvas.clear()
         with self.canvas:
-            Color(0.53, 0.81, 0.92, 1)
-            Rectangle(pos=(0, 0), size=Window.size)
-
             # กำหนดระยะมองเห็นรอบตัว (รัศมีการมองเห็น)
             view_radius = 15
             visible_tiles = []
@@ -110,18 +116,108 @@ class KivyRenderer(Widget):
                 draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
                 Rectangle(texture=tex, pos=(draw_x, draw_y), size=(TILE_W, TILE_IMG_H))
 
-            # เพนกวิน placeholder
-            if not penguin.is_dead:
-                px, py = self.grid_to_screen(penguin.col, penguin.row)
-                pw, ph = 40, 50
-                Color(0.15, 0.15, 0.2, 1)
-                Rectangle(pos=(px + ox - pw // 2, py + oy - 5), size=(pw, ph))
-                Color(0.95, 0.95, 0.95, 1)
-                Rectangle(pos=(px + ox - 10, py + oy + 15), size=(20, 20))
+                # วาดอุปสรรคบน Tile นี้ (ถ้ามี)
+                obs = grid_manager.get_obstacle_at(col, row)
+                if obs and obs.active:
+                    self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+
+                # วาดตัวละคร (Animated Skin) เมื่อถึงแผ่นที่ยืนอยู่
+                # เพื่อให้ Z-index ถูกต้อง (อยู่หลังแผ่นที่อยู่ถัดไป)
+                if col == penguin.col and row == penguin.row:
+                    self._draw_penguin(penguin, ox, oy)
+
+    def _draw_penguin(self, penguin, ox, oy):
+        """วาดตัวละคร (Animated Skin)"""
+        if penguin.is_dead:
+            # ท่าตก (Fall)
+            px, py = self.grid_to_screen(penguin.col, penguin.row)
+            skin_path = penguin.get_skin_path(action='Fall')
+            
+            if skin_path not in self.tile_textures:
+                self.tile_textures[skin_path] = CoreImage(skin_path).texture
+            
+            skin_tex = self.tile_textures[skin_path]
+            if penguin.facing_left:
+                skin_tex = skin_tex.get_region(0, 0, -32, 32)
+            
+            pw, ph = 64, 64
+            Color(1, 1, 1, 1)
+            Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
+        else:
+            px, py = self.grid_to_screen(penguin.col, penguin.row)
+            
+            # อัปเดตเฟรมแอนิเมชัน (11 เฟรม)
+            self.anim_frame = (self.anim_frame + 0.2) % 11
+            frame_idx = int(self.anim_frame)
+            
+            skin_path = penguin.get_skin_path(action='Idle')
+            cache_key = f"{skin_path}_{frame_idx}"
+            
+            if cache_key not in self.tile_textures:
+                if skin_path not in self.tile_textures:
+                    self.tile_textures[skin_path] = CoreImage(skin_path).texture
+                full_tex = self.tile_textures[skin_path]
+                self.tile_textures[cache_key] = full_tex.get_region(frame_idx * 32, 0, 32, 32)
+            
+            skin_tex = self.tile_textures[cache_key]
+            
+            # พลิกรูปตามทิศทาง
+            if penguin.facing_left:
+                skin_tex = skin_tex.get_region(0, 0, -32, 32)
+            
+            pw, ph = 64, 64
+            Color(1, 1, 1, 1)
+            Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
+
+    def _draw_obstacle(self, obs, tx, ty, ox, oy):
+        """วาดกล่อง Box2 พร้อมแอนิเมชันและซ้อนกันตาม Size"""
+        state = obs.state
+        frame = int(obs.anim_frame)
+        full_tex = self.box_assets.get(state)
+        
+        # ตัดเฟรม (Box2 ขนาด 28x24)
+        # Spritesheet แนวนอน
+        tex = full_tex.get_region(frame * 28, 0, 28, 24)
+        
+        bw, bh = 56, 48 # ขยายขนาดจาก 28x24
+        
+        Color(1, 1, 1, 1)
+        # วาดซ้อนกันตาม Size
+        for i in range(obs.size):
+            y_offset = i * (bh * 0.6) # ซ้อนเหลื่อมกันเล็กน้อย
+            Rectangle(
+                texture=tex,
+                pos=(tx + (TILE_W - bw) // 2, ty + y_offset),
+                size=(bw, bh)
+            )
 
 
 class ArrowButton(ButtonBehavior, Image):
-    pass
+
+    def __init__(self, move_callback=None, **kwargs):
+        super().__init__(**kwargs)
+        self._move_callback = move_callback      # รับ callback ผ่าน __init__
+        self.bind(on_press=self.handle_press)
+        self.bind(on_release=self.handle_release)
+    
+    def collide_point(self, x, y):
+        return (self.x <= x <= self.right and self.y <= y <= self.top)
+
+    def handle_press(self, *args):
+        Animation(
+            size=(150, 150),
+            duration=0.08,
+            t='out_back'
+        ).start(self)
+        if self._move_callback: # เรียก callback เอง ไม่ผูกกับ on_press ใน GamePlayScreen
+            self._move_callback()
+
+    def handle_release(self, *args):
+        Animation(
+            size=(120, 120),
+            duration=0.1,
+            t='out_quad'
+        ).start(self)
 
 
 class GamePlayScreen(Screen):
@@ -151,25 +247,32 @@ class GamePlayScreen(Screen):
         self.add_widget(self.hud_label)
 
         # ปุ่ม
+        OFFSET = 0.2
         self.btn_left = ArrowButton(
+            move_callback=lambda: self._move(DIR_LEFT),  # ส่ง callback ผ่าน __init__
             source=ARROW_LEFT_IMG, size_hint=(None, None),
-            size=(120, 120), pos_hint={'x': 0.03, 'y': 0.03},
+            size=(120, 120), allow_stretch=True, keep_ratio=True, pos_hint={'center_x': 0.5 - OFFSET, 'center_y': 0.08},
         )
-        self.btn_left.bind(on_press=lambda _: self._move(DIR_LEFT))
         self.add_widget(self.btn_left)
 
         self.btn_right = ArrowButton(
+            move_callback=lambda: self._move(DIR_RIGHT), # ส่ง callback ผ่าน __init__
             source=ARROW_RIGHT_IMG, size_hint=(None, None),
-            size=(120, 120), pos_hint={'right': 0.97, 'y': 0.03},
+            size=(120, 120), allow_stretch=True, keep_ratio=True, pos_hint={'center_x': 0.5 + OFFSET, 'center_y': 0.08},
         )
-        self.btn_right.bind(on_press=lambda _: self._move(DIR_RIGHT))
         self.add_widget(self.btn_right)
 
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
+        self._keyboard.bind(on_key_up=self._on_keyboard_up)
 
     def on_enter(self):
+        from core.state import StateManager
         logger.info("เข้าสู่หน้า GamePlay")
+        
+        # อัปเดต Skin ก่อนเริ่มเล่น
+        self.penguin.equip_skin(StateManager().selected_skin)
+        
         self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
         AudioManager().play_bgm('Bgm.gameplay.mp3')
 
@@ -180,6 +283,10 @@ class GamePlayScreen(Screen):
     def update(self, dt):
         dist = self.grid.get_distance_m()
         self.hud_label.text = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
+        
+        # อัปเดตแอนิเมชันของอุปสรรคในรัศมีการมองเห็น
+        self.grid.update_obstacles(dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row))
+        
         self.renderer.draw(self.grid, self.penguin, self.path_index)
 
     def _move(self, direction):
@@ -191,10 +298,27 @@ class GamePlayScreen(Screen):
         if self.penguin.is_dead:
             return
 
+        # ตั้งค่าทิศทางหันหน้า
+        if direction == DIR_LEFT:
+            self.penguin.facing_left = True
+        elif direction == DIR_RIGHT:
+            self.penguin.facing_left = False
+
         new_col = self.penguin.col + direction[0]
         new_row = self.penguin.row + direction[1]
 
-        # ย้ายก่อนเลย ไม่ว่าจะถูกหรือผิด
+        # เช็คการชนอุปสรรค
+        obs = self.grid.get_obstacle_at(new_col, new_row)
+        if obs and obs.active:
+            # ชน! เล่นอนิเมชันแตก แต่ยังไม่ให้ผ่าน (หยุดประมวลผลการเดิน)
+            if obs.hit():
+                AudioManager().play_sfx('Hit')
+                return
+            else:
+                # ถ้ากำลังเล่นอนิเมชัน Break อยู่ ก็ยังผ่านไม่ได้
+                return
+
+        # ย้ายเพนกวิน
         self.penguin.col = new_col
         self.penguin.row = new_row
 
@@ -216,8 +340,11 @@ class GamePlayScreen(Screen):
             self.penguin.is_dead = True
             AudioManager().play_sfx('Down')
             logger.info(f"ตก! ระยะ {self.grid.get_distance_m()} m")
-            # เปลี่ยนไป GameOver
-            self.manager.current = 'gameover'
+            # ดีเลย์นิดนึงให้เห็นท่าตก
+            Clock.schedule_once(lambda dt: self._go_gameover(), 0.5)
+
+    def _go_gameover(self):
+        self.manager.current = 'gameover'
 
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
@@ -227,9 +354,19 @@ class GamePlayScreen(Screen):
         if self.penguin.is_dead:
             return False
         if keycode[1] == 'left':
-            self._move(DIR_LEFT)
+            self.btn_left.handle_press()
             return True
         elif keycode[1] == 'right':
-            self._move(DIR_RIGHT)
+            self.btn_right.handle_press()
+            return True
+        return False
+    
+
+    def _on_keyboard_up(self, keyboard, keycode):
+        if keycode[1] == 'left':
+            self.btn_left.handle_release()
+            return True
+        elif keycode[1] == 'right':
+            self.btn_right.handle_release()
             return True
         return False
