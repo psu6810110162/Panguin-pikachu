@@ -80,9 +80,6 @@ class KivyRenderer(Widget):
 
         self.canvas.clear()
         with self.canvas:
-            Color(0.53, 0.81, 0.92, 1)
-            Rectangle(pos=(0, 0), size=Window.size)
-
             # กำหนดระยะมองเห็นรอบตัว (รัศมีการมองเห็น)
             view_radius = 15
             visible_tiles = []
