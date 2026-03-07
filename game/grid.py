@@ -1,6 +1,6 @@
 from core.config import TILE_TO_METER
 import random
-from core.obstacle import ObstacleFactory
+from game.obstacle_factory import ObstacleFactory
 
 PATH_WIDTH       = 3    # กว้าง 3 tile
 SEGMENT_LEN_MIN  = 6    # ความยาวตรงต่อ segment (สั้นสุด)

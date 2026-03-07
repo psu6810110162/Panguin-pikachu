@@ -71,55 +71,111 @@
         text: 'Game is running... (Press Left/Right)'
 
 <GameOverScreen>:
+    canvas.before:
+        # Semi-transparent dark overlay for background
+        Color:
+            rgba: 0, 0, 0, 0.7
+        Rectangle:
+            pos: self.pos
+            size: self.size
+            
     BoxLayout:
         orientation: 'vertical'
-        padding: 50
-        spacing: 20
+        padding: [50, 100, 50, 100]
+        spacing: 30
         
-        Label:
-            text: 'GAME OVER'
-            font_size: '48sp'
-            bold: True
-            color: 1, 0.2, 0.2, 1
-            size_hint_y: 0.3
-            
-        Label:
-            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            text: 'Distance: 120 m' # ตัวอย่างใส่หลอกไว้ก่อน
-            font_size: '32sp'
-            size_hint_y: 0.2
-            
-        TextInput:
-            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            hint_text: 'Enter your name'
-            font_size: '24sp'
-            multiline: False
-            size_hint_y: 0.15
-            
-        Button:
-            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            text: 'RETRY'
-            font_size: '24sp'
-            size_hint_y: 0.2
-            background_color: 0.2, 0.8, 0.2, 1
-            on_release: root.retry_game()
-            
-        BoxLayout:
-            orientation: 'horizontal'
-            size_hint_y: 0.2
-            spacing: 10
-            
-            Button:
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                text: 'VIEW HISTORY'
-                font_size: '20sp'
-                on_release: root.view_history()
+        # Glass Panel
+        RelativeLayout:
+            size_hint: (1, 1)
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 0.1  # Glass transparency
+                RoundedRectangle:
+                    pos: 0, 0
+                    size: self.size
+                    radius: [20,]
+                Color:
+                    rgba: 1, 1, 1, 0.2  # Glass border
+                Line:
+                    rounded_rectangle: (0, 0, self.width, self.height, 20)
+                    width: 1.2
+
+            BoxLayout:
+                orientation: 'vertical'
+                padding: [20, 40, 20, 40]
+                spacing: 20
                 
-            Button:
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                text: 'HOME'
-                font_size: '20sp'
-                on_release: root.go_home()
+                Label:
+                    text: 'GAME OVER'
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    font_size: '56sp'
+                    bold: True
+                    color: 1, 0.3, 0.3, 1
+                    outline_color: 0, 0, 0, 1
+                    outline_width: 2
+                    size_hint_y: 0.25
+                    
+                Label:
+                    id: score_label
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    text: 'DISTANCE: -- M'
+                    font_size: '32sp'
+                    color: 1, 1, 1, 0.9
+                    size_hint_y: 0.15
+                    
+                TextInput:
+                    id: name_input
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    hint_text: 'ENTER YOUR NAME'
+                    font_size: '20sp'
+                    multiline: False
+                    size_hint: (0.8, 0.15)
+                    pos_hint: {'center_x': 0.5}
+                    background_color: 1, 1, 1, 0.05
+                    foreground_color: 1, 1, 1, 1
+                    cursor_color: 1, 1, 1, 1
+                    hint_text_color: 1, 1, 1, 0.4
+                    padding: [15, 10, 15, 10]
+                    canvas.after:
+                        Color:
+                            rgba: 1, 1, 1, 0.2
+                        Line:
+                            rounded_rectangle: (self.x, self.y, self.width, self.height, 5)
+                    
+                HoverButton:
+                    text: 'RETRY'
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    font_size: '28sp'
+                    size_hint: (0.9, 0.2)
+                    pos_hint: {'center_x': 0.5}
+                    background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                    background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                    border: (10, 10, 10, 10)
+                    on_release: root.retry_game()
+                    
+                BoxLayout:
+                    orientation: 'horizontal'
+                    size_hint: (0.9, 0.15)
+                    pos_hint: {'center_x': 0.5}
+                    spacing: 15
+                    
+                    HoverButton:
+                        text: 'HISTORY'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '18sp'
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.view_history()
+                        
+                    HoverButton:
+                        text: 'HOME'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '18sp'
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.go_home()
 <HistoryScreen>:
     BoxLayout:
         orientation: 'vertical'
