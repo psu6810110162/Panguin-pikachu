@@ -72,11 +72,13 @@
         on_release: root.exit_game()
         
     HoverButton:
-        pos_hint: {'center_x': 0.97, 'center_y': 0.03}
         background_normal: 'assets/Component_UI/Button Sounds/volume_up.png'
         background_down: 'assets/Component_UI/Button Sounds/volume_down.png'
+        background_color: (1, 1, 1, 1)
+        border: (0, 0, 0, 0)
         size_hint: (None, None)
         size: (80, 80)
+        pos_hint: {'center_x': 0.97, 'center_y': 0.03}
         on_release: root.toggle_sound()
 
 
