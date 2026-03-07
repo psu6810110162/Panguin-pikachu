@@ -29,6 +29,7 @@ class AudioManager:
             'jump'   : f'{SOUND_DIR}Jump.ogg',
             'jump2'  : f'{SOUND_DIR}Jump 2.ogg',
             'down'   : f'{SOUND_DIR}Down.ogg',
+            'coin'   : f'{SOUND_DIR}tap-a.ogg',
         }
 
     def play_bgm(self, filename, loop=True):
