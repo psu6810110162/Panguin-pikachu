@@ -253,6 +253,7 @@ class GamePlayScreen(Screen):
         self.penguin    = Penguin()
         self.game_event = None
         self.path_index = 0
+        self.gems_collected = 0
 
         self.grid.reset()
         start = self.grid.path[0]
@@ -342,6 +343,12 @@ class GamePlayScreen(Screen):
             else:
                 # ถ้ากำลังเล่นอนิเมชัน Break อยู่ ก็ยังผ่านไม่ได้
                 return
+
+        # เช็คการเก็บ Gem
+        gem = self.grid.get_gem_at(new_col, new_row)
+        if gem and gem.active:
+            self.gems_collected += gem.collect()
+            AudioManager().play_sfx('Coin')
 
         # ย้ายเพนกวิน
         self.penguin.col = new_col
