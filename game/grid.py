@@ -171,6 +171,10 @@ class GridManager:
             
             # สุ่มวาง Obstacle บน centerline (ยกเว้นช่วงแรกๆ)
             # ปรับโอกาสเหลือ 0.2 เพื่อไม่ให้รกเกินไปเมื่อซิกแซกถี่ขึ้น
+            if self._seg_count > 0 and random.random() < 0.2 and not mark_fork:
+                # เช็คไม่ให้วางทับพิกัดเดิมที่มีกล่องอยู่แล้ว (กันการเจนซ้ำซ้อน)
+                if (col, row) not in self.obstacles:
+                    dist = self.get_distance_m()
                     obs = ObstacleFactory.spawn_obstacle(dist, col, row)
                     self.obstacles[(col, row)] = obs
             
