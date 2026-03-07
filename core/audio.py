@@ -19,7 +19,8 @@ class AudioManager:
         self.bgm        = None
         self.bgm_volume = 0.5
         self.sfx_volume = 0.8
-        self._sfx_ref   = None  
+        self._sfx_ref   = None 
+        self.bgm_muted   = False 
 
         self.sfx_paths = {
             'click'  : f'{SOUND_DIR}click-b.ogg',
@@ -32,12 +33,20 @@ class AudioManager:
             'coin'   : f'{SOUND_DIR}tap-a.ogg',
         }
 
+
+    def toggle_mute(self): #สลับเปิด/ปิดเสียง BGM
+        self.bgm_muted = not self.bgm_muted
+        if self.bgm:
+            self.bgm.volume = 0 if self.bgm_muted else self.bgm_volume
+        return self.bgm_muted  # คืนค่า state ให้ UI อัปเดตปุ่ม
+    
+
     def play_bgm(self, filename, loop=True):
         self.stop_bgm()
         path = f'{SOUND_DIR}{filename}'
         self.bgm = SoundLoader.load(path)
         if self.bgm:
-            self.bgm.volume = self.bgm_volume
+            self.bgm.volume = 0 if self.bgm_muted else self.bgm_volume
             self.bgm.loop   = loop
             self.bgm.play()
             print(f"[AudioManager] ✅ เล่น BGM: {filename}")
