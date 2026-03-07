@@ -3,9 +3,12 @@ from kivy.core.window import Window
 from kivy.animation import Animation
 from kivy.uix.image import Image
 from kivy.clock import Clock
-from kivy.properties import BooleanProperty, StringProperty, NumericProperty
+from kivy.properties import BooleanProperty, NumericProperty
 
 class HoverButton(Button):
+    """
+    ปุ่มกดที่ขยายขนาดขึ้นเล็กน้อยเมื่อเอาเมาส์ไปวาง (Hover Effect)
+    """
     hovering = BooleanProperty(False)
 
     def __init__(self, **kwargs):
@@ -46,7 +49,6 @@ class HoverButton(Button):
         if not self.hovering: return
         self.hovering = False
 
-        # ✅ เอาจาก feat/ui/menuscreen — รองรับทั้ง size และ size_hint
         if self.size_hint_x is None or self.size_hint_y is None:
             if self.original_size:
                 Animation(
@@ -61,8 +63,11 @@ class HoverButton(Button):
                 ).start(self)
 
 
-# ✅ เอาจาก develop — เก็บ AnimatedSkin ไว้ด้วย
 class AnimatedSkin(Image):
+    """
+    Widget แสดงผล Skin ตัวละครแบบแอนิเมชัน (Idle)
+    รองรับ Spritesheet 11 เฟรม (352x32)
+    """
     frame_index = NumericProperty(0)
 
     def __init__(self, **kwargs):
@@ -72,6 +77,7 @@ class AnimatedSkin(Image):
         Clock.schedule_interval(self.update_animation, 1.0 / 12.0)
 
     def on_source(self, instance, value):
+        # เมื่อเปลี่ยนรูป ให้รีเซ็ตเฟรม
         self.update_texture()
 
     def update_animation(self, dt):
