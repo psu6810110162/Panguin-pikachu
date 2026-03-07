@@ -19,7 +19,8 @@ class AudioManager:
         self.bgm        = None
         self.bgm_volume = 0.5
         self.sfx_volume = 0.8
-        self._sfx_ref   = None  
+        self._sfx_ref   = None 
+        self.is_muted   = False 
 
         self.sfx_paths = {
             'click'  : f'{SOUND_DIR}click-b.ogg',
@@ -30,6 +31,14 @@ class AudioManager:
             'jump2'  : f'{SOUND_DIR}Jump 2.ogg',
             'down'   : f'{SOUND_DIR}Down.ogg',
         }
+
+
+    def toggle_mute(self): #สลับเปิด/ปิดเสียง BGM
+        self.is_muted = not self.is_muted
+        if self.bgm:
+            self.bgm.volume = 0 if self.is_muted else self.bgm_volume
+        return self.is_muted  # คืนค่า state ให้ UI อัปเดตปุ่ม
+    
 
     def play_bgm(self, filename, loop=True):
         self.stop_bgm()
@@ -49,6 +58,8 @@ class AudioManager:
             self.bgm = None
 
     def play_sfx(self, name):
+        if self.is_muted: #ถ้าเสียงถูกปิดอยู่ ไม่ต้องเล่น SFX
+            return
         path = self.sfx_paths.get(name.lower())
         if not path:
             print(f"[AudioManager] ⚠️ ไม่พบ SFX: {name}")
