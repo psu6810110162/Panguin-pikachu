@@ -20,6 +20,45 @@ class DatabaseManager:
         if not self.conn:
             self.conn = sqlite3.connect(DB_FILE)
             self.conn.row_factory = sqlite3.Row
+            self._ensure_tables()
+
+    def _ensure_tables(self):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS players (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            gem_balance INTEGER DEFAULT 0,
+            equipped_skin TEXT DEFAULT "default",
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER REFERENCES players(id),
+            played_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            duration_s REAL DEFAULT 0.0
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER REFERENCES sessions(id),
+            distance_m INTEGER NOT NULL,
+            gems_collected INTEGER DEFAULT 0,
+            obstacles_cleared INTEGER DEFAULT 0
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS player_skins (
+            player_id INTEGER REFERENCES players(id),
+            skin_id TEXT NOT NULL,
+            purchased_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (player_id, skin_id)
+            )
+        ''')
+        self.conn.commit()
             
     def close(self):
         if self.conn:
