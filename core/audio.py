@@ -32,14 +32,19 @@ class AudioManager:
             'down'   : f'{SOUND_DIR}Down.ogg',
             'coin'   : f'{SOUND_DIR}tap-a.ogg',
         }
-
+        
+        # Pre-load sounds to avoid lag and channel leaks
+        self.sounds = {}
+        for name, path in self.sfx_paths.items():
+            s = SoundLoader.load(path)
+            if s:
+                self.sounds[name] = s
 
     def toggle_mute(self): #สลับเปิด/ปิดเสียง BGM
         self.bgm_muted = not self.bgm_muted
         if self.bgm:
             self.bgm.volume = 0 if self.bgm_muted else self.bgm_volume
         return self.bgm_muted  # คืนค่า state ให้ UI อัปเดตปุ่ม
-    
 
     def play_bgm(self, filename, loop=True):
         self.stop_bgm()
@@ -59,18 +64,15 @@ class AudioManager:
             self.bgm = None
 
     def play_sfx(self, name):
-        path = self.sfx_paths.get(name.lower())
-        if not path:
-            print(f"[AudioManager] ⚠️ ไม่พบ SFX: {name}")
-            return
-
-        self._sfx_ref = SoundLoader.load(path)  
-        if self._sfx_ref:
-            self._sfx_ref.volume = self.sfx_volume
-            self._sfx_ref.play()
+        sound = self.sounds.get(name.lower())
+        if sound:
+            # Note: playing an already playing sound depends on the provider.
+            # Some restart, some do nothing. For brief SFX, this is usually okay.
+            sound.volume = self.sfx_volume
+            sound.play()
             print(f"[AudioManager] ✅ เล่น SFX: {name}")
         else:
-            print(f"[AudioManager] ⚠️ โหลด SFX ไม่ได้: {path}")
+            print(f"[AudioManager] ⚠️ ไม่พบหรือโหลด SFX ไม่ได้: {name}")
 
     def set_bgm_volume(self, volume):
         self.bgm_volume = volume
