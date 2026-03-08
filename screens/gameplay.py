@@ -13,6 +13,7 @@ from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.graphics import Color as GColor, Rectangle as GRect
+from kivy.uix.behaviors import ButtonBehavior
 
 from core.audio import AudioManager
 from core.logger import logger
@@ -289,7 +290,7 @@ class GamePlayScreen(Screen):
         # ── Pause Button ──
         self.pause_btn = Button(
             size_hint=(None, None),
-            size=(60, 60),
+            size=(80, 80),
             pos_hint={'x': 0.02, 'top': 0.98},
             background_normal='assets/Component_UI/Stop/pause_on.png',
             background_down='assets/Component_UI/Stop/pause_down.png',
@@ -312,31 +313,37 @@ class GamePlayScreen(Screen):
             size=lambda o, v: setattr(self._overlay_bg, 'size', v),
         )
 
-        # ── 3 ปุ่มใน Overlay ──
+       # ── 3 ปุ่มใน Overlay ──
         btn_box = BoxLayout(
             orientation='horizontal',
             size_hint=(None, None),
-            size=(400, 90),
+            size=(360, 100),
             pos_hint={'center_x': 0.5, 'center_y': 0.35},
             spacing=20,
         )
-        for label, img_n, img_d, cb in [
-            ('HOME',    'assets/Component_UI/Backtomanu/backtomenu.png',
-                        'assets/Component_UI/Backtomanu/backtomenu_down.png', self.go_home),
-            ('RESTART', 'assets/Component_UI/Reset/reset_up.png',
-                        'assets/Component_UI/Reset/reset_down.png',           self.restart_game),
-            ('RESUME',  'assets/Component_UI/Resume/resume_on.png',
-                        'assets/Component_UI/Resume/resume_down.png',         self.resume_game),
+
+        class IconButton(ButtonBehavior, Image):
+            pass
+
+        for img_n, img_d, cb in [
+            ('assets/Component_UI/Backtomanu/backtomenu.png',
+             'assets/Component_UI/Backtomanu/backtomenu_down.png', self.go_home),
+            ('assets/Component_UI/Reset/reset_up.png',
+             'assets/Component_UI/Reset/reset_down.png',           self.restart_game),
+            ('assets/Component_UI/Resume/resume_on.png',
+             'assets/Component_UI/Resume/resume_down.png',         self.resume_game),
         ]:
-            b = Button(
+            b = IconButton(
+                source=img_n,
                 size_hint=(None, None),
-                size=(120, 90),
-                background_normal=img_n,
-                background_down=img_d,
-                background_color=(1, 1, 1, 1),
-                font_size='14sp',
+                size=(100, 100),
+                allow_stretch=True,
+                keep_ratio=True,
             )
-            b.bind(on_release=lambda _, c=cb: c())
+            b.bind(
+                on_press=lambda x, d=img_d: setattr(x, 'source', d),
+                on_release=lambda x, n=img_n, c=cb: (setattr(x, 'source', n), c()),
+            )
             btn_box.add_widget(b)
 
         self.pause_overlay.add_widget(btn_box)
