@@ -9,6 +9,10 @@ from kivy.graphics import Color, Rectangle
 from kivy.core.window import Window
 from kivy.core.image import Image as CoreImage
 from kivy.animation import Animation
+from kivy.uix.button import Button
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.graphics import Color as GColor, Rectangle as GRect
 
 from core.audio import AudioManager
 from core.logger import logger
@@ -40,6 +44,13 @@ DIR_RIGHT = (1, 0)   # iso ขวา
 
 
 class KivyRenderer(Widget):
+
+    def on_touch_down(self, touch):
+        return False
+    def on_touch_move(self, touch):
+        return False
+    def on_touch_up(self, touch):
+        return False
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -288,6 +299,63 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.btn_right)
 
+        self.pause_btn = Button(
+            size_hint=(None, None),
+            size=(60, 60),
+            pos_hint={'x': 0.02, 'top': 0.98},
+            background_normal='assets/Component_UI/Stop/pause_on.png',
+            background_down='assets/Component_UI/Stop/pause_down.png',
+            background_color=(1, 1, 1, 1),
+            border=(0, 0, 0, 0),
+        )
+        self.pause_btn.bind(on_release=lambda _: self.pause_game())
+        self.add_widget(self.pause_btn)
+
+        # ── Pause Overlay ──
+        self.pause_overlay = FloatLayout(opacity=0, disabled=True)
+        with self.pause_overlay.canvas.before:
+            GColor(0, 0, 0, 0.6)
+            self._overlay_bg = GRect(
+                pos=self.pause_overlay.pos,
+                size=self.pause_overlay.size
+            )
+        self.pause_overlay.bind(
+            pos=lambda o, v: setattr(self._overlay_bg, 'pos', v),
+            size=lambda o, v: setattr(self._overlay_bg, 'size', v),
+        )
+
+        # ── 3 ปุ่มใน Overlay ──
+        btn_box = BoxLayout(
+            orientation='horizontal',
+            size_hint=(None, None),
+            size=(400, 90),
+            pos_hint={'center_x': 0.5, 'center_y': 0.35},
+            spacing=20,
+        )
+        for label, img_n, img_d, cb in [
+            ('HOME',    'assets/Component_UI/Backtomanu/backtomenu.png',
+                        'assets/Component_UI/Backtomanu/backtomenu_down.png', self.go_home),
+            ('RESTART', 'assets/Component_UI/Reset/reset_up.png',
+                        'assets/Component_UI/Reset/reset_down.png',    self.restart_game),
+            ('RESUME',  'assets/Component_UI/Resume/resume_on.png',
+                        'assets/Component_UI/Resume/resume_down.png',  self.resume_game),
+        ]:
+            b = Button(
+                text=label,
+                size_hint=(None, None),
+                size=(120, 90),
+                background_normal=img_n,
+                background_down=img_d,
+                background_color=(1, 1, 1, 1),
+                border=(10, 10, 10, 10),
+                font_size='14sp',
+            )
+            b.bind(on_release=lambda _, c=cb: c())
+            btn_box.add_widget(b)
+
+        self.pause_overlay.add_widget(btn_box)
+        self.add_widget(self.pause_overlay)
+
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
         self._keyboard.bind(on_key_up=self._on_keyboard_up)
@@ -377,13 +445,60 @@ class GamePlayScreen(Screen):
 
     def _go_gameover(self):
         self.manager.current = 'gameover'
+    
+
+    def pause_game(self): #หยุด game loop + แสดง overlay
+        if self.game_event:
+            self.game_event.cancel()
+            self.game_event = None
+        self.pause_overlay.opacity = 1
+        self.pause_overlay.disabled = False
+        AudioManager().play_sfx('click')
+
+
+    def resume_game(self): # ซ่อน overlay + เล่นต่อ
+        self.pause_overlay.opacity = 0
+        self.pause_overlay.disabled = True
+        if not self.game_event:
+            self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
+        AudioManager().play_sfx('click')
+
+
+    def restart_game(self): # รีเซ็ต stateทั้งหมดกลับเป็นค่าเริ่มต้นเหมือนตอนเข้าเกม
+        AudioManager().play_sfx('click')
+        self.grid.reset()
+        self.penguin.is_dead = False
+        start = self.grid.path[0]
+        self.penguin.col = start[0]
+        self.penguin.row = start[1]
+        self.path_index = 0
+        self.gems_collected = 0
+        self.renderer.cam_x = None
+        self.renderer.cam_y = None
+        self.pause_overlay.opacity = 0
+        self.pause_overlay.disabled = True
+        if not self.game_event:
+            self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
+
+
+    def go_home(self): #กลับหน้าเมนู + หยุด game loop
+        AudioManager().play_sfx('click')
+        if self.game_event:
+            self.game_event.cancel()
+            self.game_event = None
+        Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'menu'), 0.2)
+
 
     def _keyboard_closed(self):
-        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
-        self._keyboard = None
+         if self._keyboard:
+            self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+            self._keyboard.unbind(on_key_up=self._on_keyboard_up)   
+            self._keyboard = None
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if self.penguin.is_dead:
+            return False
+        if not self.game_event:
             return False
         if keycode[1] == 'left':
             self.btn_left.handle_press()
@@ -395,6 +510,8 @@ class GamePlayScreen(Screen):
     
 
     def _on_keyboard_up(self, keyboard, keycode):
+        if not self.game_event:
+            return False
         if keycode[1] == 'left':
             self.btn_left.handle_release()
             return True
