@@ -205,6 +205,20 @@ class DatabaseManager:
         
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_last_player_name(self) -> str:
+        """ ดึงชื่อผู้เล่นล่าสุดที่บันทึกไว้ """
+        self.connect()
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT p.name 
+            FROM players p
+            JOIN sessions s ON p.id = s.player_id
+            ORDER BY s.played_at DESC
+            LIMIT 1
+        ''')
+        row = cursor.fetchone()
+        return row['name'] if row else "Penguin"
+
 if __name__ == "__main__":
     db = DatabaseManager()
     db.init_db()
