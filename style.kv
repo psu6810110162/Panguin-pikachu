@@ -6,11 +6,13 @@
             source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
             pos: self.pos
             size: self.size
+
     BoxLayout:
         orientation: 'vertical'
-        padding: [40, 60, 40, 100]
-        spacing: 16
-        
+        padding: [0, 50, 0, 50]
+        spacing: 0
+
+        # ── Title ──
         Label:
             text: 'Penguin Dash'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -20,29 +22,39 @@
             color: 1, 1, 1, 1
             outline_color: 0, 0, 0, 1
             outline_width: 2
-            
+
+        # ── Spacer ──
+        Widget:
+            size_hint_y: 0.08
+
+        # ── Hero START GAME ──
         HoverButton:
             text: 'START GAME'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            font_size: '28sp'
-            size_hint: (0.6, 0.18)
+            font_size: '32sp'
+            size_hint: (0.45, 0.18)
             pos_hint: {'center_x': 0.5}
             background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
             background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
             border: (20, 20, 20, 20)
             color: 1, 1, 1, 1
             on_release: root.start_game()
-            
+
+        # ── Spacer ──
+        Widget:
+            size_hint_y: 0.12
+
+        # ── Icon Row ──
         BoxLayout:
             orientation: 'horizontal'
-            size_hint: (0.7, 0.22)
+            size_hint: (0.6, 0.22)
             pos_hint: {'center_x': 0.5}
-            spacing: 40
+            spacing: 0
 
             # SHOP
             BoxLayout:
                 orientation: 'vertical'
-                spacing: 6
+                spacing: 8
                 HoverButton:
                     size_hint: (None, None)
                     size: (90, 90)
@@ -55,16 +67,16 @@
                 Label:
                     text: 'SHOP'
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                    font_size: '16sp'
-                    color: 1, 1, 1, 1
+                    font_size: '14sp'
+                    color: 1, 1, 1, 0.8
                     size_hint_y: None
-                    height: 24
+                    height: 22
                     halign: 'center'
 
             # SOUND
             BoxLayout:
                 orientation: 'vertical'
-                spacing: 6
+                spacing: 8
                 HoverButton:
                     id: sound_btn
                     size_hint: (None, None)
@@ -78,16 +90,16 @@
                 Label:
                     text: 'SOUND'
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                    font_size: '16sp'
-                    color: 1, 1, 1, 1
+                    font_size: '14sp'
+                    color: 1, 1, 1, 0.8
                     size_hint_y: None
-                    height: 24
+                    height: 22
                     halign: 'center'
 
             # HISTORY
             BoxLayout:
                 orientation: 'vertical'
-                spacing: 6
+                spacing: 8
                 HoverButton:
                     size_hint: (None, None)
                     size: (90, 90)
@@ -100,25 +112,28 @@
                 Label:
                     text: 'HISTORY'
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                    font_size: '16sp'
-                    color: 1, 1, 1, 1
+                    font_size: '14sp'
+                    color: 1, 1, 1, 0.8
                     size_hint_y: None
-                    height: 24
+                    height: 22
                     halign: 'center'
 
-    # ── EXIT (กลางล่าง) ──
-    HoverButton:
-        text: 'EXIT'
-        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-        font_size: '20sp'
-        size_hint: (None, None)
-        size: (120, 50)
-        pos_hint: {'center_x': 0.5, 'y': 0.03}
-        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
-        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
-        border: (20, 20, 20, 20)
-        color: 1, 1, 1, 1
-        on_release: root.exit_game()
+        # ── Spacer ──
+        Widget:
+            size_hint_y: 0.08
+
+        # ── EXIT (กลางล่าง) ──
+        HoverButton:
+            text: 'EXIT'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '18sp'
+            size_hint: (0.2, 0.08)
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (20, 20, 20, 20)
+            color: 1, 1, 1, 1
+            on_release: root.exit_game()
 
 
             
