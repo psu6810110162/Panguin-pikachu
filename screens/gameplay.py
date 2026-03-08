@@ -44,24 +44,24 @@ class KivyRenderer(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.tile_textures = {}
-        self.anim_frame = 0  # เฟรมแอนิเมชันปัจจุบัน
+        self.anim_frame = 0  
         self._grass_textures = [CoreImage(p).texture for p in GRASS_TILES]
         
-        # โหลด Sprite ของอุปสรรค (Box2)
         self.box_assets = {
             'Idle': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Idle.png').texture,
             'Hit': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Hit (28x24).png').texture,
             'Break': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Break.png').texture
         }
-
-        # โหลด Sprite ของ Gem (16x16, 4 frames)
         self.gem_texture = CoreImage('assets/Gem/Coin_Gems/spr_coin_strip4.png').texture
 
-        # ── FIX 1: ตั้ง cam เป็น None
-        # เฟรมแรกจะ snap ทันที ไม่ lerp จาก (0,0)
-        # ซึ่งเป็นสาเหตุที่กล้องวิ่งหนีไปขวาตอนเริ่ม
         self.cam_x = None
         self.cam_y = None
+        
+        # สำหรับ Screen Shake
+        self.shake_amount = 0
+
+    def trigger_shake(self, amount=10):
+        self.shake_amount = amount
 
     def _get_tile_texture(self, col, row):
         key = (col, row)
@@ -74,70 +74,79 @@ class KivyRenderer(Widget):
         y = (col + row) * (TILE_H // 2)
         return x, y
 
-    def draw(self, grid_manager, penguin, path_index):
+    def draw(self, grid_manager, penguin, path_index, is_shaking_floor=False):
         target_x, target_y = self.grid_to_screen(penguin.col, penguin.row)
 
-        # snap เฟรมแรก
         if self.cam_x is None:
             self.cam_x = target_x
             self.cam_y = target_y
 
-        # smooth follow
         self.cam_x += (target_x - self.cam_x) * 0.15
         self.cam_y += (target_y - self.cam_y) * 0.15
 
-        # ── FIX 1: ใช้ /2 ทั้งสองแกน → เพนกวินอยู่กลางจอ
         ox = Window.width  / 2 - self.cam_x
         oy = Window.height / 2 - self.cam_y
+        
+        # Apply Screen Shake
+        if self.shake_amount > 0:
+            ox += random.uniform(-self.shake_amount, self.shake_amount)
+            oy += random.uniform(-self.shake_amount, self.shake_amount)
+            self.shake_amount *= 0.8
+            if self.shake_amount < 0.5: self.shake_amount = 0
 
         self.canvas.clear()
         with self.canvas:
-            # กำหนดระยะมองเห็นรอบตัว (รัศมีการมองเห็น)
             view_radius = 15
             visible_tiles = []
             
-            # ค้นหาแผ่นกระเบื้องที่อยู่ในรัศมีการมองเห็นจาก path_set
+            # รวบรวม Tiles ที่อยู่ในระยะมองเห็น
             for col, row in grid_manager.path_set:
                 if (penguin.col - view_radius <= col <= penguin.col + view_radius) and \
                    (penguin.row - view_radius <= row <= penguin.row + view_radius):
                     visible_tiles.append((col, row))
 
-            # Painter's Algorithm: col+row มาก = วาดก่อน (ข้างหลัง)
+            # [FIX] เพื่อให้วาดตัวละครได้แม้พื้นจะถล่มไปแล้ว (แต่ยังตกอยู่)
+            # เพิ่มพิกัดที่ตัวละครยืนอยู่เข้าไปในลิสต์เพื่อวาด Penguin ในลำดับการวาด (isometric sorting)
+            p_pos = (penguin.col, penguin.row)
+            if p_pos not in visible_tiles:
+                visible_tiles.append(p_pos)
+
             visible_tiles.sort(key=lambda t: t[0] + t[1], reverse=True)
 
             Color(1, 1, 1, 1)
             for col, row in visible_tiles:
-                # เช็คว่าเป็น fork tile หรือไม่ เพื่อ render สีต่าง
-                if grid_manager.is_fork_tile(col, row):
-                    Color(1, 0.9, 0.4, 1) # สีทอง/เหลืองอ่อน
-                else:
-                    Color(1, 1, 1, 1)
+                # วาดพื้น เฉพาะตัวที่มีอยู่ใน path_set
+                if (col, row) in grid_manager.path_set:
+                    if grid_manager.is_fork_tile(col, row):
+                        Color(1, 0.9, 0.4, 1) 
+                    else:
+                        Color(1, 1, 1, 1)
 
-                tex    = self._get_tile_texture(col, row)
-                sx, sy = self.grid_to_screen(col, row)
-                draw_x = sx + ox - (TILE_W // 2)
-                draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
-                Rectangle(texture=tex, pos=(draw_x, draw_y), size=(TILE_W, TILE_IMG_H))
+                    tex    = self._get_tile_texture(col, row)
+                    sx, sy = self.grid_to_screen(col, row)
+                    draw_x = sx + ox - (TILE_W // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
+                    Rectangle(texture=tex, pos=(draw_x, draw_y), size=(TILE_W, TILE_IMG_H))
 
-                # วาดอุปสรรคบน Tile นี้ (ถ้ามี)
-                obs = grid_manager.get_obstacle_at(col, row)
-                if obs and obs.active:
-                    self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                    obs = grid_manager.get_obstacle_at(col, row)
+                    if obs and obs.active:
+                        self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
 
-                # วาด Gem บน Tile นี้ (ถ้ามี)
-                gem = grid_manager.get_gem_at(col, row)
-                if gem and gem.active:
-                    self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                    gem = grid_manager.get_gem_at(col, row)
+                    if gem and gem.active:
+                        self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
 
-                # วาดตัวละคร (Animated Skin) เมื่อถึงแผ่นที่ยืนอยู่
-                # เพื่อให้ Z-index ถูกต้อง (อยู่หลังแผ่นที่อยู่ถัดไป)
+                # วาด Penguin เสมอเมื่อถึงตำแหน่งพิกัดของมัน (ไม่ว่าจะยังมีพื้นหรือไม่)
                 if col == penguin.col and row == penguin.row:
-                    self._draw_penguin(penguin, ox, oy)
+                    p_ox, p_oy = ox, oy
+                    if is_shaking_floor:
+                        p_ox += random.uniform(-3, 3)
+                        p_oy += random.uniform(-3, 3)
+                    self._draw_penguin(penguin, p_ox, p_oy)
 
     def _draw_penguin(self, penguin, ox, oy):
         """วาดตัวละคร (Animated Skin)"""
         if penguin.is_dead:
-            # ท่าตก (Fall)
             px, py = self.grid_to_screen(penguin.col, penguin.row)
             skin_path = penguin.get_skin_path(action='Fall')
             
@@ -146,33 +155,30 @@ class KivyRenderer(Widget):
             
             skin_tex = self.tile_textures[skin_path]
             if penguin.facing_left:
-                skin_tex = skin_tex.get_region(0, 0, -32, 32)
+                skin_tex = skin_tex.get_region(32, 0, -32, 32)
             
             pw, ph = 64, 64
             Color(1, 1, 1, 1)
             Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
         else:
             px, py = self.grid_to_screen(penguin.col, penguin.row)
-            
-            # อัปเดตเฟรมแอนิเมชัน (11 เฟรม)
             self.anim_frame = (self.anim_frame + 0.2) % 11
             frame_idx = int(self.anim_frame)
             
             skin_path = penguin.get_skin_path(action='Idle')
-            cache_key = f"{skin_path}_{frame_idx}"
+            cache_key = f"{skin_path}_{frame_idx}_{'L' if penguin.facing_left else 'R'}"
             
             if cache_key not in self.tile_textures:
                 if skin_path not in self.tile_textures:
                     self.tile_textures[skin_path] = CoreImage(skin_path).texture
                 full_tex = self.tile_textures[skin_path]
-                self.tile_textures[cache_key] = full_tex.get_region(frame_idx * 32, 0, 32, 32)
+                
+                if penguin.facing_left:
+                    self.tile_textures[cache_key] = full_tex.get_region((frame_idx + 1) * 32, 0, -32, 32)
+                else:
+                    self.tile_textures[cache_key] = full_tex.get_region(frame_idx * 32, 0, 32, 32)
             
             skin_tex = self.tile_textures[cache_key]
-            
-            # พลิกรูปตามทิศทาง
-            if penguin.facing_left:
-                skin_tex = skin_tex.get_region(0, 0, -32, 32)
-            
             pw, ph = 64, 64
             Color(1, 1, 1, 1)
             Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
@@ -253,12 +259,15 @@ class GamePlayScreen(Screen):
         self.penguin    = Penguin()
         self.game_event = None
         self.path_index = 0
-        self.gems_collected = 0
-
         self.grid.reset()
         start = self.grid.path[0]
         self.penguin.col = start[0]
         self.penguin.row = start[1]
+        self.path_index = 0
+        self.gems_collected = 0
+        self.idle_timer = 0
+        self.MAX_IDLE_TIME = 2.0 
+        self.game_started = False # จะเริ่มจับเวลาถล่มเมื่อก้าวแรกเดิน
 
         # Renderer — cam_x/cam_y = None → snap อัตโนมัติ
         self.renderer = KivyRenderer()
@@ -266,10 +275,13 @@ class GamePlayScreen(Screen):
 
         # HUD
         self.hud_label = Label(
-            text="0 m", font_size='28sp', bold=True,
+            text="0 m | 💎 0", font_size='24sp', bold=True,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
             pos_hint={'right': 0.98, 'top': 0.98},
-            size_hint=(0.2, 0.05), color=(1, 1, 1, 1),
+            size_hint=(0.3, 0.05), color=(1, 1, 1, 1),
+            halign='right'
         )
+        self.hud_label.bind(size=self.hud_label.setter('text_size'))
         self.add_widget(self.hud_label)
 
         # ปุ่ม
@@ -288,32 +300,74 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.btn_right)
 
-        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
-        self._keyboard.bind(on_key_down=self._on_keyboard_down)
-        self._keyboard.bind(on_key_up=self._on_keyboard_up)
+        self._keyboard = None
 
     def on_enter(self):
         from core.state import StateManager
         logger.info("เข้าสู่หน้า GamePlay")
         
+        # ขอคีย์บอร์ดทุกครั้งที่เข้าหน้าจอ (ป้องกันอาการค้าง/กดไม่ติด)
+        if not self._keyboard:
+            self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+            self._keyboard.bind(on_key_down=self._on_keyboard_down)
+            self._keyboard.bind(on_key_up=self._on_keyboard_up)
+
         # อัปเดต Skin ก่อนเริ่มเล่น
         self.penguin.equip_skin(StateManager().selected_skin)
         
         self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
         AudioManager().play_bgm('Bgm.gameplay.mp3')
+        
+        # [FIX] บังคับ Reset ทุกครั้งที่เข้าหน้า Gameplay จากเมนู (เพื่อให้ Start Game เริ่มจุดใหม่)
+        self.grid.reset()
+        start = self.grid.path[0]
+        self.penguin.col = start[0]
+        self.penguin.row = start[1]
+        self.penguin.is_dead = False
+        self.path_index = 0
+        self.gems_collected = 0
+        self.idle_timer = 0
+        self.game_started = False
+        self.renderer.cam_x = None 
 
     def on_leave(self):
         if self.game_event:
             self.game_event.cancel()
+        
+        # ปล่อยคีย์บอร์ดเมื่อออก
+        if self._keyboard:
+            self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+            self._keyboard.unbind(on_key_up=self._on_keyboard_up)
+            self._keyboard = None
 
     def update(self, dt):
         dist = self.grid.get_distance_m()
-        self.hud_label.text = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
+        dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
+        self.hud_label.text = f"{dist_str} | 💎 {self.gems_collected}"
         
         # อัปเดตแอนิเมชันของอุปสรรคในรัศมีการมองเห็น
         self.grid.update_obstacles(dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row))
         
-        self.renderer.draw(self.grid, self.penguin, self.path_index)
+        # [CLEANUP] ลบวัตถุที่ผ่านไปแล้ว
+        self.grid.cleanup_behind(self.path_index)
+        
+        # [FALLING FLOOR]
+        if not self.penguin.is_dead and self.game_started:
+            self.idle_timer += dt
+            
+            # สั่นเตือนเมื่อเหลือ 1 วินาที
+            is_shaking = self.idle_timer > (self.MAX_IDLE_TIME - 1.0)
+            
+            if self.idle_timer >= self.MAX_IDLE_TIME:
+                logger.warning(f"พื้นถล่ม! ยืนนิ่งนานเกินไปที่ ({self.penguin.col}, {self.penguin.row})")
+                self.grid.remove_tile(self.penguin.col, self.penguin.row)
+                self.penguin.is_dead = True
+                AudioManager().play_sfx('Down') 
+                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8) # ให้เวลาเห็นท่าตกหน่อย
+            
+            self.renderer.draw(self.grid, self.penguin, self.path_index, is_shaking_floor=is_shaking)
+        else:
+            self.renderer.draw(self.grid, self.penguin, self.path_index)
 
     def _move(self, direction):
         """
@@ -338,21 +392,30 @@ class GamePlayScreen(Screen):
         if obs and obs.active:
             # ชน! เล่นอนิเมชันแตก แต่ยังไม่ให้ผ่าน (หยุดประมวลผลการเดิน)
             if obs.hit():
-                AudioManager().play_sfx('Hit')
+                AudioManager().play_sfx('Hit') 
+                # [FIX] นำกล่องออกจาก Dictionary ทันทีตามที่ขอให้หายไปเลย
+                self.grid.obstacles.pop((new_col, new_row), None)
+                self.idle_timer = 0 # รีเซ็ตเวลาเมื่อมีการทำลายกล่อง (มีกิจกรรม)
+                self.game_started = True 
                 return
             else:
-                # ถ้ากำลังเล่นอนิเมชัน Break อยู่ ก็ยังผ่านไม่ได้
                 return
 
         # เช็คการเก็บ Gem
         gem = self.grid.get_gem_at(new_col, new_row)
         if gem and gem.active:
-            self.gems_collected += gem.collect()
+            val = gem.collect()
+            self.gems_collected += val
             AudioManager().play_sfx('Coin')
+            tile_type = "FORK" if self.grid.is_fork_tile(new_col, new_row) else "NORMAL"
+            logger.info(f"[COLLECT] Gem ที่ ({new_col}, {new_row}) ชนิด {tile_type} | รวม: {self.gems_collected}")
+            # [FIX] นำเพชรออกจาก Dictionary ทันทีเพื่อให้หายไปจากจอแน่นอน
+            self.grid.gems.pop((new_col, new_row), None)
 
         # ย้ายเพนกวิน
         self.penguin.col = new_col
         self.penguin.row = new_row
+        self.game_started = True # เริ่มเกมจริงจังหลังจากมีการขยับครั้งแรก
 
         if self.grid.is_on_path(new_col, new_row):
             # ถูกทาง: นับระยะ + อัปเดต index
@@ -362,6 +425,11 @@ class GamePlayScreen(Screen):
                 self.path_index = idx
                 self.grid.extend_if_needed(self.path_index)
                 AudioManager().play_sfx('Jump')
+                self.renderer.trigger_shake(5) # สั่นพองามตอนกระโดด
+                
+                # [FIX] รีเซ็ตเวลาและหยุดสั่น (จากพื้นถล่ม) ทันทีเมื่อก้าวไปบล็อกใหม่
+                self.idle_timer = 0 
+                self.renderer.shake_amount = 5 # ให้กระตุกตอนโดดแทนการสั่นรัวๆ ของพื้นถล่ม
             
             # เช็คว่าเดินไปถึงจุดสุดท้ายของแผนที่แล้วหรือยัง
             if self.path_index == len(self.grid.path) - 1:
@@ -379,8 +447,10 @@ class GamePlayScreen(Screen):
         self.manager.current = 'gameover'
 
     def _keyboard_closed(self):
-        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
-        self._keyboard = None
+        if self._keyboard:
+            self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+            self._keyboard.unbind(on_key_up=self._on_keyboard_up)
+            self._keyboard = None
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if self.penguin.is_dead:

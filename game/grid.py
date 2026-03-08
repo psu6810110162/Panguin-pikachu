@@ -40,6 +40,7 @@ class GridManager:
         self._last_pos  = (0, 0)
         self._last_dir  = self.DIR_A
         self._seg_count = 0
+        self._last_cleaned_idx = 0
 
     # ═══════════════════════════════════════════
     #  PUBLIC API
@@ -57,6 +58,7 @@ class GridManager:
         self._last_pos  = (0, 0)
         self._last_dir  = self.DIR_A
         self._seg_count = 0
+        self._last_cleaned_idx = 0
         self._build_start_platform()
         for _ in range(PRELOAD_SEGMENTS):
             self._append_segment()
@@ -125,6 +127,33 @@ class GridManager:
     def is_merge_point(self, col, row):
         return (col, row) in self.merge_points
 
+    def remove_tile(self, col, row):
+        """ลบ Tile ออกจากแผนที่ (ใช้สำหรับระบบทางเดินถล่ม)"""
+        pos = (col, row)
+        if pos in self.path_set:
+            self.path_set.remove(pos)
+        # ลบ object ที่อาจจะอยู่บนนั้นด้วย
+        self.obstacles.pop(pos, None)
+        self.gems.pop(pos, None)
+        # Note: ไม่ลบจาก self.path เพื่อไม่ให้ลำดับพิกัดเสีย (แต่ renderer จะไม่วาดเพราะไม่อยู่ใน path_set)
+
+    def cleanup_behind(self, path_index):
+        """ลบวัตถุที่ผู้เล่นเดินผ่านมาไกลพอแล้ว เพื่อประหยัด Memory และไม่ให้รก"""
+        target_idx = path_index - 20
+        if target_idx <= self._last_cleaned_idx: return
+        
+        # ลบไล่มาจากจุดที่ล้างครั้งล่าสุด
+        for i in range(self._last_cleaned_idx, target_idx):
+            if i >= len(self.path): break
+            pos = self.path[i]
+            self.obstacles.pop(pos, None)
+            self.gems.pop(pos, None)
+            
+        self._last_cleaned_idx = target_idx
+                
+        # บริหารจัดการ path และ path_set ด้วย (ถ้าต้องการความคลีนขั้นสุด)
+        # แต่ในที่นี้เน้น object ที่ต้อง update/draw ก่อน
+
     # ═══════════════════════════════════════════
     #  INTERNAL BUILDERS
     # ═══════════════════════════════════════════
@@ -178,8 +207,9 @@ class GridManager:
                     obs = ObstacleFactory.spawn_obstacle(dist, col, row)
                     self.obstacles[(col, row)] = obs
             
-            # สุ่มวาง Gem บน centerline (ถ้าไม่มีกล่อง)
+            # สุ่มวาง Gem บน centerline (ถ้าไม่มีกล่อง และไม่มี Gem ที่จุดเดิม)
             elif self._seg_count > 0 and random.random() < 0.4 and not mark_fork:
+                # [FIX] เช็คให้ชัวร์ว่าไม่ทับ Obstacle ที่เพิ่งวางไปหมาดๆ หรือที่มีอยู่แล้ว
                 if (col, row) not in self.obstacles and (col, row) not in self.gems:
                     gem = ObstacleFactory.spawn_gem(col, row)
                     self.gems[(col, row)] = gem
@@ -233,13 +263,18 @@ class GridManager:
             self.path_set.add((lc, lr))
             self.fork_tiles.add((lc, lr))
 
-        # วิ่งตรงขนาน
+        # วิ่งตรงขนาน (เพิ่ม Gem ที่นี่)
         for _ in range(FORK_LONG_LEN):
             lc += cur_dir[0]
             lr += cur_dir[1]
             self.path_set.add((lc, lr))
             self.fork_tiles.add((lc, lr))
-            # ไม่ต้องเพิ่ม width เพราะ PATH_WIDTH = 1
+            
+            # สุ่มวาง Gem บนทางแยก (Long Branch)
+            if random.random() < 0.6: # โอกาสเยอะหน่อยให้คุ้มที่อ้อม
+                if (lc, lr) not in self.gems:
+                    gem = ObstacleFactory.spawn_gem(lc, lr)
+                    self.gems[(lc, lr)] = gem
 
         # กลับเข้า merge point
         for _ in range(SIDE_OFFSET):

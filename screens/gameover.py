@@ -7,23 +7,36 @@ from core.database import DatabaseManager
 class GameOverScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ GameOver")
-        # ดึงข้อมูลจากหน้า gameplay
+        db = DatabaseManager()
+        
+        # 1. พรีฟิลชื่อล่าสุด
+        last_name = db.get_last_player_name()
+        self.ids.name_input.text = last_name
+        
+        # 2. ดึงข้อมูลระยะทาง
         gameplay = self.manager.get_screen('gameplay')
-        distance = int(gameplay.grid.get_distance_m())
-        gems = gameplay.gems_collected
+        self.distance = int(gameplay.grid.get_distance_m())
+        self.gems = gameplay.gems_collected
         
-        # แสดงผลคะแนน
-        self.ids.score_label.text = f"DISTANCE: {distance} M"
+        # แสดงผลคะแนนเบื้องต้น
+        self.ids.score_label.text = f"DISTANCE: {self.distance} M"
+        self._saved = False
+
+    def _save_data(self):
+        if self._saved: return
+        name = self.ids.name_input.text.strip()
+        if not name: name = "Penguin"
         
-        # บันทึกลง Database
         try:
             db = DatabaseManager()
-            db.save_game_session("Penguin", distance=distance, gems=gems)
-            logger.info(f"บันทึกข้อมูลเรียบร้อย: {distance}m, {gems} gems")
+            db.save_game_session(name, distance=self.distance, gems=self.gems)
+            logger.info(f"บันทึกข้อมูลเรียบร้อยสำหรับ {name}: {self.distance}m, {self.gems} gems")
+            self._saved = True
         except Exception as e:
             logger.error(f"Error saving session: {e}")
 
     def retry_game(self):
+        self._save_data()
         AudioManager().play_sfx('click')
         # รีเซ็ตสถานะเกมก่อนกลับไปเล่น
         gameplay = self.manager.get_screen('gameplay')
@@ -33,14 +46,17 @@ class GameOverScreen(Screen):
         gameplay.penguin.col = start_pos[0]
         gameplay.penguin.row = start_pos[1]
         gameplay.path_index = 0
+        gameplay.gems_collected = 0 # รีเซ็ตเพชรที่เก็บได้ในรอบใหม่
         
         Clock.schedule_once(lambda dt: self._go_gameplay(), 0.2)
         
     def view_history(self):
+        self._save_data()
         AudioManager().play_sfx('click')
         Clock.schedule_once(lambda dt: self._go_history(), 0.2)
         
     def go_home(self):
+        self._save_data()
         AudioManager().play_sfx('click')
         Clock.schedule_once(lambda dt: self._go_menu(), 0.2)
 
