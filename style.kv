@@ -246,6 +246,11 @@
             on_release: root.go_back()
 
 <ShopScreen>:
+    canvas.before:
+        Rectangle:
+            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
+            pos: self.pos
+            size: self.size
     BoxLayout:
         orientation: 'vertical'
         padding: 50
@@ -296,6 +301,7 @@
                         font_size: '14sp'
                         size_hint_y: 0.2
                     HoverButton:
+                        id: ninja_frog_btn
                         text: 'EQUIP'
                         font_size: '14sp'
                         size_hint: (0.9, 0.25)
@@ -328,6 +334,7 @@
                         font_size: '14sp'
                         size_hint_y: 0.2
                     HoverButton:
+                        id: mask_dude_btn
                         text: 'EQUIP'
                         font_size: '14sp'
                         size_hint: (0.9, 0.25)
@@ -360,6 +367,7 @@
                         font_size: '14sp'
                         size_hint_y: 0.2
                     HoverButton:
+                        id: pink_man_btn
                         text: 'EQUIP'
                         font_size: '14sp'
                         size_hint: (0.9, 0.25)
@@ -392,6 +400,7 @@
                         font_size: '14sp'
                         size_hint_y: 0.2
                     HoverButton:
+                        id: virtual_guy_btn
                         text: 'EQUIP'
                         font_size: '14sp'
                         size_hint: (0.9, 0.25)

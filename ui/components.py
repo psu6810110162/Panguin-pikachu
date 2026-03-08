@@ -29,6 +29,9 @@ class HoverButton(Button):
     def on_enter(self):
         if self.hovering: return
         self.hovering = True
+        
+        from core.audio import AudioManager
+        AudioManager().play_sfx('switch')
 
         if self.size_hint_x is None or self.size_hint_y is None:
             if self.original_size is None:
