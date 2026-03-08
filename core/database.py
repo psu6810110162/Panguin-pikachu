@@ -219,6 +219,28 @@ class DatabaseManager:
         row = cursor.fetchone()
         return row['name'] if row else "Penguin"
 
+    def is_skin_owned(self, player_name: str, skin_id: str) -> bool:
+        """ เช็คว่าผู้เล่นคนนี้มีสกินนี้แล้วหรือยัง """
+        self.connect()
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT 1 FROM player_skins ps
+            JOIN players p ON ps.player_id = p.id
+            WHERE p.name = ? AND ps.skin_id = ?
+        ''', (player_name, skin_id))
+        return cursor.fetchone() is not None
+
+    def add_owned_skin(self, player_name: str, skin_id: str):
+        """ เพิ่มสกินที่ซื้อแล้วลงในฐานข้อมูล """
+        player_id = self.get_or_create_player(player_name)
+        self.connect()
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT OR IGNORE INTO player_skins (player_id, skin_id)
+            VALUES (?, ?)
+        ''', (player_id, skin_id))
+        self.conn.commit()
+
 if __name__ == "__main__":
     db = DatabaseManager()
     db.init_db()
