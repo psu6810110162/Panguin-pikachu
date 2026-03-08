@@ -1,161 +1,92 @@
-# 🐧 PENGUIN DASH
+# � PENGUIN DASH - Kivy Project Assignment
 
-**Penguin Dash** เป็นเกมแนว Endless Runner ในมุมมอง Isometric Grid (เส้นทางแบบ zigzag ซ้าย-ขวา) พัฒนาด้วย Kivy (Python)
-
-เป้าหมายของเกมคือการวิ่งไปให้ไกลที่สุดเท่าที่จะทำได้ ผู้เล่นต้องควบคุมนกเพนกวินให้เลี้ยวตามทางให้ทัน พังสิ่งกีดขวาง (Obstacles) ที่ขวางทาง และระวังบล็อกทางเดินด้านหลังที่ค่อยๆ ร่วงหล่นตามมาถล่มตัวเรา!
+**Penguin Dash** เป็นโปรเจกต์เกมแนว Endless Runner พัฒนาด้วย Kivy Framework (Python) สำหรับส่งวิชาการเขียนโปรแกรม โดยเน้นการสร้าง Application ที่มีความสวยงาม ลื่นไหล และมีระบบ Logic ที่ซับซ้อนตามเงื่อนไขที่อาจารย์กำหนด
 
 ---
 
-## 👥 Members (สมาชิกกลุ่ม)
-
-ผู้พัฒนาโปรเจกต์ (Contributors):
+## 👥 สมาชิกกลุ่ม (Team Members)
 
 1. **6810110162** - นายอภิชาติ (Aphichat)
 2. **6810110402** - นายธีรยุทธ (Teerayut)
 
 ---
 
-## 🛠 Tech Stack
+## 🎮 ภาพรวมของโปรแกรม (Program Overview)
 
-- **Language:** Python 3.10+
-- **Framework:** Kivy
-- **Database:** SQLite (สำหรับเก็บ Local Leaderboard และ Session History)
-- **Deployment:** Buildozer
+**Penguin Dash** คือเกมวิ่งไม่จำกัด (Endless Runner) ในมุมมอง Isometric ที่ผู้เล่นต้องใช้ทักษะความไวในการตัดสินใจเลี้ยวซ้าย-ขวาตามเส้นทางที่เปลี่ยนไปตลอดเวลา
 
----
+### ฟีเจอร์เด่นของเกม:
 
-## � How to Run (วิธีการรันโปรแกรม)
-
-### 1. Requirements
-
-- **Python 3.10+**
-- **pip** (Python Package Installer)
-
-### 2. Installation (การติดตั้ง)
-
-```bash
-# ติดตั้ง dependencies ที่จำเป็น
-pip install kivy[base] kivy_examples
-# หากต้องการรันระบบเสียง อาจต้องติดตั้งเพิ่มเติม (Optional)
-pip install ffpyplayer
-```
-
-### 3. Execution (การรัน)
-
-```bash
-python main.py
-```
+- **Infinite Terrain Generation:** เส้นทาง zigzag และทางแยก (Forks) ที่สร้างแบบ Procedural ทำให้การเล่นแต่ละครั้งไม่เหมือนกัน
+- **Obstacle & Smashing Mechanics:** การตัดสินใจเลี้ยวเพื่อหลบหรือชนทำลายกล่องไม้ที่เป็นอุปสรรค
+- **Falling Floors:** ระบบ "พื้นถล่ม" หากผู้เล่นหยุดนิ่งนานเกินไปจะถูกบีบให้ต้องก้าวเดินต่อ
+- **Full Shop System:** ระบบสะสม Gems เพื่อปลดล็อก Skin ตัวละครใหม่ๆ และสวมใส่ได้ทันที
+- **Persistence Data:** บันทึกประวัติการเล่น คะแนนสูงสุด และของสะสมลงใน Database
 
 ---
 
-## 🎮 Gameplay Mechanics (ระบบการเล่น)
+## 🛠 คำอธิบายการทำงานของ Code (Technical Logic)
 
-- **Controls:** ใช้ปุ่มลูกศร `←` และ `→` บนคีย์บอร์ด หรือกดปุ่มลูกศรบนหน้าจอเพื่อเลี้ยว
-- **Obstacles:** บล็อกไม้ที่ขวางทางจะมีความสูง (Size) แตกต่างกัน คุณต้องชนมันตามจำนวนครั้งที่กำหนดเพื่อให้ทางเปิด
-- **Gems:** เก็บ Gems ระหว่างทางเพื่อนำไปซื้อ Skins ใหม่ๆ ใน Shop
-- **Progressive Difficulty:** ยิ่งวิ่งไกล บล็อกด้านหลังจะร่วงเร็วขึ้นเรื่อยๆ ท้าทายความไวของนิ้วคุณ!
+ทีมงานเราแบ่งโครงสร้างโค้ดออกเป็นส่วนๆ (Modular Architecture) เพื่อให้ง่ายต่อการพัฒนาและตรวจสอบ:
+
+1. **Core Generation (`game/grid.py`):**
+   - หัวใจหลักคือ `GridManager` ที่ใช้การสุ่มเลือกทิศทางและทำทางแยก (Diamond Forks)
+   - ใช้ระบบ Coordinate Mapping เพื่อเปลี่ยน Grid index เป็นพิกัดหน้าจอแบบ Isometric
+
+2. **Game Loop & Rendering (`screens/gameplay.py`):**
+   - ใช้ `Clock.schedule_interval` ที่ความถี่ 60 FPS เพื่อคำนวณตำแหน่งและวาดภาพ
+   - `KivyRenderer` ทำหน้าที่จัดการ Canvas instructions (Rectangle, Color) เพื่อรีดประสิทธิภาพสูงสุด
+
+3. **Global State (`core/state.py`):**
+   - เก็บข้อมูลการเลือก Skin, คะแนนปัจจุบัน และสถานะ Pause โดยใช้ Singleton เพื่อให้ข้อมูลคงที่ตลอดทั้ง Application
+
+4. **Persistence Helper (`core/database.py`):**
+   - จัดการ SQLite3 เพื่อเก็บ Gems Balance, บันทึกชื่อผู้เล่น และสถานะการเป็นเจ้าของ Skin
 
 ---
 
 ## 📊 Technical Requirements Proof (ตรวจสอบเงื่อนไข Assignment)
 
-โปรเจกต์นี้ได้รับการพัฒนาตามเงื่อนไขที่กำหนดไว้อย่างครบถ้วน:
+ครบถ้วนตามเกณฑ์คะแนนที่กำหนด:
 
 ### 1. Widgets (อย่างน้อย 30 Widgets)
 
-เรามีการใช้งาน Widget ในหน้าจอต่างๆ รวมกัน **มากกว่า 55 Widgets** ดังนี้:
+เรามีการใช้งาน Widget รวมกัน **มากกว่า 60 Widgets** ครอบคลุมทั้ง:
 
-- **Layouts:** `BoxLayout`, `RelativeLayout`, `GridLayout`, `AnchorLayout`
-- **Buttons:** `HoverButton` (Custom), `ArrowButton` (Custom), `ImageButton`
-- **Labels:** สำหรับแสดง Score, Distance, Gem count, และ Headings
-- **Inputs:** `TextInput` สำหรับรับชื่อผู้เล่นในหน้า Game Over
-- **Others:** `Image`, `Canvas (Rectangle/RoundedRectangle/Line)`, `ScrollView`, `ScreenManager`
-- _ตรวจสอบได้ที่ไฟล์ [style.kv](file:///Users/aphchat/Coding%20Year%201/KIVY_Project/Panguin-pikachu/style.kv) และ Python files ในโฟลเดอร์ `screens/`_
+- **Containers:** `BoxLayout`, `RelativeLayout`, `GridLayout`, `ScrollView`, `ScreenManager`
+- **Active Widgets:** `HoverButton` (Custom CSS-like styles), `ArrowButton`, `TextInput`, `Label`, `Image`
+- **Visuals:** Canvas instructions จำนวนมาก (Rectangle/Line/RoundedRectangle) ในหน้า Gameplay และ Shop
 
 ### 2. Callbacks (อย่างน้อย 10 Callbacks)
 
-มีการใช้งาน Event Handlers และ Bindings **มากกว่า 17 จุด** เช่น:
+มีการนำระบบ Callback มาใช้อย่างคุ้มค่า เช่น:
 
-- `on_release` ของปุ่ม Menu ต่างๆ (Start, Shop, History, Exit)
-- `handle_press` / `handle_release` ของปุ่มลูกศรควบคุม
-- `on_key_down` / `on_key_up` สำหรับการควบคุมผ่าน Keyboard
-- `Clock.schedule_interval` (Game Loop)
-- `Clock.schedule_once` (Delayed Actions)
-- `bind(on_press=...)` ในการสร้าง UI Dynamic
-- `on_enter` / `on_leave` ของ ScreenManager
+1. `on_release`: สำหรับทุกปุ่มนำทางและปุ่มเมนู
+2. `handle_press/release`: ระบบควบคุมการเดินที่ตอบสนองไว
+3. `on_key_down/up`: การผูก Event Keyboard กับ Window Direct
+4. `Clock.schedule_interval`: ระบบ Game Engine Update
+5. `Clock.schedule_once`: ระบบ Delay เมื่อตายหรือเปลี่ยนหน้าจอ
+6. `on_enter/leave`: การ Reset ข้อมูลและโหลด Scene
+7. `bind(on_press=...)`: การสร้าง List ในหน้า History แบบ Dynamic
+8. `update_balance_label`: การสื่อสารข้อมูลระหว่าง Database กับ UI
+9. `toggle_sound`: การสลับสถานะ Global AudioManager
+10. `on_text_validate`: ระบบรับชื่อผู้เล่นผ่านคีย์บอร์ด
 
-### 3. Git Persistence (Commit Early & Commit Often)
+### 3. Git Persistence (Commit Early & Often)
 
-- **Total Commits:** 99+ commits
-- **Early Commit:** เริ่มต้นตั้งแต่วันที่ 23 กุมภาพันธ์ 2026
-- **Contributors:**
-  - 6810110162 (Aphichat)
-  - 6810110402 (Teerayut)
-  - _แต่ละคนมี Commit ไม่ต่ำกว่า 25 ตามเงื่อนไข_
+- **จำนวน Commits รวม:** 140+ Commits (เกินเกณฑ์ 50 Commits)
 
----
-
-## 📁 Project Structure
-
-```text
-penguin_dash/
-├── assets/                  # Graphics (Sprites/Atlas/Backgrounds) & Audio (BGM/SFX)
-├── core/                    # Game Engine Core
-│   ├── config.py            # Global variables & Constants
-│   ├── state.py             # Global State Manager
-│   ├── audio.py             # Sound & Music system
-│   └── database.py          # SQLite persistence (Leaderboard/Shop)
-├── game/                    # Entities & Logic
-│   ├── penguin.py           # Player logic & animation
-│   ├── grid.py              # Zigzag math & world generation
-│   ├── blocks.py            # Obstacle & Gem entities
-│   └── pool.py              # Object recovery system
-├── screens/                 # UI Views
-│   ├── menu.py, gameplay.py, gameover.py, history.py, shop.py
-├── main.py                  # Entry Point
-└── style.kv                 # UI Design Definitions
-```
+- **Link:** [GitHub Repository](https://github.com/psu6810110162/Panguin-pikachu)
 
 ---
 
-## 🔄 Git Workflow & Commit Guide
+## วิธีการรันโปรแกรม (How to Run)
 
-เพื่อให้การทำงานร่วมกันเป็นไปอย่างราบรื่น เราจะใช้รูปแบบ **Git Flow** ขั้นพื้นฐาน และรูปแบบ **Conventional Commits**:
-
-### การสลับ Branch
-
-มี Branch หลัก 2 เส้น:
-
-1. `main` : ใช้เก็บโค้ดตัวเต็มที่ **พร้อมใช้งานแบบสมบูรณ์** (Production-ready)
-2. `develop` : ใช้เก็บโค้ดที่ **กำลังพัฒนาและประกอบรวมร่าง** (Integration branch)
-
-**การสร้างฟีเจอร์ใหม่ ให้แยกสาขา (Branch) ออกจาก `develop` ชั่วคราว:**
-
-```bash
-# 1. เช็คเอาต์ไปที่ develop และอัปเดตงานให้ล่าสุดเสมอ
-git checkout develop
-git pull origin develop
-
-# 2. แตกกิ่งใหม่สำหรับการทำฟีเจอร์นั้นๆ
-git checkout -b feature/menu-screen
-
-# 3. เมื่อทำเสร็จและทดสอบครบถ้วน
-git add .
-git commit -m "feat: setup initial menu screen UI"
-
-# 4. รวมร่างกลับไปที่ develop
-git checkout develop
-git merge feature/menu-screen
-git push origin develop
-```
-
-### รูปแบบการเขียน Commit Message
-
-- `feat:` ฟีเจอร์ใหม่
-- `fix:` แก้บั๊ก/ปัญหา
-- `refactor:` ปรับปรุงโครงสร้างโค้ดเดิม
-- `docs:` แก้ไขเอกสาร (เช่น README, Doc.md)
-- `style:` จัดระเบียบหน้าตาโค้ด
-- `test:` เพิ่มหรือแก้ไข Unit Test
-
----
+1. **เตรียม Environment:**
+   ```bash
+   pip install kivy[base] ffpyplayer
+   ```
+2. **เริ่มเกม:**
+   ```bash
+   python main.py
+   ```

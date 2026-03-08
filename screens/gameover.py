@@ -11,20 +11,27 @@ class GameOverScreen(Screen):
         
         # 1. พรีฟิลชื่อล่าสุด
         last_name = db.get_last_player_name()
-        self.ids.name_input.text = last_name
+        if 'name_input' in self.ids:
+            self.ids.name_input.text = last_name
         
-        # 2. ดึงข้อมูลระยะทาง
-        gameplay = self.manager.get_screen('gameplay')
-        self.distance = int(gameplay.grid.get_distance_m())
-        self.gems = gameplay.gems_collected
+        # 2. ดึงข้อมูลจากหน้า gameplay
+        try:
+            gameplay = self.manager.get_screen('gameplay')
+            self.distance = int(gameplay.grid.get_distance_m())
+            self.gems = gameplay.gems_collected
+        except Exception as e:
+            logger.error(f"Error getting gameplay data: {e}")
+            self.distance = 0
+            self.gems = 0
         
-        # แสดงผลคะแนนเบื้องต้น
-        self.ids.score_label.text = f"DISTANCE: {self.distance} M"
+        # แสดงผลคะแนน
+        if 'score_label' in self.ids:
+            self.ids.score_label.text = f"DISTANCE: {self.distance} M"
         self._saved = False
 
     def _save_data(self):
-        if self._saved: return
-        name = self.ids.name_input.text.strip()
+        if hasattr(self, '_saved') and self._saved: return
+        name = self.ids.name_input.text.strip() if 'name_input' in self.ids else "Penguin"
         if not name: name = "Penguin"
         
         try:
@@ -32,6 +39,7 @@ class GameOverScreen(Screen):
             db.save_game_session(name, distance=self.distance, gems=self.gems)
             logger.info(f"บันทึกข้อมูลเรียบร้อยสำหรับ {name}: {self.distance}m, {self.gems} gems")
             self._saved = True
+
         except Exception as e:
             logger.error(f"Error saving session: {e}")
 

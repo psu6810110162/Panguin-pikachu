@@ -46,6 +46,14 @@ class AudioManager:
             self.bgm.volume = 0 if self.bgm_muted else self.bgm_volume
         return self.bgm_muted  # คืนค่า state ให้ UI อัปเดตปุ่ม
 
+
+    def toggle_mute(self): #สลับเปิด/ปิดเสียง BGM
+        self.bgm_muted = not self.bgm_muted
+        if self.bgm:
+            self.bgm.volume = 0 if self.bgm_muted else self.bgm_volume
+        return self.bgm_muted  # คืนค่า state ให้ UI อัปเดตปุ่ม
+    
+
     def play_bgm(self, filename, loop=True):
         self.stop_bgm()
         path = f'{SOUND_DIR}{filename}'

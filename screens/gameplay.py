@@ -54,6 +54,9 @@ class KivyRenderer(Widget):
         }
         self.gem_texture = CoreImage('assets/Gem/Coin_Gems/spr_coin_strip4.png').texture
 
+        # ── FIX 1: ตั้ง cam เป็น None
+        # เฟรมแรกจะ snap ทันที ไม่ lerp จาก (0,0)
+        # ซึ่งเป็นสาเหตุที่กล้องวิ่งหนีไปขวาตอนเริ่ม
         self.cam_x = None
         self.cam_y = None
         
@@ -137,6 +140,7 @@ class KivyRenderer(Widget):
                         self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
 
                 # วาด Penguin เสมอเมื่อถึงตำแหน่งพิกัดของมัน (ไม่ว่าจะยังมีพื้นหรือไม่)
+                # เพื่อให้ Z-index ถูกต้อง (อยู่หลังแผ่นที่อยู่ถัดไป)
                 if col == penguin.col and row == penguin.row:
                     p_ox, p_oy = ox, oy
                     if is_shaking_floor:
@@ -259,12 +263,11 @@ class GamePlayScreen(Screen):
         self.penguin    = Penguin()
         self.game_event = None
         self.path_index = 0
+        self.gems_collected = 0
         self.grid.reset()
         start = self.grid.path[0]
         self.penguin.col = start[0]
         self.penguin.row = start[1]
-        self.path_index = 0
-        self.gems_collected = 0
         self.idle_timer = 0
         self.MAX_IDLE_TIME = 2.0 
         self.game_started = False # จะเริ่มจับเวลาถล่มเมื่อก้าวแรกเดิน

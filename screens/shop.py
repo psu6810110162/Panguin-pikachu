@@ -13,7 +13,6 @@ class ShopScreen(Screen):
     def update_balance_label(self):
         db = DatabaseManager()
         balance = db.get_gem_balance("Penguin")
-        # เช็คว่ามี label นี้ไหมใน kv
         if 'gem_label' in self.ids:
             self.ids.gem_label.text = f"GEMS: 💎 {balance}"
         
@@ -43,6 +42,9 @@ class ShopScreen(Screen):
         db = DatabaseManager()
         state = StateManager()
         
+        # ราคาพื้นฐาน (สมมติว่า 10 Gem ยกเว้นตัวเริ่มต้น)
+        price = 10 if item_name != 'Ninja Frog' else 0
+        
         # ถ้ามีอยู่แล้วให้แค่สวมใส่
         if db.is_skin_owned("Penguin", item_name):
             state.selected_skin = item_name
@@ -52,17 +54,20 @@ class ShopScreen(Screen):
             return
 
         # ถ้ายังไม่มีให้หักเงินและบันทึก
-        if db.deduct_gems("Penguin", 10):
+        if db.deduct_gems("Penguin", price):
             db.add_owned_skin("Penguin", item_name)
             state.selected_skin = item_name
             AudioManager().play_sfx('tab')
-            logger.info(f"ซื้อสกิน {item_name} สำเร็จ! หัก 10 Gems")
+            logger.info(f"ซื้อสกิน {item_name} สำเร็จ! หัก {price} Gems")
             self.update_balance_label()
         else:
             logger.warning("Gems ไม่พอ!")
             AudioManager().play_sfx('down') # เสียงเตือนเงินไม่พอ
 
     def go_back(self):
+        AudioManager().play_sfx('click')
+        Clock.schedule_once(lambda dt: self._go_menu(), 0.2)
+
         AudioManager().play_sfx('click')
         Clock.schedule_once(lambda dt: self._go_menu(), 0.2)
 
