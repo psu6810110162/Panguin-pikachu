@@ -203,9 +203,6 @@ class PauseOverlay(FloatLayout):
         return super().on_touch_up(touch)
 
 
-class IconButton(ButtonBehavior, Image):
-    pass
-
 
 class ArrowButton(ButtonBehavior, Image):
 
@@ -275,7 +272,7 @@ class GamePlayScreen(Screen):
         self.add_widget(self.btn_right)
 
         self.pause_btn = Button(
-            size_hint=(None, None), size=(60, 60),
+            size_hint=(None, None), size=(80, 80),
             pos_hint={'x': 0.02, 'top': 0.98},
             background_normal='assets/Component_UI/Stop/pause_on.png',
             background_down='assets/Component_UI/Stop/pause_down.png',
@@ -299,6 +296,10 @@ class GamePlayScreen(Screen):
             pos_hint={'center_x': 0.5, 'center_y': 0.35},
             spacing=20,
         )
+        # ── 3 ปุ่มใน Overlay ──
+        class IconButton(ButtonBehavior, Image):
+            pass
+
         for img_n, img_d, cb in [
             ('assets/Component_UI/Backtomanu/backtomenu.png',
              'assets/Component_UI/Backtomanu/backtomenu_down.png', self.go_home),
