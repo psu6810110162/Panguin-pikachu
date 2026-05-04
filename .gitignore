@@ -1,5 +1,7 @@
 Doc.md
 game.db
 
+venv/
+
 **/__pycache__/
 *.pyc

@@ -22,23 +22,25 @@ from core.config import (
     DIR_LEFT, DIR_RIGHT,
     BOX_FRAME_W, BOX_FRAME_H, BOX_DRAW_W, BOX_DRAW_H,
     GEM_FRAME_W, GEM_FRAME_H, GEM_DRAW_W, GEM_DRAW_H, GEM_FLOAT_OFFSET,
-    PENGUIN_DRAW_SIZE, VIEW_RADIUS,
+    PENGUIN_DRAW_SIZE, PENGUIN_SPRITE_W, VIEW_RADIUS,
 )
 from game.grid import GridManager
 from game.penguin import Penguin
+from game.chaser import ChaserBlock
+from game.biome import BiomeManager, BIOMES
 
-# รายการรูปภาพแผ่นหญ้าสำหรับพื้น
-GRASS_TILES = [
-    'assets/isometric-nature-pack/grass1.png',
-    'assets/isometric-nature-pack/grass2.png',
-    'assets/isometric-nature-pack/grass3.png',
-    'assets/isometric-nature-pack/grass4.png',
-    'assets/isometric-nature-pack/grass5.png',
-    'assets/isometric-nature-pack/grass6.png',
-    'assets/isometric-nature-pack/grass7.png',
-    'assets/isometric-nature-pack/grass8.png',
-    'assets/isometric-nature-pack/grass9.png',
-    'assets/isometric-nature-pack/grass10.png',
+# รายการรูปภาพแผ่นน้ำแข็งสำหรับพื้น (The Great Melt)
+ICE_TILES = [
+    'assets/great_melt/tiles/ice_tile_1.png',
+    'assets/great_melt/tiles/ice_tile_2.png',
+    'assets/great_melt/tiles/ice_tile_3.png',
+    'assets/great_melt/tiles/ice_tile_4.png',
+    'assets/great_melt/tiles/ice_tile_5.png',
+    'assets/great_melt/tiles/ice_tile_6.png',
+    'assets/great_melt/tiles/ice_tile_7.png',
+    'assets/great_melt/tiles/ice_tile_8.png',
+    'assets/great_melt/tiles/ice_tile_9.png',
+    'assets/great_melt/tiles/ice_tile_10.png',
 ]
 
 ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_right_normal.png'  
@@ -58,19 +60,23 @@ class KivyRenderer(Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.tile_textures = {}    # tile grass texture cache
-        self.penguin_frame_cache = {}  # penguin animation frame cache (แยกออกจาก tile cache)
+        self.tile_textures = {}    # tile ice texture cache
+        self.penguin_frame_cache = {}  # penguin animation frame cache
         self.anim_frame = 0
         self._anim_dt = 0          # dt ล่าสุดที่ส่งมาจาก update loop
-        self._grass_textures = [CoreImage(p).texture for p in GRASS_TILES] # โหลดแผ่นหญ้า
-        # โหลด Texture ของกล่องอุปสรรคตามสถานะต่างๆ
+        self._biome_textures = {}
+        self._prev_biome_id = None
+        # preload all biome tile sets
+        for _b in BIOMES:
+            self._biome_textures[_b.id] = [CoreImage(p).texture for p in _b.tile_paths]
+        # โหลด Texture ของก้อนน้ำแข็งอุปสรรคตามสถานะต่างๆ
         self.box_assets = {
-            'Idle':  CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Idle.png').texture,
-            'Hit':   CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Hit (28x24).png').texture,
-            'Break': CoreImage('assets/pixelAdventure/Free/Items/Boxes/Box2/Break.png').texture
+            'Idle':  CoreImage('assets/great_melt/obstacles/ice_idle.png').texture,
+            'Hit':   CoreImage('assets/great_melt/obstacles/ice_hit.png').texture,
+            'Break': CoreImage('assets/great_melt/obstacles/ice_break.png').texture,
         }
-        # โหลด Texture ของ Gem
-        self.gem_texture = CoreImage('assets/Gem/Coin_Gems/spr_coin_strip4.png').texture
+        # โหลด Texture ของ Ice Crystal Gem
+        self.gem_texture = CoreImage('assets/great_melt/gems/ice_crystal_strip4.png').texture
         self.cam_x = None # ตัวแปรเก็บตำแหน่งกล้องแกน X
         self.cam_y = None # ตัวแปรเก็บตำแหน่งกล้องแกน Y
         self.shake_amount = 0 # ความแรงของการสั่นของกล้อง
@@ -79,14 +85,14 @@ class KivyRenderer(Widget):
         """ สั่งให้กล้องสั่นเมื่อเกิดเหตุการณ์สำคัญ (เช่น พื้นถล่ม) """
         self.shake_amount = amount
 
-    def _get_tile_texture(self, col, row):
+    def _get_tile_texture(self, col, row, textures):
         """ ดึง Texture ของแผ่นพื้นตามพิกัด (ถ้าไม่มีจะสุ่มขึ้นมาใหม่) """
         key = (col, row)
         if key not in self.tile_textures:
             if len(self.tile_textures) > 500:  # ป้องกัน memory leak — ลบ entry เก่าออก
                 for k in list(self.tile_textures)[:200]:
                     del self.tile_textures[k]
-            self.tile_textures[key] = random.choice(self._grass_textures)
+            self.tile_textures[key] = random.choice(textures)
         return self.tile_textures[key]
 
     def grid_to_screen(self, col, row):
@@ -95,7 +101,7 @@ class KivyRenderer(Widget):
         y = (col + row) * (TILE_H // 2)
         return x, y
 
-    def draw(self, grid_manager, penguin, path_index, is_shaking_floor=False, dt=0):
+    def draw(self, grid_manager, penguin, path_index, chaser=None, is_shaking_floor=False, dt=0, biome=None):
         """ ฟังก์ชันหลักในการวาดทุกอย่างลงบน Canvas """
         self._anim_dt = dt
         # 1. คำนวณหาตำแหน่งที่กล้องควรจะหันไป (ศูนย์กลางคือแแพนกวิน)
@@ -120,57 +126,98 @@ class KivyRenderer(Widget):
             self.shake_amount *= SHAKE_DECAY
             if self.shake_amount < SHAKE_STOP: self.shake_amount = 0
 
+        # Biome texture cache: clear if biome changed
+        if biome and biome.id != self._prev_biome_id:
+            self.tile_textures.clear()
+            self._prev_biome_id = biome.id
+            self._cur_biome = biome
+
+        # Resolve current texture list
+        if biome:
+            cur_textures = self._biome_textures.get(biome.id, list(self._biome_textures.values())[0])
+        else:
+            cur_textures = self._biome_textures.get('arctic', list(self._biome_textures.values())[0])
+
         self.canvas.clear() # เคลียร์ภาพเก่าออกก่อนวาดใหม่
         with self.canvas:
             view_radius = VIEW_RADIUS
             visible_tiles = []
+            visible_set = set()
             for col, row in grid_manager.path_set:
                 if (penguin.col - view_radius <= col <= penguin.col + view_radius) and \
                    (penguin.row - view_radius <= row <= penguin.row + view_radius):
                     visible_tiles.append((col, row))
+                    visible_set.add((col, row))
 
-            # ใส่ตำแหน่งเลเยอร์ผู้เล่นลงไปรวมด้วย
+            # ใส่ตำแหน่งผู้เล่น
             p_pos = (penguin.col, penguin.row)
-            if p_pos not in visible_tiles:
+            if p_pos not in visible_set:
                 visible_tiles.append(p_pos)
+                visible_set.add(p_pos)
 
-            # 4. เรียงลำดับการวาดจากหลังมาหน้า (Z-order) เพื่อให้วัตถุที่อยู่ไกลโดนทับด้วยของที่อยู่ใกล้
+            # ใส่ตำแหน่ง Chaser (ถ้า active และอยู่ในระยะ)
+            if chaser and chaser.active:
+                c_pos = (chaser.col, chaser.row)
+                if c_pos not in visible_set:
+                    if (penguin.col - view_radius <= chaser.col <= penguin.col + view_radius) and \
+                       (penguin.row - view_radius <= chaser.row <= penguin.row + view_radius):
+                        visible_tiles.append(c_pos)
+                        visible_set.add(c_pos)
+
+            # 4. เรียงลำดับ Z-order (col+row สูง = ไกล = วาดก่อน)
             visible_tiles.sort(key=lambda t: t[0] + t[1], reverse=True)
 
             Color(1, 1, 1, 1)
             for col, row in visible_tiles:
-                if (col, row) in grid_manager.path_set:
-                    # ถ้าเป็นทางแยกพิเศษ (Fork) ให้เน้นสีทอง
-                    if grid_manager.is_fork_tile(col, row):
-                        Color(1, 0.9, 0.4, 1) 
-                    else:
-                        Color(1, 1, 1, 1)
+                is_chaser_here = chaser and chaser.active and col == chaser.col and row == chaser.row
 
-                    # วาดแผ่นพื้น
-                    tex    = self._get_tile_texture(col, row)
+                if (col, row) in grid_manager.path_set:
+                    # สีกระเบื้อง: แดงถ้า chaser อยู่, biome fork สีถ้า fork, biome tint ปกติ
+                    if is_chaser_here:
+                        Color(1, 0.18, 0.0, 1)
+                    elif grid_manager.is_fork_tile(col, row):
+                        if biome:
+                            Color(*biome.fork_color)
+                        else:
+                            Color(1, 0.9, 0.4, 1)
+                    else:
+                        if biome:
+                            Color(*biome.tile_tint)
+                        else:
+                            Color(1, 1, 1, 1)
+
+                    tex    = self._get_tile_texture(col, row, cur_textures)
                     sx, sy = self.grid_to_screen(col, row)
                     draw_x = sx + ox - (TILE_W // 2)
                     draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
                     Rectangle(texture=tex, pos=(draw_x, draw_y), size=(TILE_W, TILE_IMG_H))
 
-                    # วาดสิ่งกีดขวาง (ถ้ามี)
-                    obs = grid_manager.get_obstacle_at(col, row)
-                    if obs and obs.active:
-                        self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                    if is_chaser_here:
+                        # วาด Chaser block ทับไปเลย ไม่วาด obstacle/gem ตรงนั้น
+                        self._draw_chaser(draw_x, draw_y + (TILE_IMG_H // 2), chaser.pulse_alpha())
+                    else:
+                        # วาดสิ่งกีดขวางและ Gem ปกติ
+                        obs = grid_manager.get_obstacle_at(col, row)
+                        if obs and obs.active:
+                            self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                        gem = grid_manager.get_gem_at(col, row)
+                        if gem and gem.active:
+                            self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
 
-                    # วาด Gem (ถ้ามี)
-                    gem = grid_manager.get_gem_at(col, row)
-                    if gem and gem.active:
-                        self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
-
-                # 5. วาดแพนกวินในลำดับที่ถูกต้องตามตำแหน่ง Grid
+                # 5. วาดแพนกวินในลำดับ Z ที่ถูกต้อง
                 if col == penguin.col and row == penguin.row:
                     p_ox, p_oy = ox, oy
-                    # ถ้าพื้นสั่น (ใกล้ถล่ม) ให้แพนกวินสั่นตาม
                     if is_shaking_floor:
                         p_ox += random.uniform(-3, 3)
                         p_oy += random.uniform(-3, 3)
                     self._draw_penguin(penguin, p_ox, p_oy)
+
+            # Atmosphere overlay (biome tint over full screen)
+            if biome and biome.atmo_tint[3] > 0:
+                r2, g2, b2, a2 = biome.atmo_tint
+                Color(r2, g2, b2, a2)
+                Rectangle(pos=(0, 0), size=(Window.width, Window.height))
+                Color(1, 1, 1, 1)
 
     def _draw_penguin(self, penguin, ox, oy):
         """ วาดแพนกวินพร้อมจัดการแอนิเมชันและสกิน """
@@ -181,9 +228,9 @@ class KivyRenderer(Widget):
             if skin_path not in self.penguin_frame_cache:
                 self.penguin_frame_cache[skin_path] = CoreImage(skin_path).texture
             skin_tex = self.penguin_frame_cache[skin_path]
-            # พลิกรูปถ้าหันหน้าคนละด้าน
+            # พลิกรูปถ้าหันหน้าซ้าย (PENGUIN_SPRITE_W=32 คือความกว้างจริงของ frame ใน spritesheet)
             if penguin.facing_left:
-                skin_tex = skin_tex.get_region(PENGUIN_DRAW_SIZE, 0, -PENGUIN_DRAW_SIZE, PENGUIN_DRAW_SIZE)
+                skin_tex = skin_tex.get_region(PENGUIN_SPRITE_W, 0, -PENGUIN_SPRITE_W, PENGUIN_SPRITE_W)
             pw, ph = PENGUIN_DRAW_SIZE, PENGUIN_DRAW_SIZE
             Color(1, 1, 1, 1)
             Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
@@ -194,17 +241,19 @@ class KivyRenderer(Widget):
             frame_idx = int(self.anim_frame)
             skin_path = penguin.get_skin_path(action='Idle')
 
-            # ดึงเฉพาะส่วน (Region) จาก Spritesheet มาวาด — ใช้ penguin_frame_cache แยกต่างหาก
+            # ดึงเฉพาะส่วน (Region) จาก Spritesheet — ใช้ PENGUIN_SPRITE_W=32 สำหรับ spritesheet frame
             cache_key = f"{skin_path}_{frame_idx}_{'L' if penguin.facing_left else 'R'}"
             if cache_key not in self.penguin_frame_cache:
                 if skin_path not in self.penguin_frame_cache:
                     self.penguin_frame_cache[skin_path] = CoreImage(skin_path).texture
                 full_tex = self.penguin_frame_cache[skin_path]
                 if penguin.facing_left:
-                    self.penguin_frame_cache[cache_key] = full_tex.get_region((frame_idx + 1) * PENGUIN_DRAW_SIZE, 0, -PENGUIN_DRAW_SIZE, PENGUIN_DRAW_SIZE)
+                    self.penguin_frame_cache[cache_key] = full_tex.get_region(
+                        (frame_idx + 1) * PENGUIN_SPRITE_W, 0, -PENGUIN_SPRITE_W, PENGUIN_SPRITE_W)
                 else:
-                    self.penguin_frame_cache[cache_key] = full_tex.get_region(frame_idx * PENGUIN_DRAW_SIZE, 0, PENGUIN_DRAW_SIZE, PENGUIN_DRAW_SIZE)
-            
+                    self.penguin_frame_cache[cache_key] = full_tex.get_region(
+                        frame_idx * PENGUIN_SPRITE_W, 0, PENGUIN_SPRITE_W, PENGUIN_SPRITE_W)
+
             skin_tex = self.penguin_frame_cache[cache_key]
             pw, ph = PENGUIN_DRAW_SIZE, PENGUIN_DRAW_SIZE
             Color(1, 1, 1, 1)
@@ -230,6 +279,33 @@ class KivyRenderer(Widget):
         gw, gh = GEM_DRAW_W, GEM_DRAW_H
         Color(1, 1, 1, 1)
         Rectangle(texture=tex, pos=(tx + (TILE_W - gw) // 2, ty + float_offset), size=(gw, gh))
+
+    def _draw_chaser(self, tx, ty, pulse_a):
+        """ วาด Chaser — บล็อกยักษ์สีแดงที่ไล่ตามผู้เล่น พร้อม pulse glow """
+        bw = int(BOX_DRAW_W * 2.4)
+        bh = int(BOX_DRAW_H * 2.4)
+        cx = tx + (TILE_W - bw) // 2
+
+        # Danger glow — use biome chaser_glow if available
+        cur_biome = getattr(self, '_cur_biome', None)
+        if cur_biome:
+            gr, gg, gb = cur_biome.chaser_glow
+        else:
+            gr, gg, gb = 1.0, 0.05, 0.0
+        Color(gr, gg, gb, pulse_a * 0.55)
+        Rectangle(pos=(cx - 14, ty - 8), size=(bw + 28, bh + 16))
+
+        # Chaser block — red-tinted oversized ice block
+        full_tex = self.box_assets['Idle']
+        tex = full_tex.get_region(0, 0, BOX_FRAME_W, BOX_FRAME_H)
+        Color(1, 0.12, 0.0, 1)
+        Rectangle(texture=tex, pos=(cx, ty), size=(bw, bh))
+
+        # White hot core highlight
+        Color(1, 0.85, 0.80, pulse_a * 0.35)
+        Rectangle(pos=(cx + bw // 4, ty + bh // 3), size=(bw // 2, bh // 3))
+
+        Color(1, 1, 1, 1)  # reset
 
 
 class PauseOverlay(FloatLayout):
@@ -300,6 +376,7 @@ class GamePlayScreen(Screen):
         self.idle_timer = 0             # ตัวนับเวลาที่ห้ามยืนนิ่งเฉยๆ
         self.MAX_IDLE_TIME = MAX_IDLE_TIME
         self.game_started = False       # สถานะว่าเริ่มวิ่งก้าวแรกหรือยัง
+        self.chaser = ChaserBlock()     # บล็อกไล่ตามที่ตามมาเรื่อยๆ
 
         # สร้าง Renderer สำหรับวาดภาพ
         self.renderer = KivyRenderer()
@@ -307,7 +384,7 @@ class GamePlayScreen(Screen):
 
         # สร้างส่วนแสดงผลคะแนน (HUD)
         self.hud_label = Label(
-            text="0 m | 💎 0", font_size='24sp', bold=True,
+            text="🌡 0 m  💎 0", font_size='24sp', bold=True,
             font_name='assets/Component_UI/Font/Kenney Future.ttf',
             pos_hint={'right': 0.98, 'top': 0.98},
             size_hint=(0.3, 0.05), color=(1, 1, 1, 1),
@@ -344,6 +421,18 @@ class GamePlayScreen(Screen):
         )
         self.pause_btn.bind(on_release=lambda _: self.pause_game())
         self.add_widget(self.pause_btn)
+
+        # Biome manager and announcement label
+        self.biome_mgr = BiomeManager()
+        self.biome_label = Label(
+            text='', font_size='30sp', bold=True,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            pos_hint={'center_x': 0.5, 'center_y': 0.60},
+            size_hint=(0.9, 0.12),
+            color=(1, 1, 1, 0),
+            halign='center',
+        )
+        self.add_widget(self.biome_label)
 
         # หน้าต่างเมนูตอนกดหยุด (Pause Overlay)
         self.pause_overlay = PauseOverlay(opacity=0, disabled=True)
@@ -410,7 +499,9 @@ class GamePlayScreen(Screen):
         self.gems_collected = 0
         self.idle_timer = 0
         self.game_started = False
+        self.chaser.reset()
         self.renderer.cam_x = None # รีเซ็ตกล้อง
+        self.biome_mgr.reset()
 
     def on_leave(self):
         """ ทำงานเมื่อเดินออกจากหน้าจอนี้ (หยุดเกมลูปและเสียง) """
@@ -428,29 +519,52 @@ class GamePlayScreen(Screen):
         # 1. อัปเดตระยะทางบนหน้าจอ (HUD)
         dist = self.grid.get_distance_m()
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
-        self.hud_label.text = f"{dist_str} | 💎 {self.gems_collected}"
-        
+        self.hud_label.text = f"🌡 {dist_str}  💎 {self.gems_collected}"
+
+        # Update biome and HUD color
+        biome, biome_changed = self.biome_mgr.update(dist)
+        self.hud_label.color = list(biome.hud_color)
+        if biome_changed:
+            Animation.cancel_all(self.biome_label)
+            self.biome_label.text = biome.name
+            self.biome_label.color = list(biome.hud_color[:3]) + [1.0]
+            Animation(color=list(biome.hud_color[:3]) + [0.0], duration=2.5, t='out_quad').start(self.biome_label)
+
         # 2. สั่งให้อุปสรรคและแผ่นพื้นหลังผู้เล่นอัปเดต/ทำลายทิ้งเพื่อประหยัด Memory
         self.grid.update_obstacles(dt, view_radius=VIEW_RADIUS, penguin_pos=(self.penguin.col, self.penguin.row))
         self.grid.cleanup_behind(self.path_index)
-        
-        # 3. ตรวจสอบการยืนนิ่งถล่มของพื้น
+
+        # 3. อัปเดต Chaser และตรวจว่าตามทันผู้เล่นหรือยัง
+        if not self.penguin.is_dead:
+            dist = self.grid.get_distance_m()
+            # Spawn chaser หลังจากผู้เล่นมีระยะนำหน้าพอแล้ว
+            if not self.chaser.active and self.path_index >= ChaserBlock.ACTIVATE_AFTER:
+                self.chaser.activate(self.path_index - ChaserBlock.START_GAP, self.grid.path)
+            if self.chaser.active:
+                caught = self.chaser.update(dt, self.path_index, dist, self.grid.path)
+                if caught:
+                    self.penguin.is_dead = True
+                    AudioManager().play_sfx('down')
+                    self.renderer.trigger_shake(20)
+                    Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+
+        # 4. ตรวจสอบการยืนนิ่งถล่มของพื้น
         if not self.penguin.is_dead and self.game_started:
             self.idle_timer += dt
-            # ถ้าใกล้จะยืนนานเกินไป พื้นจะสั่นเตือน
             is_shaking = self.idle_timer > (self.MAX_IDLE_TIME - 1.0)
-            
+
             if self.idle_timer >= self.MAX_IDLE_TIME:
                 logger.warning(f"พื้นถล่ม! ยืนนิ่งนานเกินไปที่ ({self.penguin.col}, {self.penguin.row})")
-                self.grid.remove_tile(self.penguin.col, self.penguin.row) # ทำลายพื้นแผ่นที่ยืนอยู่
+                self.grid.remove_tile(self.penguin.col, self.penguin.row)
                 self.penguin.is_dead = True
-                AudioManager().play_sfx('down') # เล่นเสียงตกลงหลุม
-                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8) # เปลี่ยนไปหน้าจบเกม
-            
-            # วาดภาพลง Canvas
-            self.renderer.draw(self.grid, self.penguin, self.path_index, is_shaking_floor=is_shaking, dt=dt)
+                AudioManager().play_sfx('down')
+                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+
+            self.renderer.draw(self.grid, self.penguin, self.path_index,
+                               chaser=self.chaser, is_shaking_floor=is_shaking, dt=dt, biome=biome)
         else:
-            self.renderer.draw(self.grid, self.penguin, self.path_index, dt=dt)
+            self.renderer.draw(self.grid, self.penguin, self.path_index,
+                               chaser=self.chaser, dt=dt, biome=biome)
 
     def _move(self, direction):
         """ ฟังก์ชันจัดการการเคลื่อนที่เมื่อกดปุ่มลูกศร (รับเวกเตอร์ทิศทาง) """
@@ -545,8 +659,12 @@ class GamePlayScreen(Screen):
         self.gems_collected = 0
         self.idle_timer = 0
         self.game_started = False
+        self.chaser.reset()
         self.renderer.cam_x = None
         self.renderer.cam_y = None
+        self.biome_mgr.reset()
+        Animation.cancel_all(self.biome_label)
+        self.biome_label.color = (1, 1, 1, 0)
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:

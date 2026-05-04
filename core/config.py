@@ -32,8 +32,9 @@ GEM_FRAME_W      = 16   # width of one gem spritesheet frame (px)
 GEM_FRAME_H      = 16   # height of one gem spritesheet frame (px)
 GEM_DRAW_W       = 32   # drawn width of gem on screen
 GEM_DRAW_H       = 32   # drawn height of gem on screen
-PENGUIN_DRAW_SIZE = 64  # drawn width/height of penguin sprite
-VIEW_RADIUS       = 15  # tile radius rendered around penguin
+PENGUIN_DRAW_SIZE  = 64  # drawn width/height of penguin sprite on screen
+PENGUIN_SPRITE_W   = 32  # pixel width of one frame in the penguin spritesheet
+VIEW_RADIUS        = 15  # tile radius rendered around penguin
 
 # --- Camera ---
 CAMERA_LERP = 0.15  # camera smoothing factor per frame
@@ -42,8 +43,8 @@ SHAKE_STOP  = 0.5   # threshold below which shake is zeroed
 
 # --- Grid / Path generation ---
 PATH_WIDTH       = 1
-SEGMENT_LEN_MIN  = 2
-SEGMENT_LEN_MAX  = 6
+SEGMENT_LEN_MIN  = 5     # minimum tiles per straight run (was 2)
+SEGMENT_LEN_MAX  = 12    # maximum tiles per straight run (was 6)
 PRELOAD_SEGMENTS = 8
 VISIBLE_BUFFER   = 60
 FORK_CHANCE      = 0.30
@@ -63,4 +64,4 @@ DIR_LEFT  = (0, 1)
 DIR_RIGHT = (1, 0)
 
 # --- Default player name (fallback) ---
-DEFAULT_PLAYER_NAME = "Penguin"
+DEFAULT_PLAYER_NAME = "Explorer"

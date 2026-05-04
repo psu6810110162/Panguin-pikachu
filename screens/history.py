@@ -27,30 +27,32 @@ class HistoryScreen(Screen):
             self.ids.history_list.add_widget(Label(
                 text="NO HISTORY YET",
                 font_name='assets/Component_UI/Font/Kenney Future.ttf',
-                size_hint_y=None, height=50
+                font_size='20sp',
+                size_hint_y=None, height=60,
+                color=(0.70, 0.90, 1.0, 0.55)
             ))
             return
 
-        # 3. นำข้อมูลแต่ละรอบการเล่นมาสร้างเป็น Label และเพิ่มลงในลิสต์
         for i, row in enumerate(history, 1):
-            # แยกเอาเฉพาะวันที่ (ตัดเวลาออก)
             date_str = row['played_at'].split(' ')[0]
             dist = row['distance_m']
             gems = row['gems_collected']
-            
-            # ทำเครื่องหมายถ้วยทอง (Award) ให้กับรายการแรก (คะแนนสูงสุดในลิสต์ที่ดึงมา)
-            award = " 🏆" if i == 1 else ""
-            
-            label_text = f"{i}. {date_str}: {dist} m ({gems} Gems){award}"
-            
-            self.ids.history_list.add_widget(Label(
+            award = "  🏆" if i == 1 else ""
+            label_text = f"#{i}  {date_str}   {dist} m   💎 {gems}{award}"
+            # Alternate row tint for readability
+            row_alpha = 0.08 if i % 2 == 0 else 0.0
+            lbl = Label(
                 text=label_text,
                 font_name='assets/Component_UI/Font/Kenney Future.ttf',
-                font_size='18sp',
+                font_size='17sp',
                 size_hint_y=None,
-                height=50,
-                color=(1, 1, 1, 0.9)
-            ))
+                height=48,
+                color=(1.0, 0.80, 0.20, 1) if i == 1 else (0.75, 0.90, 1.0, 0.92),
+                halign='left',
+                valign='middle',
+            )
+            lbl.bind(size=lambda l, v: setattr(l, 'text_size', v))
+            self.ids.history_list.add_widget(lbl)
 
     def go_back(self):
         """ ฟังก์ชันกลับหน้าเมนูหลัก """

@@ -25,7 +25,7 @@ class ShopScreen(Screen):
         state = StateManager()
         current_skin = state.selected_skin
 
-        skins = ['Ninja Frog', 'Mask Dude', 'Pink Man', 'Virtual Guy']
+        skins = ['Classic', 'Arctic', 'Emperor', 'Crystal']
         for s_name in skins:
             btn_id = s_name.lower().replace(' ', '_') + "_btn"
             btn = self.ids.get(btn_id)
@@ -50,7 +50,7 @@ class ShopScreen(Screen):
         player_name = db.get_last_player_name()
 
         # ราคาพื้นฐานของสกิน (สมมติว่าตัวละ 10 Gem ยกเว้นตัว Ninja Frog ที่เป็นตัวเริ่มต้นฟรี)
-        price = 10 if item_name != 'Ninja Frog' else 0
+        price = 10 if item_name != 'Classic' else 0
 
         # 1. ถ้าผู้เล่นมีสกินนี้อยู่แล้ว -> แค่สวมใส่และเปลี่ยน State ของแอป
         if db.is_skin_owned(player_name, item_name):

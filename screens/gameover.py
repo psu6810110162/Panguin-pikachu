@@ -1,9 +1,28 @@
+import random
 from kivy.uix.screenmanager import Screen
 from core.logger import logger
 from core.audio import AudioManager
 from kivy.clock import Clock
 from core.database import DatabaseManager
 from core.config import DEFAULT_PLAYER_NAME
+
+CLIMATE_FACTS = [
+    "Arctic sea ice has declined ~13% per decade since 1979.",
+    "The Arctic warms 4× faster than the global average.",
+    "2023 was Earth's hottest year in 125,000 years.",
+    "Sea ice loss exposes darker ocean, absorbing more heat.",
+    "Emperor penguins may be extinct by 2100 without action.",
+    "Greenland loses ~280 billion tonnes of ice per year.",
+    "Every 0.5°C of warming doubles the chance of ice-free summers.",
+    "Permafrost thaw releases CO₂ trapped for thousands of years.",
+    "Ocean heat content reached a record high in 2023.",
+    "Limiting warming to 1.5°C saves 70% of coral reefs.",
+    "Renewable energy is now cheaper than fossil fuels globally.",
+    "1 billion people face water scarcity from glacier retreat.",
+    "Antarctica lost 150 billion tonnes of ice per year in the 2010s.",
+    "Arctic shipping routes open as sea ice retreats — a double-edged change.",
+    "Planting trees and reducing meat consumption can cut emissions 30%.",
+]
 
 class GameOverScreen(Screen):
     """ คลาสหน้าจอจบเกม (Game Over) """
@@ -29,7 +48,15 @@ class GameOverScreen(Screen):
         
         # แสดงผลระยะทางบนหน้าจอ
         if 'score_label' in self.ids:
-            self.ids.score_label.text = f"DISTANCE: {self.distance} M"
+            self.ids.score_label.text = f"AWARENESS INDEX: {self.distance} M"
+        if 'climate_fact_label' in self.ids:
+            try:
+                gameplay = self.manager.get_screen('gameplay')
+                biome = gameplay.biome_mgr.current
+                fact = random.choice(biome.facts)
+            except Exception:
+                fact = random.choice(CLIMATE_FACTS)
+            self.ids.climate_fact_label.text = f"🌍  {fact}"
         self._saved = False # สถานะว่าบันทึกข้อมูลลง Database หรือยัง
 
     def _save_data(self):
@@ -63,7 +90,8 @@ class GameOverScreen(Screen):
         gameplay.penguin.col = start_pos[0]
         gameplay.penguin.row = start_pos[1]
         gameplay.path_index = 0
-        gameplay.gems_collected = 0 # รีเซ็ตเพชรที่เก็บได้
+        gameplay.gems_collected = 0
+        gameplay.chaser.reset()
         
         # เปลี่ยนหน้าจอกลับไปที่ Gameplay
         Clock.schedule_once(lambda dt: self._go_gameplay(), 0.2)

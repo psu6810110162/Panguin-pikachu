@@ -169,8 +169,11 @@ class GridManager:
             # --- สร้างทางแยก (Diamond Fork) ---
             self._build_diamond_fork()
         else:
-            # --- สร้างช่วงทางตรง ---
-            self._build_straight(random.randint(SEGMENT_LEN_MIN, SEGMENT_LEN_MAX))
+            # --- สร้างช่วงทางตรง (ยาวขึ้นตามระยะทาง = corridors ยาว = มีแรงกดดันมากขึ้น) ---
+            dist = self.get_distance_m()
+            extra = min(6, int(dist) // 100)   # +1 tile ต่อ 100m, สูงสุด +6
+            seg_len = random.randint(SEGMENT_LEN_MIN + extra, SEGMENT_LEN_MAX + extra)
+            self._build_straight(seg_len)
 
         # หลังจากจบช่วง (ตรง/แยก) ให้สร้างจุดหักเลี้ยว (Corner) เพื่อเปลี่ยนทิศทาง
         self._build_corner()
@@ -179,32 +182,47 @@ class GridManager:
     # ───────────────────────────────────────────
     #  การสร้างทางตรง (Straight segment)
     # ───────────────────────────────────────────
+    # ─── Dynamic difficulty helpers ───────────────────────────────────────────
+    def _obstacle_chance(self, dist):
+        """Obstacle spawn probability per tile, scaled by distance."""
+        if dist < 30:   return 0.15   # safe intro
+        if dist < 100:  return 0.30   # warming up
+        if dist < 250:  return 0.45   # getting serious
+        if dist < 500:  return 0.58   # intense
+        return 0.68                   # relentless
+
+    def _gem_chance(self, dist):
+        """Gem spawn probability per non-obstacle tile, scaled by distance."""
+        if dist < 30:   return 0.50   # generous early on
+        if dist < 150:  return 0.40
+        return 0.32                   # sparser late-game (harder to collect)
+
     def _build_straight(self, length, mark_fork=False):
         """ สร้างพื้นตรงไปทางทิศปัจจุบันตามความยาวที่ระบุ """
         col, row = self._last_pos
-        cur_dir  = self._last_dir # ทิศทางที่จะมุ่งไป (DIR_A หรือ DIR_B)
+        cur_dir  = self._last_dir
+        dist     = self.get_distance_m()
         for _ in range(length):
             col += cur_dir[0]
             row += cur_dir[1]
-            self._add_center(col, row) # เพิ่มจุดเข้า Centerline
-            self._add_width(col, row, cur_dir) # เพิ่มความกว้างให้ทาง (ถ้า PATH_WIDTH > 1)
+            self._add_center(col, row)
+            self._add_width(col, row, cur_dir)
             if mark_fork:
                 self.fork_tiles.add((col, row))
-            
-            # สุ่มวางกล่องอุปสรรค (โอกาส 20%) บนทางเดินหลัก
-            if self._seg_count > 0 and random.random() < 0.2 and not mark_fork:
-                if (col, row) not in self.obstacles:
-                    dist = self.get_distance_m() # คำนวณความยากตามระยะทาง
-                    obs = ObstacleFactory.spawn_obstacle(dist, col, row)
-                    self.obstacles[(col, row)] = obs
-            
-            # สุ่มวาง Gem (โอกาส 40%) ถ้าจุดนั้นไม่มีกล่องวางอยู่
-            elif self._seg_count > 0 and random.random() < 0.4 and not mark_fork:
-                if (col, row) not in self.obstacles and (col, row) not in self.gems:
-                    gem = ObstacleFactory.spawn_gem(col, row)
-                    self.gems[(col, row)] = gem
 
-        self._last_pos = (col, row) # อัปเดตจุดสุดท้าย
+            if self._seg_count > 0 and not mark_fork:
+                if random.random() < self._obstacle_chance(dist):
+                    if (col, row) not in self.obstacles:
+                        obs = ObstacleFactory.spawn_obstacle(dist, col, row)
+                        self.obstacles[(col, row)] = obs
+                # Gems are independent — spawn if the tile has no obstacle
+                if (col, row) not in self.obstacles:
+                    if random.random() < self._gem_chance(dist):
+                        if (col, row) not in self.gems:
+                            gem = ObstacleFactory.spawn_gem(col, row)
+                            self.gems[(col, row)] = gem
+
+        self._last_pos = (col, row)
 
     # ───────────────────────────────────────────
     #  การสร้างทางแยกรูปเพชร (Diamond Fork)
