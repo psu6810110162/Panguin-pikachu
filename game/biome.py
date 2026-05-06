@@ -32,7 +32,7 @@ BIOMES = [
         ],
     ),
     BiomeDef(
-        id='drought', name='🌵  DROUGHT ZONE', start_dist=250,
+        id='drought', name='🌵  DROUGHT ZONE', start_dist=100,
         tile_paths=[f'assets/great_melt/tiles/drought/drought_tile_{i}.png' for i in range(1,6)],
         tile_tint=(1.0, 0.88, 0.58, 1.0),
         atmo_tint=(0.28, 0.10, 0.0, 0.30),
@@ -48,7 +48,7 @@ BIOMES = [
         ],
     ),
     BiomeDef(
-        id='flood', name='🌊  FLOOD SURGE', start_dist=550,
+        id='flood', name='🌊  FLOOD SURGE', start_dist=250,
         tile_paths=[f'assets/great_melt/tiles/flood/flood_tile_{i}.png' for i in range(1,6)],
         tile_tint=(0.55, 0.90, 1.0, 1.0),
         atmo_tint=(0.0, 0.15, 0.35, 0.32),
@@ -64,7 +64,7 @@ BIOMES = [
         ],
     ),
     BiomeDef(
-        id='wildfire', name='🔥  WILDFIRE', start_dist=900,
+        id='wildfire', name='🔥  WILDFIRE', start_dist=450,
         tile_paths=[f'assets/great_melt/tiles/wildfire/wildfire_tile_{i}.png' for i in range(1,6)],
         tile_tint=(1.0, 0.68, 0.30, 1.0),
         atmo_tint=(0.40, 0.08, 0.0, 0.38),

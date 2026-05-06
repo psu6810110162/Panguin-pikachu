@@ -71,6 +71,14 @@ class GameOverScreen(Screen):
             db = DatabaseManager()
             # บันทึก Session การเล่น (ชื่อ, ระยะทาง, เพชร)
             db.save_game_session(name, distance=self.distance, gems=self.gems)
+            # บันทึก Quiz answers ที่สะสมไว้ระหว่างเล่น
+            try:
+                gameplay = self.manager.get_screen('gameplay')
+                for biome_id, q_idx, correct in gameplay._pending_quiz_answers:
+                    db.save_quiz_answer(name, biome_id, q_idx, correct)
+                gameplay._pending_quiz_answers = []
+            except Exception:
+                pass
             logger.info(f"บันทึกข้อมูลเรียบร้อยสำหรับ {name}: {self.distance}m, {self.gems} gems")
             self._saved = True
 

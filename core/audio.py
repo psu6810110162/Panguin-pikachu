@@ -27,14 +27,17 @@ class AudioManager:
 
         # รายการไฟล์เสียง SFX (เสียงสั้นๆ เช่น กดปุ่ม, ตกหลุม)
         self.sfx_paths = {
-            'click'  : f'{SOUND_DIR}click-b.ogg',
-            'tab'    : f'{SOUND_DIR}tap-a.ogg',
-            'hit'    : f'{SOUND_DIR}tap-b.ogg',
-            'switch' : f'{SOUND_DIR}switch-a.ogg',
-            'jump'   : f'{SOUND_DIR}Jump.ogg',
-            'jump2'  : f'{SOUND_DIR}Jump 2.ogg',
-            'down'   : f'{SOUND_DIR}Down.ogg',
-            'coin'   : f'{SOUND_DIR}tap-a.ogg',
+            'click'         : f'{SOUND_DIR}click-b.ogg',
+            'tab'           : f'{SOUND_DIR}tap-a.ogg',
+            'hit'           : f'{SOUND_DIR}tap-b.ogg',
+            'switch'        : f'{SOUND_DIR}switch-a.ogg',
+            'jump'          : f'{SOUND_DIR}Jump.ogg',
+            'jump2'         : f'{SOUND_DIR}Jump 2.ogg',
+            'down'          : f'{SOUND_DIR}Down.ogg',
+            'coin'          : f'{SOUND_DIR}tap-a.ogg',
+            'quiz_correct'  : f'{SOUND_DIR}quiz_correct.wav',
+            'quiz_wrong'    : f'{SOUND_DIR}quiz_wrong.wav',
+            'chaser_surge'  : f'{SOUND_DIR}chaser_surge.wav',
         }
         
         # โหลดไฟล์เสียงเตรียมไว้ล่วงหน้า (Pre-load) เพื่อลดความหน่วงเวลาเล่น

@@ -1,4 +1,5 @@
 import random
+import resource
 from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
@@ -28,6 +29,9 @@ from game.grid import GridManager
 from game.penguin import Penguin
 from game.chaser import ChaserBlock
 from game.biome import BiomeManager, BIOMES
+from game.event_manager import EventManager
+from game.quiz_manager import QuizManager
+from ui.quiz_popup import QuizPopupWidget
 
 # รายการรูปภาพแผ่นน้ำแข็งสำหรับพื้น (The Great Melt)
 ICE_TILES = [
@@ -384,7 +388,7 @@ class GamePlayScreen(Screen):
 
         # สร้างส่วนแสดงผลคะแนน (HUD)
         self.hud_label = Label(
-            text="🌡 0 m  💎 0", font_size='24sp', bold=True,
+            text="0 m   GEM 0", font_size='24sp', bold=True,
             font_name='assets/Component_UI/Font/Kenney Future.ttf',
             pos_hint={'right': 0.98, 'top': 0.98},
             size_hint=(0.3, 0.05), color=(1, 1, 1, 1),
@@ -434,6 +438,23 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.biome_label)
 
+        # ── Benchmark overlay (FPS + RAM) — toggle with 'b' key ──
+        self._bench_visible   = False
+        self._fps_samples     = []
+        self._bench_tick      = 0.0
+        self.bench_label = Label(
+            text='',
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            font_size='14sp',
+            pos_hint={'x': 0.01, 'top': 0.94},
+            size_hint=(0.25, 0.12),
+            color=(0.3, 1.0, 0.3, 0),  # hidden by default
+            halign='left',
+            valign='top',
+        )
+        self.bench_label.bind(size=self.bench_label.setter('text_size'))
+        self.add_widget(self.bench_label)
+
         # หน้าต่างเมนูตอนกดหยุด (Pause Overlay)
         self.pause_overlay = PauseOverlay(opacity=0, disabled=True)
         with self.pause_overlay.canvas.before:
@@ -471,7 +492,14 @@ class GamePlayScreen(Screen):
 
         self.pause_overlay.add_widget(btn_box)
         self.add_widget(self.pause_overlay)
-        self._keyboard = None 
+        self._keyboard = None
+
+        # ── Quiz / Event System ───────────────────────────────
+        self.event_manager       = EventManager()
+        self.quiz_manager        = QuizManager()
+        self._pending_quiz_answers = []   # [(biome_id, q_idx, correct), ...]
+        self.quiz_popup          = QuizPopupWidget(size_hint=(1, 1))
+        self.add_widget(self.quiz_popup)   # เพิ่มบนสุด — ซ้อนทับทุก widget
 
     def on_enter(self):
         """ ทำงานเมื่อเข้าสู่หน้าจอนี้ (เริ่มเล่นรอบใหม่/เข้าสู่รอบถัดไป) """
@@ -502,6 +530,9 @@ class GamePlayScreen(Screen):
         self.chaser.reset()
         self.renderer.cam_x = None # รีเซ็ตกล้อง
         self.biome_mgr.reset()
+        self.event_manager.reset()
+        self.quiz_manager.reset()
+        self._pending_quiz_answers = []
 
     def on_leave(self):
         """ ทำงานเมื่อเดินออกจากหน้าจอนี้ (หยุดเกมลูปและเสียง) """
@@ -516,10 +547,21 @@ class GamePlayScreen(Screen):
 
     def update(self, dt):
         """ ฟังก์ชัน Game Loop หลักที่รันทุกเฟรม """
+        # Benchmark sampling
+        if self._bench_visible and dt > 0:
+            self._fps_samples.append(1.0 / dt)
+            self._bench_tick += dt
+            if self._bench_tick >= 1.0:
+                fps_avg = sum(self._fps_samples) / len(self._fps_samples)
+                ram_mb  = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024 // 1024
+                self.bench_label.text = f"FPS {fps_avg:.0f}\nRAM {ram_mb} MB"
+                self._fps_samples.clear()
+                self._bench_tick = 0.0
+
         # 1. อัปเดตระยะทางบนหน้าจอ (HUD)
         dist = self.grid.get_distance_m()
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
-        self.hud_label.text = f"🌡 {dist_str}  💎 {self.gems_collected}"
+        self.hud_label.text = f"{dist_str}   GEM {self.gems_collected}"
 
         # Update biome and HUD color
         biome, biome_changed = self.biome_mgr.update(dist)
@@ -533,6 +575,15 @@ class GamePlayScreen(Screen):
         # 2. สั่งให้อุปสรรคและแผ่นพื้นหลังผู้เล่นอัปเดต/ทำลายทิ้งเพื่อประหยัด Memory
         self.grid.update_obstacles(dt, view_radius=VIEW_RADIUS, penguin_pos=(self.penguin.col, self.penguin.row))
         self.grid.cleanup_behind(self.path_index)
+
+        # 2.5 ตรวจ Quiz Event trigger
+        if not self.penguin.is_dead and self.game_started:
+            if self.event_manager.should_trigger(dist):
+                question = self.quiz_manager.get_question(biome.id)
+                if question:
+                    self.event_manager.mark_triggered(dist)
+                    self._show_quiz_popup(question, biome.id)
+                    return  # หยุด update ในเฟรมนี้เลย popup จะ pause loop
 
         # 3. อัปเดต Chaser และตรวจว่าตามทันผู้เล่นหรือยัง
         if not self.penguin.is_dead:
@@ -598,6 +649,7 @@ class GamePlayScreen(Screen):
             self.gems_collected += val
             AudioManager().play_sfx('coin') # เสียงเก็บเหรียญ
             self.grid.gems.pop((new_col, new_row), None)
+            self._spawn_float(f'+{val}', y_frac=0.18)
 
         # 3. ขยับตัวละครไปยังพิกัดใหม่
         self.penguin.col = new_col
@@ -663,6 +715,11 @@ class GamePlayScreen(Screen):
         self.renderer.cam_x = None
         self.renderer.cam_y = None
         self.biome_mgr.reset()
+        self.event_manager.reset()
+        self.quiz_manager.reset()
+        self._pending_quiz_answers = []
+        self._fps_samples.clear()
+        self._bench_tick = 0.0
         Animation.cancel_all(self.biome_label)
         self.biome_label.color = (1, 1, 1, 0)
         self.pause_overlay.opacity = 0
@@ -687,6 +744,14 @@ class GamePlayScreen(Screen):
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         """ จัดการคำสั่งจากคีย์บอร์ด (กดปุ่มลง) """
+        # 'b' toggles benchmark overlay — works anytime during gameplay
+        if keycode[1] == 'b':
+            self._bench_visible = not self._bench_visible
+            self.bench_label.color = (0.3, 1.0, 0.3, 1 if self._bench_visible else 0)
+            if not self._bench_visible:
+                self.bench_label.text = ''
+            return True
+
         if self.penguin.is_dead:
             return False
         if not self.game_event:
@@ -710,3 +775,69 @@ class GamePlayScreen(Screen):
             self.btn_right.handle_release()
             return True
         return False
+
+    # ── Quiz helpers ──────────────────────────────────────────
+
+    def _show_quiz_popup(self, question: dict, biome_id: str):
+        """ หยุด game loop และแสดง Quiz popup """
+        self._pause_game_loop()
+        self.quiz_popup.show(question, biome_id, self._on_quiz_done)
+
+    def _on_quiz_done(self, correct: bool, question: dict, biome_id: str):
+        """ callback หลังผู้เล่นตอบ Quiz (หรือ timeout) """
+        self.event_manager.mark_finished()
+        self._pending_quiz_answers.append((biome_id, question['idx'], correct))
+
+        if correct:
+            self.gems_collected += 5
+            AudioManager().play_sfx('quiz_correct')
+            self._spawn_float('+5 GEM', y_frac=0.22, color=(1.0, 0.85, 0.15, 1.0))
+        else:
+            self.chaser.apply_speed_boost(factor=1.8, steps=15)
+            AudioManager().play_sfx('quiz_wrong')
+            AudioManager().play_sfx('chaser_surge')
+            self._flash_red()
+            self.renderer.trigger_shake(15)
+
+        self._resume_game_loop()
+
+    def _pause_game_loop(self):
+        if self.game_event:
+            self.game_event.cancel()
+            self.game_event = None
+
+    def _resume_game_loop(self):
+        if not self.game_event:
+            self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
+
+    def _flash_red(self):
+        """แฟลชหน้าจอแดงสั้นๆ เมื่อตอบผิด"""
+        overlay = Widget(size_hint=(1, 1), opacity=0)
+        with overlay.canvas:
+            Color(1, 0.08, 0.08, 0.45)
+            rect = Rectangle(pos=overlay.pos, size=overlay.size)
+        overlay.bind(pos=lambda w, v: setattr(rect, 'pos', v),
+                     size=lambda w, v: setattr(rect, 'size', v))
+        self.add_widget(overlay)
+        anim = Animation(opacity=1, duration=0.08) + Animation(opacity=0, duration=0.35)
+        anim.bind(on_complete=lambda *_: self.remove_widget(overlay))
+        anim.start(overlay)
+
+    def _spawn_float(self, text, x_frac=0.5, y_frac=0.15,
+                     color=(1.0, 0.85, 0.15, 1.0)):
+        """ข้อความลอยขึ้นแล้วหาย — ใช้สำหรับ gem และ quiz reward"""
+        lbl = Label(
+            text=text,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            font_size='24sp',
+            bold=True,
+            color=list(color),
+            size_hint=(None, None),
+            size=(200, 48),
+        )
+        self.add_widget(lbl)
+        lbl.center_x = self.width * x_frac
+        lbl.center_y = self.height * y_frac
+        anim = Animation(y=lbl.y + 90, opacity=0, duration=1.1, t='out_quad')
+        anim.bind(on_complete=lambda *_: self.remove_widget(lbl))
+        anim.start(lbl)

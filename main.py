@@ -18,7 +18,9 @@ from screens.menu import MenuScreen
 from screens.gameover import GameOverScreen
 from screens.history import HistoryScreen
 from screens.shop import ShopScreen
+from screens.learning_path import LearningPathScreen
 from core.database import DatabaseManager
+from core import i18n
 
 # โหลดไฟล์ .kv ที่จัดเก็บดีไซน์และเลย์เอาต์ (Style Sheet)
 Builder.load_file('style.kv')
@@ -28,6 +30,9 @@ class PenguinDashApp(App):
     def build(self):
         # 1. เตรียมฐานข้อมูล SQLite (สร้าง Table ถ้ายังไม่มี)
         DatabaseManager().init_db()
+
+        # 2. โหลดการตั้งค่าภาษา (ไทย/อังกฤษ)
+        i18n.load()
         
         # 2. ตั้งขนาดหน้าต่างแอปตามที่กำหนดไว้ใน Config
         Window.size = (WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -41,6 +46,7 @@ class PenguinDashApp(App):
         sm.add_widget(GameOverScreen(name='gameover'))
         sm.add_widget(HistoryScreen(name='history'))
         sm.add_widget(ShopScreen(name='shop'))
+        sm.add_widget(LearningPathScreen(name='learning_path'))
 
         logger.info("เริ่มเปิดเข้าสู่เกม Penguin Dash")
         return sm

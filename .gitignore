@@ -4,4 +4,4 @@ game.db
 venv/
 
 **/__pycache__/
-*.pyc
+*.pyc.claude/

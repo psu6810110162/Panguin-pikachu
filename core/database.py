@@ -74,6 +74,18 @@ class DatabaseManager:
             PRIMARY KEY (player_id, skin_id)
             )
         ''')
+
+        # ตารางบันทึกผลการตอบ Quiz แยกตาม Biome (สำหรับ Learning Path)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quiz_progress (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id   INTEGER REFERENCES players(id),
+            biome_id    TEXT NOT NULL,
+            question_idx INTEGER NOT NULL,
+            correct     INTEGER NOT NULL,
+            answered_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
         self.conn.commit() # บันทึกการเปลี่ยนแปลงลงไฟล์
             
     def close(self):
@@ -214,4 +226,54 @@ class DatabaseManager:
             VALUES (?, ?)
         ''', (player_id, skin_id))
         self.conn.commit()
+
+    # ==========================
+    # ระบบ Quiz / Learning Path
+    # ==========================
+
+    def save_quiz_answer(self, player_name: str, biome_id: str, q_idx: int, correct: bool):
+        """ บันทึกผลการตอบ Quiz หนึ่งข้อลง quiz_progress """
+        player_id = self.get_or_create_player(player_name)
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO quiz_progress (player_id, biome_id, question_idx, correct) VALUES (?, ?, ?, ?)",
+            (player_id, biome_id, q_idx, 1 if correct else 0)
+        )
+        self.conn.commit()
+
+    def get_quiz_stats(self, player_name: str) -> Dict[str, Dict]:
+        """
+        ดึงสถิติ Quiz แยกตาม biome_id
+        คืนค่า: {'arctic': {'correct': 3, 'total': 5}, 'drought': {...}, ...}
+        นับเฉพาะข้อที่ตอบถูกครั้งแรก (distinct question_idx correct=1)
+        """
+        self.connect()
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT qp.biome_id,
+                   COUNT(DISTINCT CASE WHEN qp.correct=1 THEN qp.question_idx END) AS correct,
+                   COUNT(DISTINCT qp.question_idx) AS total
+            FROM quiz_progress qp
+            JOIN players p ON qp.player_id = p.id
+            WHERE p.name = ?
+            GROUP BY qp.biome_id
+        ''', (player_name,))
+        stats = {}
+        for row in cursor.fetchall():
+            stats[row['biome_id']] = {'correct': row['correct'] or 0, 'total': row['total'] or 0}
+        return stats
+
+    def reset_quiz_progress(self, player_name: str):
+        """ลบข้อมูล quiz_progress ทั้งหมดของผู้เล่นคนนี้"""
+        self.connect()
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT id FROM players WHERE name = ?", (player_name,)
+        )
+        row = cursor.fetchone()
+        if row:
+            cursor.execute(
+                "DELETE FROM quiz_progress WHERE player_id = ?", (row['id'],)
+            )
+            self.conn.commit()
 
