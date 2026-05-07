@@ -65,3 +65,11 @@ DIR_RIGHT = (1, 0)
 
 # --- Default player name (fallback) ---
 DEFAULT_PLAYER_NAME = "Explorer"
+
+# --- Buff durations ---
+GOLD_BUFF_DURATION = 5.0   # วิ — Gold buff (force prop)
+DARK_BUFF_DURATION = 5.0   # วิ — Dark buff (reverse prop)
+
+# --- Quiz Event (Active Learning) ---
+QUIZ_INTERVAL_MIN = 50     # m — popup เร็วสุด
+QUIZ_INTERVAL_MAX = 100    # m — popup ช้าสุด
