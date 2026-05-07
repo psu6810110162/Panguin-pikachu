@@ -6,8 +6,8 @@ class ChaserBlock:
     - เริ่ม spawn หลังจากผู้เล่นวิ่งไปแล้ว ACTIVATE_AFTER ก้าว
     - ยิ่งวิ่งไกลยิ่งเร็ว — ถ้าตามทันผู้เล่นก็แพ้
     """
-    ACTIVATE_AFTER = 10   # ผู้เล่นต้องวิ่งถึง path_index นี้ก่อนถึง spawn
-    START_GAP      = 4    # จุดเริ่มต้นห่างจากผู้เล่น (tiles)
+    ACTIVATE_AFTER = 20   # ผู้เล่นต้องวิ่งถึง path_index นี้ก่อนถึง spawn (~20 tiles)
+    START_GAP      = 14   # จุดเริ่มต้นห่างจากผู้เล่น — ให้พื้นที่ตั้งตัว แต่รู้สึกตามมา
 
     def __init__(self):
         self.path_index      = 0
@@ -62,11 +62,14 @@ class ChaserBlock:
 
         if self.move_timer >= effective_interval:
             self.move_timer = 0.0
-            self.path_index += 1
-            if self.path_index < len(path):
+            next_idx = self.path_index + 1
+            if next_idx < len(path):           # guard: ไม่ข้ามปลาย path
+                self.path_index = next_idx
                 self.col, self.row = path[self.path_index]
+            # ถ้า path ยังไม่ถูก extend ทัน — หยุดรอ ไม่ increment เกิน
 
-        return self.path_index >= player_path_index
+        # caught เฉพาะเมื่อ chaser อยู่บน tile เดียวกับ player จริงๆ
+        return self.path_index >= player_path_index and self.path_index < len(path)
 
     def pulse_alpha(self):
         """ค่า Alpha ที่เต้นเป็น pulse เพื่อใช้ตอนวาด"""
