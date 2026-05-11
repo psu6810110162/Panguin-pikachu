@@ -17,6 +17,7 @@ from kivy.graphics import Color as GColor, Rectangle as GRect
 
 from core.audio import AudioManager
 from core.logger import logger
+from core import i18n
 from core.config import (
     TARGET_FPS, TILE_W, TILE_H, TILE_IMG_H,
     CAMERA_LERP, SHAKE_DECAY, SHAKE_STOP, MAX_IDLE_TIME,
@@ -65,7 +66,6 @@ class RenderState:
     chaser:           object          = None
     is_shaking_floor: bool            = False
     gold_active:      bool            = False
-    reverse_active:   bool            = False
     falling_props:    dict            = field(default_factory=dict)
     falling_tiles:    dict            = field(default_factory=dict)
     trap_states:      dict            = field(default_factory=dict)
@@ -211,13 +211,19 @@ class KivyRenderer(Widget):
                 if pos in grid_manager.path_set:
                     # ── Falling floor tint ──────────────────────────────
                     fall_t = falling_tiles.get(pos)
-                    if fall_t is not None and not is_chaser_here:
+                    # chaser danger — tile ที่ chaser ผ่านมาแล้ว → แดงเต็มๆ
+                    is_danger = (chaser and chaser.active and pos in chaser.visited
+                                 and not is_chaser_here)
+
+                    if is_danger:
+                        Color(1, 0.08, 0.0, 1)                         # แดงเลือด
+                    elif fall_t is not None and not is_chaser_here:
                         # urgency 0→1 (กะพริบแดงยิ่งใกล้ร่วง)
                         urgency = max(0.0, min(1.0, 1.0 - fall_t / 3.0))
                         pulse   = 0.5 + 0.5 * abs(((fall_t * 6) % 2) - 1)
                         Color(1.0, 1.0 - urgency * pulse, 1.0 - urgency * pulse, 1)
                     elif is_chaser_here:
-                        Color(1, 0.18, 0.0, 1)
+                        Color(1, 0.18, 0.0, 1)                         # ตัว chaser
                     elif grid_manager.is_fork_tile(col, row):
                         Color(*(biome.fork_color if biome else (1, 0.9, 0.4, 1)))
                     else:
@@ -514,9 +520,8 @@ class GamePlayScreen(Screen):
         self.game_started = False       # สถานะว่าเริ่มวิ่งก้าวแรกหรือยัง
         self.chaser = ChaserBlock()     # บล็อกไล่ตามที่ตามมาเรื่อยๆ
 
-        # Buff system
+        # Buff system — gold buff เท่านั้น (reverse ถูกเอาออกจาก game design)
         self.gold_buff   = GoldBuff()
-        self.reverse_buff = ReverseBuff()
 
         # Falling prop animations — block ร่วงลง Y เมื่อถูกทำลาย/เก็บ
         # {(col, row): {'prop': str, 'y_offset': float, 'vy': float, 'alpha': float}}
@@ -532,8 +537,8 @@ class GamePlayScreen(Screen):
 
         # สร้างส่วนแสดงผลคะแนน (HUD)
         self.hud_label = Label(
-            text="🌡 0 m  💎 0", font_size='24sp', bold=True,
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            text="0 m  GEM 0", font_size='24sp', bold=True,
+            font_name=i18n.FONT_KF,
             pos_hint={'right': 0.98, 'top': 0.98},
             size_hint=(0.3, 0.05), color=(1, 1, 1, 1),
             halign='right'
@@ -544,7 +549,7 @@ class GamePlayScreen(Screen):
         # Buff HUD — gold ⚡ / reverse 🔄 countdown ด้านซ้ายบน
         self.buff_label = Label(
             text='', font_size='20sp', bold=True,
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            font_name=i18n.FONT_KF,
             pos_hint={'x': 0.02, 'top': 0.88},
             size_hint=(0.35, 0.08), color=(1, 1, 1, 1),
             halign='left',
@@ -557,7 +562,7 @@ class GamePlayScreen(Screen):
         self.btn_left = ArrowButton(
             move_callback=lambda: self._move(DIR_LEFT),
             source=ARROW_LEFT_IMG, size_hint=(None, None),
-            size=(120, 120), allow_stretch=True, keep_ratio=True,
+            size=(120, 120), fit_mode='contain',
             pos_hint={'center_x': 0.5 - OFFSET, 'center_y': 0.08},
         )
         self.add_widget(self.btn_left)
@@ -565,7 +570,7 @@ class GamePlayScreen(Screen):
         self.btn_right = ArrowButton(
             move_callback=lambda: self._move(DIR_RIGHT),
             source=ARROW_RIGHT_IMG, size_hint=(None, None),
-            size=(120, 120), allow_stretch=True, keep_ratio=True,
+            size=(120, 120), fit_mode='contain',
             pos_hint={'center_x': 0.5 + OFFSET, 'center_y': 0.08},
         )
         self.add_widget(self.btn_right)
@@ -585,7 +590,7 @@ class GamePlayScreen(Screen):
         self.biome_mgr = BiomeManager()
         self.biome_label = Label(
             text='', font_size='30sp', bold=True,
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            font_name=i18n.FONT_KF,
             pos_hint={'center_x': 0.5, 'center_y': 0.60},
             size_hint=(0.9, 0.12),
             color=(1, 1, 1, 0),
@@ -620,7 +625,7 @@ class GamePlayScreen(Screen):
         ]:
             b = IconButton(
                 source=img_n, size_hint=(None, None), size=(100, 100),
-                allow_stretch=True, keep_ratio=True,
+                fit_mode='contain',
             )
             b.bind(
                 on_press=lambda x, d=img_d: setattr(x, 'source', d),
@@ -650,7 +655,10 @@ class GamePlayScreen(Screen):
 
         # โหลดสกินที่ผู้เล่นเลือกไว้ และเริ่มเสียงเพลงประกอบ
         self.penguin.equip_skin(StateManager().selected_skin)
-        self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS) # เริ่มเกมลูป
+        # Cancel game loop เก่าก่อนเสมอ — ป้องกัน double loop เมื่อ retry_game เรียก on_enter
+        if self.game_event:
+            self.game_event.cancel()
+        self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
         AudioManager().play_bgm('Bgm.gameplay.mp3')
         
         # รีเซ็ตพิกัดและข้อมูลทุกอย่างให้พร้อมสำหรับเกมรอบใหม่
@@ -697,7 +705,6 @@ class GamePlayScreen(Screen):
             chaser           = self.chaser,
             is_shaking_floor = is_shaking,
             gold_active      = self.gold_buff.active,
-            reverse_active   = self.reverse_buff.active,
             falling_props    = self.falling_props,
             falling_tiles    = self.grid.falling_tiles,
             trap_states      = self.grid.trap_states,
@@ -709,7 +716,7 @@ class GamePlayScreen(Screen):
         """อัปเดต HUD label + biome transition — คืน biome ปัจจุบัน"""
         dist    = self.grid.get_distance_m()
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
-        self.hud_label.text = f"🌡 {dist_str}  💎 {self.gems_collected}"
+        self.hud_label.text = f"{dist_str}  +{self.gems_collected}"
 
         biome, biome_changed = self.biome_mgr.update(dist)
         self.hud_label.color = list(biome.hud_color)
@@ -728,29 +735,24 @@ class GamePlayScreen(Screen):
         self.grid.update_falling(dt)
         self.grid.update_traps(dt)
         self.gold_buff.update(dt)
-        self.reverse_buff.update(dt)
         self.grid.cleanup_behind(self.path_index)
 
-        # Falling prop animation (block ร่วงลง Y + fade out)
+        # Falling prop animation — vy เริ่มสูง (60) ทำให้เห็นการเคลื่อนที่ตั้งแต่เฟรมแรก
         for key in list(self.falling_props):
             fp = self.falling_props[key]
-            fp['vy']       += 280 * dt
-            fp['y_offset'] -= fp['vy'] * dt
-            fp['alpha']    -= 1.8 * dt
+            fp['vy']       += 320 * dt          # gravity
+            fp['y_offset'] -= fp['vy'] * dt     # ร่วงลงแกน Y ของ Kivy
+            fp['alpha']    -= 1.4 * dt           # fade ช้าลง — เห็นนานขึ้น
             if fp['alpha'] <= 0:
                 del self.falling_props[key]
 
-        # Buff HUD
-        buff_parts = []
+        # Buff HUD — แสดงเฉพาะ gold buff
         if self.gold_buff.active:
-            buff_parts.append(f"⚡ {self.gold_buff.timer:.1f}s")
+            self.buff_label.text  = f"GOLD {self.gold_buff.timer:.1f}s"
             self.buff_label.color = (1.0, 0.9, 0.0, 1)
-        if self.reverse_buff.active:
-            buff_parts.append(f"🔄 {self.reverse_buff.timer:.1f}s")
-            self.buff_label.color = (0.8, 0.5, 1.0, 1)
-        if not buff_parts:
+        else:
+            self.buff_label.text  = ''
             self.buff_label.color = (1, 1, 1, 0)
-        self.buff_label.text = "  ".join(buff_parts)
 
         if self.game_started:
             self._check_quiz_trigger(dist)
@@ -787,9 +789,6 @@ class GamePlayScreen(Screen):
         if self.penguin.is_dead:
             return
 
-        # Reverse buff สลับทิศทาง
-        direction = self.reverse_buff.apply(direction)
-
         if direction == DIR_LEFT:
             self.penguin.facing_left = True
         elif direction == DIR_RIGHT:
@@ -824,11 +823,6 @@ class GamePlayScreen(Screen):
             self.gold_buff.activate()
             self._pop_prop_animated(new_col, new_row)   # เก็บ buff → ร่วง
             AudioManager().play_sfx('coin')
-
-        elif prop == PROP_REVERSE:
-            if not self.gold_buff.active:
-                self.reverse_buff.activate()
-            self._pop_prop_animated(new_col, new_row)   # เก็บ buff → ร่วง
 
         elif prop == PROP_TRAP:
             state = self.grid.trap_states.get((new_col, new_row))
@@ -883,7 +877,7 @@ class GamePlayScreen(Screen):
             self.falling_props[(col, row)] = {
                 'prop':     prop,
                 'y_offset': 0.0,
-                'vy':       0.0,
+                'vy':       80.0,   # เริ่มด้วย velocity สูง — เห็นการตกตั้งแต่เฟรมแรก
                 'alpha':    1.0,
             }
 
@@ -909,9 +903,11 @@ class GamePlayScreen(Screen):
             self.game_event = None
 
         from screens.quiz_popup import QuizPopup
+        biome_id   = self.biome_mgr.current.id
         biome_name = self.biome_mgr.current.name
         popup = QuizPopup(
             on_close=self._on_quiz_close,
+            biome_id=biome_id,
             biome_name=biome_name,
             size_hint=(1, 1),
             pos_hint={'x': 0, 'y': 0},
@@ -970,7 +966,6 @@ class GamePlayScreen(Screen):
         self.renderer.cam_y = None
         self.biome_mgr.reset()
         self.gold_buff    = GoldBuff()
-        self.reverse_buff = ReverseBuff()
         self.falling_props = {}
         self.next_quiz_at = random.randint(QUIZ_INTERVAL_MIN, QUIZ_INTERVAL_MAX)
         self.buff_label.text = ''

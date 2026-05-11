@@ -18,6 +18,7 @@ class ChaserBlock:
         self.pulse_timer     = 0.0
         self._boost_factor   = 1.0   # multiplier ความเร็ว (>1 = เร็วขึ้น)
         self._boost_steps    = 0     # จำนวนก้าวที่ยังมี boost อยู่
+        self.visited         = set() # พิกัดที่ chaser ผ่านมาแล้ว — render แดงในตัว renderer
 
     def activate(self, path_index, path):
         self.path_index = max(0, path_index)
@@ -25,6 +26,7 @@ class ChaserBlock:
         self.move_timer = 0.0
         if self.path_index < len(path):
             self.col, self.row = path[self.path_index]
+            self.visited.add((self.col, self.row))
 
     def reset(self):
         self.path_index      = 0
@@ -35,6 +37,7 @@ class ChaserBlock:
         self.pulse_timer     = 0.0
         self._boost_factor   = 1.0
         self._boost_steps    = 0
+        self.visited.clear()
 
     def apply_speed_boost(self, factor: float = 1.1, steps: int = 30):
         """เพิ่มความเร็ว Chaser ชั่วคราว (penalty เมื่อตอบ Quiz ผิด)"""
@@ -66,6 +69,7 @@ class ChaserBlock:
             if next_idx < len(path):           # guard: ไม่ข้ามปลาย path
                 self.path_index = next_idx
                 self.col, self.row = path[self.path_index]
+                self.visited.add((self.col, self.row))  # mark ตำแหน่งที่ผ่านมา → render แดง
             # ถ้า path ยังไม่ถูก extend ทัน — หยุดรอ ไม่ increment เกิน
 
         # caught เฉพาะเมื่อ chaser อยู่บน tile เดียวกับ player จริงๆ

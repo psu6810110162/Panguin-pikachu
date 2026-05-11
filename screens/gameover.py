@@ -5,6 +5,10 @@ from core.logger import logger
 from core.audio import AudioManager
 from core.database import DatabaseManager
 from core.config import DEFAULT_PLAYER_NAME
+from core import i18n
+
+THAI_FONT = i18n.FONT_THAI
+KF_FONT   = i18n.FONT_KF
 
 CLIMATE_FACTS = [
     "Arctic sea ice has declined ~13% per decade since 1979.",
@@ -24,6 +28,24 @@ CLIMATE_FACTS = [
     "Planting trees and reducing meat consumption can cut emissions 30%.",
 ]
 
+CLIMATE_FACTS_TH = [
+    "น้ำแข็งทะเลอาร์กติกลดลง ~13% ต่อทศวรรษตั้งแต่ปี 1979",
+    "อาร์กติกร้อนขึ้นเร็วกว่าค่าเฉลี่ยโลกถึง 4 เท่า",
+    "ปี 2023 ร้อนที่สุดในรอบ 125,000 ปีของโลก",
+    "น้ำแข็งที่ละลายเปิดพื้นผิวมหาสมุทรดูดซับความร้อนมากขึ้น",
+    "เพนกวิน Emperor อาจสูญพันธุ์ภายในปี 2100 หากไม่มีการแก้ไข",
+    "กรีนแลนด์สูญเสียน้ำแข็ง ~280 พันล้านตันต่อปี",
+    "ทุก 0.5°C ของอุณหภูมิที่สูงขึ้นทำให้โอกาสฤดูร้อนไร้น้ำแข็งเพิ่มเป็นสองเท่า",
+    "การละลายของดินเยือกแข็งปล่อย CO₂ ที่สะสมมานับพันปี",
+    "ความร้อนในมหาสมุทรสูงเป็นประวัติการณ์ในปี 2023",
+    "จำกัดอุณหภูมิที่ 1.5°C จะช่วยรักษาแนวปะการัง 70% ของโลก",
+    "พลังงานหมุนเวียนตอนนี้ถูกกว่าเชื้อเพลิงฟอสซิลทั่วโลกแล้ว",
+    "ประชากร 1,000 ล้านคนเผชิญกับการขาดแคลนน้ำจากธารน้ำแข็งละลาย",
+    "แอนตาร์กติกาสูญเสียน้ำแข็ง 150 พันล้านตันต่อปีในช่วงทศวรรษ 2010",
+    "เส้นทางเดินเรือในอาร์กติกเปิดขึ้นตามการละลายของน้ำแข็ง — ผลกระทบสองด้าน",
+    "การปลูกต้นไม้และลดการบริโภคเนื้อสัตว์ช่วยลดการปล่อยก๊าซ 30%",
+]
+
 
 class GameOverScreen(Screen):
     """หน้าจอจบเกม — แสดงคะแนน, เกร็ดความรู้, และตัวเลือกถัดไป"""
@@ -40,13 +62,37 @@ class GameOverScreen(Screen):
         # ดึงคะแนนจาก gameplay screen
         self.distance, self.gems = self._get_gameplay_score()
 
+        self._refresh_static_text()
+        self._saved = False
+
+    def _refresh_static_text(self):
+        """อัปเดต label และปุ่มตามภาษาปัจจุบัน"""
+        lang = i18n.get_language()
+        font = THAI_FONT if lang == 'th' else KF_FONT
+
         if 'score_label' in self.ids:
-            self.ids.score_label.text = f"AWARENESS INDEX: {self.distance} M"
+            lbl = self.ids.score_label
+            lbl.text      = f"{i18n.t('distance_prefix')}{self.distance} m"
+            lbl.font_name = font
 
         if 'climate_fact_label' in self.ids:
-            self.ids.climate_fact_label.text = f"🌍  {self._pick_fact()}"
+            lbl = self.ids.climate_fact_label
+            lbl.text      = self._pick_fact()
+            lbl.font_name = font
 
-        self._saved = False
+        if 'name_input' in self.ids:
+            self.ids.name_input.hint_text = i18n.t('enter_name')
+
+        _btn_map = {
+            'retry_btn':      'play_again',
+            'go_history_btn': 'history',
+            'home_btn':       'home',
+        }
+        for widget_id, key in _btn_map.items():
+            w = self.ids.get(widget_id)
+            if w:
+                w.text      = i18n.t(key)
+                w.font_name = font
 
     # ── ฟังก์ชันช่วย (Private Helpers) ─────────────────────────────────────
 
@@ -60,12 +106,20 @@ class GameOverScreen(Screen):
             return 0, 0
 
     def _pick_fact(self):
-        """เลือกเกร็ดความรู้ตาม biome ปัจจุบัน (fallback = random global fact)"""
+        """เลือกเกร็ดความรู้ตาม biome + ภาษาปัจจุบัน"""
+        lang = i18n.get_language()
         try:
             gameplay = self.manager.get_screen('gameplay')
-            return random.choice(gameplay.biome_mgr.current.facts)
+            biome_id = gameplay.biome_mgr.current.id
+            # ใช้ข้อมูลจาก learning_path BIOME_FACTS ถ้ามี
+            from screens.learning_path import BIOME_FACTS
+            facts_dict = BIOME_FACTS.get(biome_id, {})
+            if facts_dict:
+                return random.choice(facts_dict.get(lang, facts_dict.get('en', '')).split('\n'))
         except Exception:
-            return random.choice(CLIMATE_FACTS)
+            pass
+        # fallback — global facts
+        return random.choice(CLIMATE_FACTS_TH if lang == 'th' else CLIMATE_FACTS)
 
     def _save_data(self):
         """บันทึก session ลง SQLite — ป้องกันการบันทึกซ้ำด้วย _saved flag"""

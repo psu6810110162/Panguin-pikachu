@@ -61,6 +61,7 @@
 
             # Subtitle tagline
             Label:
+                id: tagline_lbl
                 text: 'Every step counts. The ice won\'t wait.'
                 font_name: 'assets/Component_UI/Font/Kenney Future Narrow.ttf'
                 font_size: '16sp'
@@ -72,6 +73,7 @@
 
             # START GAME button (primary — ice blue fill)
             HoverButton:
+                id: start_btn
                 text: 'START GAME'
                 font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                 font_size: '22sp'
@@ -98,6 +100,7 @@
 
             # SHOP button (secondary — dark fill)
             HoverButton:
+                id: skins_btn
                 text: 'SKINS'
                 font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                 font_size: '20sp'
@@ -123,6 +126,7 @@
 
             # HISTORY button (secondary)
             HoverButton:
+                id: history_btn
                 text: 'HISTORY'
                 font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                 font_size: '20sp'
@@ -148,6 +152,7 @@
 
             # CLIMATE REPORT button
             HoverButton:
+                id: climate_btn
                 text: 'CLIMATE REPORT'
                 font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                 font_size: '18sp'
@@ -176,6 +181,7 @@
 
         # ── EXIT (bottom-left) ───────────────────────────────
         HoverButton:
+            id: exit_btn
             text: 'EXIT'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '16sp'
@@ -322,6 +328,7 @@
 
             # RETRY button (primary)
             HoverButton:
+                id: retry_btn
                 text: 'PLAY AGAIN'
                 font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                 font_size: '24sp'
@@ -354,6 +361,7 @@
                 spacing: 12
 
                 HoverButton:
+                    id: go_history_btn
                     text: 'HISTORY'
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                     font_size: '17sp'
@@ -376,6 +384,7 @@
                             width: 1
 
                 HoverButton:
+                    id: home_btn
                     text: 'HOME'
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                     font_size: '17sp'
@@ -432,6 +441,7 @@
 
         # Title
         Label:
+            id: leaderboard_lbl
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             text: 'LEADERBOARD'
             font_size: '36sp'
@@ -469,6 +479,7 @@
 
         # BACK button
         HoverButton:
+            id: back_btn
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             text: 'BACK'
             font_size: '20sp'
@@ -531,6 +542,7 @@
             size_hint_y: None
             height: 60
             Label:
+                id: shop_title_lbl
                 text: 'SKINS'
                 font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                 font_size: '36sp'
@@ -544,7 +556,7 @@
                 valign: 'middle'
             Label:
                 id: gem_label
-                text: '💎 --'
+                text: 'GEM --'
                 font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                 font_size: '24sp'
                 size_hint_x: 0.35
@@ -655,7 +667,7 @@
                         color: 0.70, 0.92, 1.0, 1
                     HoverButton:
                         id: arctic_btn
-                        text: 'BUY 💎 10'
+                        text: 'BUY GEM 10'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                         font_size: '14sp'
                         size_hint: (0.92, 0.28)
@@ -708,7 +720,7 @@
                         color: 1.0, 0.85, 0.35, 1
                     HoverButton:
                         id: emperor_btn
-                        text: 'BUY 💎 10'
+                        text: 'BUY GEM 10'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                         font_size: '14sp'
                         size_hint: (0.92, 0.28)
@@ -761,7 +773,7 @@
                         color: 0.80, 0.95, 1.0, 1
                     HoverButton:
                         id: crystal_btn
-                        text: 'BUY 💎 10'
+                        text: 'BUY GEM 10'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                         font_size: '14sp'
                         size_hint: (0.92, 0.28)
@@ -786,6 +798,7 @@
 
         # ── BACK button ─────────────────────────────────
         HoverButton:
+            id: shop_back_btn
             text: 'BACK'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '20sp'
@@ -826,26 +839,26 @@
 
     BoxLayout:
         orientation: 'vertical'
-        padding: [60, 40, 60, 40]
-        spacing: 20
+        padding: [32, 28, 32, 24]
+        spacing: 14
 
         # ── Header ────────────────────────────────────────
         Label:
             text: 'CLIMATE REPORT'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            font_size: '36sp'
+            font_size: '42sp'
             bold: True
             size_hint_y: None
-            height: 60
+            height: 66
             color: 1.00, 0.80, 0.20, 1
 
         Label:
             id: subtitle_lbl
             text: 'สิ่งที่คุณได้เรียนรู้จากการวิ่ง'
             font_name: 'assets/Component_UI/Font/Thonburi.ttc'
-            font_size: '16sp'
+            font_size: '19sp'
             size_hint_y: None
-            height: 30
+            height: 34
             color: 0.70, 0.90, 1.0, 0.80
 
         # ── Global score ───────────────────────────────────
@@ -853,10 +866,10 @@
             id: global_score_lbl
             text: ''
             font_name: 'assets/Component_UI/Font/Thonburi.ttc'
-            font_size: '17sp'
+            font_size: '21sp'
             bold: True
             size_hint_y: None
-            height: 32
+            height: 38
             halign: 'center'
             color: 0.3, 1.0, 0.3, 0.9
 
@@ -864,7 +877,7 @@
         GridLayout:
             id: biome_grid
             cols: 2
-            spacing: 24
+            spacing: 16
             size_hint_y: 1
 
         # ── BACK button ───────────────────────────────────
@@ -872,9 +885,9 @@
             id: back_btn
             text: 'BACK'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            font_size: '20sp'
-            size_hint: (0.40, None)
-            height: 52
+            font_size: '22sp'
+            size_hint: (0.35, None)
+            height: 58
             pos_hint: {'center_x': 0.5}
             background_normal: ''
             background_down: ''

@@ -30,11 +30,13 @@ class GridManager:
         self.falling_tiles  = {}    # (col, row) → seconds_remaining ก่อนพื้นร่วง
         self.trap_states    = {}    # (col, row) → {'open': bool, 'type': 'seals'|'tail', 'timer': float}
 
-        self._last_pos       = (0, 0)   # ตำแหน่งสุดท้ายที่สร้างพื้นถึง
-        self._last_dir       = self.DIR_A # ทิศทางสุดท้ายที่ใช้ในการสร้างพื้น
-        self._seg_count      = 0         # นับจำนวนช่วงทางเดินที่สร้างไปแล้ว
-        self._last_cleaned_idx = 0       # ดัชนีล่าสุดที่ทำการลบพื้นหลังที่เดินผ่านมาแล้ว
-        self._used_positions = set()     # ทุก pos ที่เคย add — ป้องกัน spawn ซ้ำหลัง cleanup
+        self._last_pos        = (0, 0)    # ตำแหน่งสุดท้ายที่สร้างพื้นถึง
+        self._last_dir        = self.DIR_A # ทิศทางสุดท้ายที่ใช้ในการสร้างพื้น
+        self._seg_count       = 0          # นับจำนวนช่วงทางเดินที่สร้างไปแล้ว
+        self._last_cleaned_idx= 0          # ดัชนีล่าสุดที่ทำการลบพื้นหลังที่เดินผ่านมาแล้ว
+        self._used_positions  = set()      # ทุก pos ที่เคย add — ป้องกัน spawn ซ้ำหลัง cleanup
+        self.path_index_map   = {}         # (col,row) → index ใน path — O(1) lookup สำหรับ renderer
+        self._last_force_dist = 0          # ระยะทาง tile ล่าสุดที่ spawn force — บังคับ 100m gap
 
     # ═══════════════════════════════════════════
     #  ฟังก์ชันสาธารณะ (Public API)
@@ -55,11 +57,13 @@ class GridManager:
         self.merge_points.clear()
         self.falling_tiles.clear()
         self.trap_states.clear()
-        self._last_pos       = (0, 0)
-        self._last_dir       = self.DIR_A
-        self._seg_count      = 0
+        self._last_pos         = (0, 0)
+        self._last_dir         = self.DIR_A
+        self._seg_count        = 0
         self._last_cleaned_idx = 0
         self._used_positions.clear()
+        self.path_index_map.clear()
+        self._last_force_dist  = 0
         self._build_start_platform() # สร้างพื้นเริ่มเกมขนาด 3x3
         for _ in range(PRELOAD_SEGMENTS):
             self._append_segment() # สร้างช่วงทางเดินล่วงหน้าตามจำนวนที่ตั้งไว้
@@ -204,6 +208,8 @@ class GridManager:
                 self.path_set.add(pos)
                 self._used_positions.add(pos)   # ป้องกัน obstacle spawn ที่ start platform
 
+        self.path_index_map[(1, 1)] = 0
+        self.path_index_map[(2, 1)] = 1
         self.path.append((1, 1))   # จุดเริ่มเดิน
         self.path.append((2, 1))   # tile ขอบ platform ในทิศ DIR_A — ปิดช่องว่าง path
         self._last_pos = (2, 1)    # segment แรกเริ่มต่อจากขอบ platform
@@ -272,6 +278,12 @@ class GridManager:
                 if random.random() < self._obstacle_chance(tile_dist):
                     prop = ObstacleFactory.spawn_prop(tile_dist, col, row)
                     if prop:
+                        # force (gold buff): บังคับ gap 100m — ไม่ให้ติดกัน
+                        if prop == 'force':
+                            if tile_dist - self._last_force_dist < 100:
+                                prop = 'ice1'   # ถ้าใกล้เกิน ลด grade เป็น ice
+                            else:
+                                self._last_force_dist = tile_dist
                         self.obstacles[(col, row)] = prop
                         if prop == 'trap':
                             self.init_trap(col, row)
@@ -377,6 +389,7 @@ class GridManager:
         pos = (col, row)
         was_ever_used = pos in self._used_positions   # เคยสร้างไว้แล้วในอดีต?
         if pos not in self.path_set:
+            self.path_index_map[pos] = len(self.path)  # บันทึก index ก่อน append
             self.path.append(pos)
             self.path_set.add(pos)
             self._used_positions.add(pos)
