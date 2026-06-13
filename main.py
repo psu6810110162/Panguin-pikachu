@@ -1,3 +1,5 @@
+import os
+
 import kivy
 # ตรวจสอบเวอร์ชันของ Kivy ที่จำเป็นต้องใช้
 kivy.require('2.1.0')
@@ -47,6 +49,11 @@ class PenguinDashApp(App):
         sm.add_widget(HistoryScreen(name='history'))
         sm.add_widget(ShopScreen(name='shop'))
         sm.add_widget(LearningPathScreen(name='learning_path'))
+
+        # 5. ผูก F12 screenshot hook เฉพาะตอน dev (ใช้ทำรูปประกอบรายงาน)
+        if os.getenv('ENABLE_REPORT_CAPTURE') == '1':
+            from debug.screenshot_capture import register_capture
+            register_capture()
 
         logger.info("เริ่มเปิดเข้าสู่เกม Penguin Dash")
         return sm
