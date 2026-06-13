@@ -1,92 +1,103 @@
-# � PENGUIN DASH - Kivy Project Assignment
+# 🐧 Penguin Dash — The Great Melt
 
-**Penguin Dash** เป็นโปรเจกต์เกมแนว Endless Runner พัฒนาด้วย Kivy Framework (Python) สำหรับส่งวิชาการเขียนโปรแกรม โดยเน้นการสร้าง Application ที่มีความสวยงาม ลื่นไหล และมีระบบ Logic ที่ซับซ้อนตามเงื่อนไขที่อาจารย์กำหนด
+![CI](https://github.com/psu6810110162/Panguin-pikachu/actions/workflows/ci.yml/badge.svg)
 
----
-
-## 👥 สมาชิกกลุ่ม (Team Members)
-
-1. **6810110162** - นายอภิชาติ (Aphichat)
-2. **6810110402** - นายธีรยุทธ (Teerayut)
+**Penguin Dash** เป็นเกมแนว Endless Runner มุมมอง Isometric พัฒนาด้วย Kivy Framework (Python). ธีม *The Great Melt* พาผู้เล่นออกเดินทางผ่าน 4 ไบโอม (Arctic → Drought → Flood → Wildfire) เพื่อเล่าเรื่องผลกระทบจากภาวะโลกร้อน พร้อมระบบ Quiz เพื่อการเรียนรู้และ Climate Report สรุปข้อมูล
 
 ---
 
-## 🎮 ภาพรวมของโปรแกรม (Program Overview)
+## 👥 สมาชิกกลุ่ม
 
-**Penguin Dash** คือเกมวิ่งไม่จำกัด (Endless Runner) ในมุมมอง Isometric ที่ผู้เล่นต้องใช้ทักษะความไวในการตัดสินใจเลี้ยวซ้าย-ขวาตามเส้นทางที่เปลี่ยนไปตลอดเวลา
-
-### ฟีเจอร์เด่นของเกม:
-
-- **Infinite Terrain Generation:** เส้นทาง zigzag และทางแยก (Forks) ที่สร้างแบบ Procedural ทำให้การเล่นแต่ละครั้งไม่เหมือนกัน
-- **Obstacle & Smashing Mechanics:** การตัดสินใจเลี้ยวเพื่อหลบหรือชนทำลายกล่องไม้ที่เป็นอุปสรรค
-- **Falling Floors:** ระบบ "พื้นถล่ม" หากผู้เล่นหยุดนิ่งนานเกินไปจะถูกบีบให้ต้องก้าวเดินต่อ
-- **Full Shop System:** ระบบสะสม Gems เพื่อปลดล็อก Skin ตัวละครใหม่ๆ และสวมใส่ได้ทันที
-- **Persistence Data:** บันทึกประวัติการเล่น คะแนนสูงสุด และของสะสมลงใน Database
+1. **6810110162** — อภิชาติ (Aphichat)
+2. **6810110402** — ธีรยุทธ (Teerayut)
 
 ---
 
-## 🛠 คำอธิบายการทำงานของ Code (Technical Logic)
+## 🎮 ฟีเจอร์หลัก
 
-ทีมงานเราแบ่งโครงสร้างโค้ดออกเป็นส่วนๆ (Modular Architecture) เพื่อให้ง่ายต่อการพัฒนาและตรวจสอบ:
-
-1. **Core Generation (`game/grid.py`):**
-   - หัวใจหลักคือ `GridManager` ที่ใช้การสุ่มเลือกทิศทางและทำทางแยก (Diamond Forks)
-   - ใช้ระบบ Coordinate Mapping เพื่อเปลี่ยน Grid index เป็นพิกัดหน้าจอแบบ Isometric
-
-2. **Game Loop & Rendering (`screens/gameplay.py`):**
-   - ใช้ `Clock.schedule_interval` ที่ความถี่ 60 FPS เพื่อคำนวณตำแหน่งและวาดภาพ
-   - `KivyRenderer` ทำหน้าที่จัดการ Canvas instructions (Rectangle, Color) เพื่อรีดประสิทธิภาพสูงสุด
-
-3. **Global State (`core/state.py`):**
-   - เก็บข้อมูลการเลือก Skin, คะแนนปัจจุบัน และสถานะ Pause โดยใช้ Singleton เพื่อให้ข้อมูลคงที่ตลอดทั้ง Application
-
-4. **Persistence Helper (`core/database.py`):**
-   - จัดการ SQLite3 เพื่อเก็บ Gems Balance, บันทึกชื่อผู้เล่น และสถานะการเป็นเจ้าของ Skin
+- **Infinite Procedural Terrain** — เส้นทาง zigzag และทางแยก (Diamond Forks) สุ่มแบบ deterministic
+- **Biome System** — 4 ไบโอม (Arctic / Drought / Flood / Wildfire) เปลี่ยน background + tile ตามระยะทาง
+- **Obstacle & Smashing Mechanics** — เลี้ยวหลบหรือชนกล่องไม้
+- **Falling Floors** — พื้นถล่มถ้าหยุดนิ่งนานเกินไป
+- **Buff & Trap System** — เก็บ buff เพิ่มพลัง / โดน trap ลดความสามารถ
+- **Chaser Event** — ตัวไล่ล่าโผล่เป็นระยะ บีบจังหวะการเล่น
+- **Quiz Learning System** — มินิเกมคำถามด้านสิ่งแวดล้อม คั่นระหว่างเกม
+- **Climate Report** — หน้าจอสรุปข้อมูลผลกระทบโลกร้อนจากที่ผ่านในรอบ
+- **Shop System** — สะสม Gems → ปลดล็อก Skin ใหม่
+- **Persistence** — SQLite เก็บ high score, gems, skin ownership
+- **i18n** — รองรับไทย/อังกฤษ สลับได้
+- **Audio Manager** — เพลง BGM + SFX สลับเปิด/ปิดได้
 
 ---
 
-## 📊 Technical Requirements Proof (ตรวจสอบเงื่อนไข Assignment)
+## 🛠 โครงสร้างโค้ด
 
-ครบถ้วนตามเกณฑ์คะแนนที่กำหนด:
-
-### 1. Widgets (อย่างน้อย 30 Widgets)
-
-เรามีการใช้งาน Widget รวมกัน **มากกว่า 60 Widgets** ครอบคลุมทั้ง:
-
-- **Containers:** `BoxLayout`, `RelativeLayout`, `GridLayout`, `ScrollView`, `ScreenManager`
-- **Active Widgets:** `HoverButton` (Custom CSS-like styles), `ArrowButton`, `TextInput`, `Label`, `Image`
-- **Visuals:** Canvas instructions จำนวนมาก (Rectangle/Line/RoundedRectangle) ในหน้า Gameplay และ Shop
-
-### 2. Callbacks (อย่างน้อย 10 Callbacks)
-
-มีการนำระบบ Callback มาใช้อย่างคุ้มค่า เช่น:
-
-1. `on_release`: สำหรับทุกปุ่มนำทางและปุ่มเมนู
-2. `handle_press/release`: ระบบควบคุมการเดินที่ตอบสนองไว
-3. `on_key_down/up`: การผูก Event Keyboard กับ Window Direct
-4. `Clock.schedule_interval`: ระบบ Game Engine Update
-5. `Clock.schedule_once`: ระบบ Delay เมื่อตายหรือเปลี่ยนหน้าจอ
-6. `on_enter/leave`: การ Reset ข้อมูลและโหลด Scene
-7. `bind(on_press=...)`: การสร้าง List ในหน้า History แบบ Dynamic
-8. `update_balance_label`: การสื่อสารข้อมูลระหว่าง Database กับ UI
-9. `toggle_sound`: การสลับสถานะ Global AudioManager
-10. `on_text_validate`: ระบบรับชื่อผู้เล่นผ่านคีย์บอร์ด
-
-### 3. Git Persistence (Commit Early & Often)
-
-- **จำนวน Commits รวม:** 140+ Commits (เกินเกณฑ์ 50 Commits)
-
-- **Link:** [GitHub Repository](https://github.com/psu6810110162/Panguin-pikachu)
+```
+.
+├── core/        # config, database, logger, state, audio, i18n
+├── game/        # grid, penguin, chaser, biome, buffs, quiz_manager, obstacle_factory
+├── screens/     # menu, gameplay, gameover, history, shop, learning_path, quiz_popup
+├── ui/          # components (HoverButton, AnimatedSkin), quiz_popup
+├── debug/       # screenshot_capture (dev only)
+├── assets/      # great_melt/* (tiles, backgrounds, characters, obstacles, gems)
+├── scripts/     # report figure/diagram/experiment generators
+├── tests/       # pytest: grid logic + smoke imports
+└── main.py
+```
 
 ---
 
-## วิธีการรันโปรแกรม (How to Run)
+## 🚀 วิธีการรัน
 
-1. **เตรียม Environment:**
-   ```bash
-   pip install kivy[base] ffpyplayer
-   ```
-2. **เริ่มเกม:**
-   ```bash
-   python main.py
-   ```
+### Setup
+```bash
+python -m venv venv
+source venv/bin/activate          # macOS/Linux  (Windows: venv\Scripts\activate)
+pip install -r requirements.txt
+```
+
+### เริ่มเกม
+```bash
+python main.py
+```
+
+### Dev capture mode (สำหรับทำรายงาน)
+```bash
+ENABLE_REPORT_CAPTURE=1 python main.py
+```
+กด **F12** ระหว่างเล่นเพื่อบันทึก screenshot ลง `assets/report_figures/captures/`
+
+### รัน Tests
+```bash
+pip install -r requirements-dev.txt
+pytest tests/
+```
+
+---
+
+## 📊 Technical Requirements Proof
+
+### Widgets (≥ 30)
+ใช้ Widget มากกว่า **60 ชิ้น** ครอบคลุม `BoxLayout`, `RelativeLayout`, `GridLayout`, `ScrollView`, `ScreenManager`, `HoverButton`, `ArrowButton`, `TextInput`, `Label`, `Image` และ Canvas instructions จำนวนมากในหน้า Gameplay/Shop
+
+### Callbacks (≥ 10)
+- `on_release` ของปุ่มเมนู/นำทาง
+- `handle_press/release` ระบบควบคุมการเดิน
+- `on_key_down/up` ผูก keyboard
+- `Clock.schedule_interval` — game loop 60 FPS
+- `Clock.schedule_once` — delay ตอนตาย/เปลี่ยนหน้าจอ
+- `on_enter/leave` — reset/load scene
+- `bind(on_press=...)` — dynamic list ในหน้า History
+- `update_balance_label` — sync DB ↔ UI
+- `toggle_sound` — สลับ AudioManager
+- `on_text_validate` — รับชื่อผู้เล่น
+
+### Git Persistence
+- 140+ commits — ใช้ Conventional Commits scope (feat / fix / chore / refactor / docs / ci / test)
+- **Repo:** [github.com/psu6810110162/Panguin-pikachu](https://github.com/psu6810110162/Panguin-pikachu)
+
+---
+
+## 📄 เอกสารเพิ่มเติม
+- [SETUP.md](./SETUP.md) — การติดตั้งแบบละเอียด
+- [Project_Proposal.md](./Project_Proposal.md) — Proposal โปรเจกต์
