@@ -9,14 +9,30 @@ from core import i18n
 class MenuScreen(Screen):
     """ คลาสหน้าจอเมนูหลัก (Main Menu) """
 
-    KF_FONT = 'assets/Component_UI/Font/Kenney Future.ttf'
-
     def on_enter(self):
         """ ทำงานเมื่อเข้าสู่หน้าจอเมนู """
         logger.info("เข้าสู่หน้าจอ MenuScreen")
         Clock.schedule_once(lambda dt: AudioManager().play_bgm('Bgm.gameplay.mp3'), 0.5)
         Clock.schedule_once(lambda dt: self._sync_sound_button(), 0.1)
         self._ensure_lang_btn()
+        Clock.schedule_once(lambda dt: self._refresh_static_text(), 0.05)
+
+    def _refresh_static_text(self):
+        """อัปเดตข้อความและ font ทุกปุ่มตามภาษาปัจจุบัน"""
+        font = i18n.get_font()
+        _map = {
+            'start_btn':   'start_game',
+            'skins_btn':   'skins',
+            'history_btn': 'history',
+            'climate_btn': 'climate_report',
+            'exit_btn':    'exit',
+            'tagline_lbl': 'menu_tagline',
+        }
+        for widget_id, key in _map.items():
+            w = self.ids.get(widget_id)
+            if w:
+                w.text      = i18n.t(key)
+                w.font_name = font
 
     def _ensure_lang_btn(self):
         """สร้างปุ่มสลับภาษาครั้งแรกที่เข้า menu"""
@@ -25,7 +41,7 @@ class MenuScreen(Screen):
             return
         self._lang_btn = Button(
             text             = i18n.t('toggle_lang'),
-            font_name        = self.KF_FONT,
+            font_name        = i18n.FONT_KF,
             font_size        = 13,
             bold             = True,
             color            = (0.20, 0.95, 0.55, 1),
@@ -66,6 +82,7 @@ class MenuScreen(Screen):
         lang = 'en' if i18n.get_language() == 'th' else 'th'
         i18n.set_language(lang)
         self._lang_btn.text = i18n.t('toggle_lang')
+        self._refresh_static_text()
 
     def start_game(self):
         """ ฟังก์ชันเมื่อกดปุ่มเริ่มเกม """

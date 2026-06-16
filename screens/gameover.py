@@ -1,10 +1,14 @@
 import random
 from kivy.uix.screenmanager import Screen
+from kivy.clock import Clock
 from core.logger import logger
 from core.audio import AudioManager
-from kivy.clock import Clock
 from core.database import DatabaseManager
 from core.config import DEFAULT_PLAYER_NAME
+from core import i18n
+
+THAI_FONT = i18n.FONT_THAI
+KF_FONT   = i18n.FONT_KF
 
 CLIMATE_FACTS = [
     "Arctic sea ice has declined ~13% per decade since 1979.",
@@ -24,54 +28,112 @@ CLIMATE_FACTS = [
     "Planting trees and reducing meat consumption can cut emissions 30%.",
 ]
 
+CLIMATE_FACTS_TH = [
+    "น้ำแข็งทะเลอาร์กติกลดลง ~13% ต่อทศวรรษตั้งแต่ปี 1979",
+    "อาร์กติกร้อนขึ้นเร็วกว่าค่าเฉลี่ยโลกถึง 4 เท่า",
+    "ปี 2023 ร้อนที่สุดในรอบ 125,000 ปีของโลก",
+    "น้ำแข็งที่ละลายเปิดพื้นผิวมหาสมุทรดูดซับความร้อนมากขึ้น",
+    "เพนกวิน Emperor อาจสูญพันธุ์ภายในปี 2100 หากไม่มีการแก้ไข",
+    "กรีนแลนด์สูญเสียน้ำแข็ง ~280 พันล้านตันต่อปี",
+    "ทุก 0.5°C ของอุณหภูมิที่สูงขึ้นทำให้โอกาสฤดูร้อนไร้น้ำแข็งเพิ่มเป็นสองเท่า",
+    "การละลายของดินเยือกแข็งปล่อย CO₂ ที่สะสมมานับพันปี",
+    "ความร้อนในมหาสมุทรสูงเป็นประวัติการณ์ในปี 2023",
+    "จำกัดอุณหภูมิที่ 1.5°C จะช่วยรักษาแนวปะการัง 70% ของโลก",
+    "พลังงานหมุนเวียนตอนนี้ถูกกว่าเชื้อเพลิงฟอสซิลทั่วโลกแล้ว",
+    "ประชากร 1,000 ล้านคนเผชิญกับการขาดแคลนน้ำจากธารน้ำแข็งละลาย",
+    "แอนตาร์กติกาสูญเสียน้ำแข็ง 150 พันล้านตันต่อปีในช่วงทศวรรษ 2010",
+    "เส้นทางเดินเรือในอาร์กติกเปิดขึ้นตามการละลายของน้ำแข็ง — ผลกระทบสองด้าน",
+    "การปลูกต้นไม้และลดการบริโภคเนื้อสัตว์ช่วยลดการปล่อยก๊าซ 30%",
+]
+
+
 class GameOverScreen(Screen):
-    """ คลาสหน้าจอจบเกม (Game Over) """
+    """หน้าจอจบเกม — แสดงคะแนน, เกร็ดความรู้, และตัวเลือกถัดไป"""
+
     def on_enter(self):
-        """ ทำงานเมื่อเข้าสู่หน้าจอ Game Over """
+        """ดึงข้อมูลจาก gameplay และแสดงผล"""
         logger.info("เข้าสู่หน้าจอ GameOver")
         db = DatabaseManager()
-        
-        # 1. ดึงชื่อผู้เล่นล่าสุดมาแสดงในช่องกรอกชื่อ (Auto-fill)
-        last_name = db.get_last_player_name()
+
+        # Auto-fill ชื่อผู้เล่นล่าสุด
         if 'name_input' in self.ids:
-            self.ids.name_input.text = last_name
-        
-        # 2. ดึงข้อมูลคะแนน (ระยะทางและเพชร) จากหน้า gameplay ล่าสุด
+            self.ids.name_input.text = db.get_last_player_name()
+
+        # ดึงคะแนนจาก gameplay screen
+        self.distance, self.gems = self._get_gameplay_score()
+
+        self._refresh_static_text()
+        self._saved = False
+
+    def _refresh_static_text(self):
+        """อัปเดต label และปุ่มตามภาษาปัจจุบัน"""
+        lang = i18n.get_language()
+        font = THAI_FONT if lang == 'th' else KF_FONT
+
+        if 'score_label' in self.ids:
+            lbl = self.ids.score_label
+            lbl.text      = f"{i18n.t('distance_prefix')}{self.distance} m"
+            lbl.font_name = font
+
+        if 'climate_fact_label' in self.ids:
+            lbl = self.ids.climate_fact_label
+            lbl.text      = self._pick_fact()
+            lbl.font_name = font
+
+        if 'name_input' in self.ids:
+            self.ids.name_input.hint_text = i18n.t('enter_name')
+
+        _btn_map = {
+            'retry_btn':      'play_again',
+            'go_history_btn': 'history',
+            'home_btn':       'home',
+        }
+        for widget_id, key in _btn_map.items():
+            w = self.ids.get(widget_id)
+            if w:
+                w.text      = i18n.t(key)
+                w.font_name = font
+
+    # ── ฟังก์ชันช่วย (Private Helpers) ─────────────────────────────────────
+
+    def _get_gameplay_score(self):
+        """ดึงระยะทางและเพชรจาก gameplay screen"""
         try:
             gameplay = self.manager.get_screen('gameplay')
-            self.distance = int(gameplay.grid.get_distance_m())
-            self.gems = gameplay.gems_collected
+            return int(gameplay.grid.get_distance_m()), gameplay.gems_collected
         except Exception as e:
             logger.error(f"Error getting gameplay data: {e}")
-            self.distance = 0
-            self.gems = 0
-        
-        # แสดงผลระยะทางบนหน้าจอ
-        if 'score_label' in self.ids:
-            self.ids.score_label.text = f"AWARENESS INDEX: {self.distance} M"
-        if 'climate_fact_label' in self.ids:
-            try:
-                gameplay = self.manager.get_screen('gameplay')
-                biome = gameplay.biome_mgr.current
-                fact = random.choice(biome.facts)
-            except Exception:
-                fact = random.choice(CLIMATE_FACTS)
-            self.ids.climate_fact_label.text = f"🌍  {fact}"
-        self._saved = False # สถานะว่าบันทึกข้อมูลลง Database หรือยัง
+            return 0, 0
+
+    def _pick_fact(self):
+        """เลือกเกร็ดความรู้ตาม biome + ภาษาปัจจุบัน"""
+        lang = i18n.get_language()
+        try:
+            gameplay = self.manager.get_screen('gameplay')
+            biome_id = gameplay.biome_mgr.current.id
+            # ใช้ข้อมูลจาก learning_path BIOME_FACTS ถ้ามี
+            from screens.learning_path import BIOME_FACTS
+            facts_dict = BIOME_FACTS.get(biome_id, {})
+            if facts_dict:
+                return random.choice(facts_dict.get(lang, facts_dict.get('en', '')).split('\n'))
+        except Exception:
+            pass
+        # fallback — global facts
+        return random.choice(CLIMATE_FACTS_TH if lang == 'th' else CLIMATE_FACTS)
 
     def _save_data(self):
-        """ ฟังก์ชันภายในสำหรับบันทึกข้อมูลการเล่นลง SQLite """
-        if hasattr(self, '_saved') and self._saved: return # ป้องกันการบันทึกซ้ำ
-        
-        # ดึงชื่อจากช่อง Input ถ้าว่างให้ใช้ชื่อพื้นฐาน
-        name = self.ids.name_input.text.strip() if 'name_input' in self.ids else DEFAULT_PLAYER_NAME
-        if not name: name = DEFAULT_PLAYER_NAME
-        
+        """บันทึก session ลง SQLite — ป้องกันการบันทึกซ้ำด้วย _saved flag"""
+        if getattr(self, '_saved', False):
+            return
+
+        name = DEFAULT_PLAYER_NAME
+        if 'name_input' in self.ids:
+            name = self.ids.name_input.text.strip() or DEFAULT_PLAYER_NAME
+
         try:
             db = DatabaseManager()
-            # บันทึก Session การเล่น (ชื่อ, ระยะทาง, เพชร)
             db.save_game_session(name, distance=self.distance, gems=self.gems)
-            # บันทึก Quiz answers ที่สะสมไว้ระหว่างเล่น
+            # บันทึก Quiz answers ที่สะสมไว้ระหว่างเล่น (ถ้ามี)
             try:
                 gameplay = self.manager.get_screen('gameplay')
                 for biome_id, q_idx, correct in gameplay._pending_quiz_answers:
@@ -79,48 +141,30 @@ class GameOverScreen(Screen):
                 gameplay._pending_quiz_answers = []
             except Exception:
                 pass
-            logger.info(f"บันทึกข้อมูลเรียบร้อยสำหรับ {name}: {self.distance}m, {self.gems} gems")
+            logger.info(f"บันทึก: {name} — {self.distance}m, {self.gems} gems")
             self._saved = True
-
         except Exception as e:
             logger.error(f"Error saving session: {e}")
 
+    def _navigate(self, target: str):
+        """บันทึกคะแนน → เล่นเสียง → เปลี่ยนหน้าจอ"""
+        self._save_data()
+        AudioManager().play_sfx('click')
+        Clock.schedule_once(lambda dt: setattr(self.manager, 'current', target), 0.2)
+
+    # ── Action handlers (เรียกจาก KV หรือปุ่ม) ──────────────────────────────
+
     def retry_game(self):
-        """ ฟังก์ชันสำหรับกดเริ่มเล่นใหม่อีกครั้ง (Retry) """
-        self._save_data() # บันทึกคะแนนรอบที่เพิ่งจบไปก่อน
+        """บันทึก → reset gameplay → กลับไปเล่นใหม่"""
+        self._save_data()
         AudioManager().play_sfx('click')
-        
-        # รีเซ็ตสถานะเกมในหน้า Gameplay เพื่อให้พร้อมเริ่มรอบใหม่
-        gameplay = self.manager.get_screen('gameplay')
-        gameplay.grid.reset()
-        gameplay.penguin.is_dead = False
-        start_pos = gameplay.grid.path[0]
-        gameplay.penguin.col = start_pos[0]
-        gameplay.penguin.row = start_pos[1]
-        gameplay.path_index = 0
-        gameplay.gems_collected = 0
-        gameplay.chaser.reset()
-        
-        # เปลี่ยนหน้าจอกลับไปที่ Gameplay
-        Clock.schedule_once(lambda dt: self._go_gameplay(), 0.2)
-        
+        self.manager.get_screen('gameplay').restart_game()
+        Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'gameplay'), 0.2)
+
     def view_history(self):
-        """ ฟังก์ชันไปหน้าประวัติคะแนนสูงสุด """
-        self._save_data()
-        AudioManager().play_sfx('click')
-        Clock.schedule_once(lambda dt: self._go_history(), 0.2)
-        
+        """ไปหน้าประวัติคะแนน"""
+        self._navigate('history')
+
     def go_home(self):
-        """ ฟังก์ชันกลับไปยังเมนูหลัก """
-        self._save_data()
-        AudioManager().play_sfx('click')
-        Clock.schedule_once(lambda dt: self._go_menu(), 0.2)
-
-    def _go_gameplay(self):
-        self.manager.current = 'gameplay'
-
-    def _go_history(self):
-        self.manager.current = 'history'
-
-    def _go_menu(self):
-        self.manager.current = 'menu'
+        """กลับเมนูหลัก"""
+        self._navigate('menu')

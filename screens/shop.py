@@ -3,6 +3,7 @@ from core.logger import logger
 from core.audio import AudioManager
 from core.database import DatabaseManager
 from core.state import StateManager
+from core import i18n
 from kivy.clock import Clock
 
 class ShopScreen(Screen):
@@ -10,7 +11,18 @@ class ShopScreen(Screen):
     def on_enter(self):
         """ ทำงานเมื่อเข้าสู่หน้าร้านค้า """
         logger.info("เข้าสู่หน้าจอ Shop")
+        self._refresh_static_text()
         self.update_balance_label() # อัปเดตยอดเงินและสถานะปุ่ม
+
+    def _refresh_static_text(self):
+        """อัปเดต label/ปุ่มตามภาษา"""
+        font = i18n.get_font()
+        if 'shop_title_lbl' in self.ids:
+            self.ids.shop_title_lbl.text      = i18n.t('skins_title')
+            self.ids.shop_title_lbl.font_name = font
+        if 'shop_back_btn' in self.ids:
+            self.ids.shop_back_btn.text      = i18n.t('back')
+            self.ids.shop_back_btn.font_name = font
         
     def update_balance_label(self):
         """ อัปเดตการแสดงผลยอด Gems และสถานะของแต่ละปุ่มสกิน """
@@ -19,7 +31,7 @@ class ShopScreen(Screen):
         # ดึงยอด Gem ปัจจุบันมาแสดง
         balance = db.get_gem_balance(player_name)
         if 'gem_label' in self.ids:
-            self.ids.gem_label.text = f"GEMS: 💎 {balance}"
+            self.ids.gem_label.text = f"GEM: {balance}"
 
         # อัปเดตสถานะปุ่มของแต่ละสกิน (EQUIPPED, EQUIP, หรือ BUY)
         state = StateManager()
@@ -34,14 +46,14 @@ class ShopScreen(Screen):
             is_owned = db.is_skin_owned(player_name, s_name)
             
             if s_name == current_skin:
-                btn.text = "EQUIPPED"
+                btn.text = i18n.t('equipped')
                 btn.background_color = (0.2, 0.8, 0.2, 1) # สีเขียว: กำลังสวมใส่
             elif is_owned:
-                btn.text = "EQUIP"
-                btn.background_color = (1, 1, 1, 1) # สีขาว: มีในครอบครองแล้ว
+                btn.text = i18n.t('equip')
+                btn.background_color = (0, 0, 0, 0) # ใส: ใช้ canvas.before จาก KV
             else:
-                btn.text = "BUY 💎 10"
-                btn.background_color = (1, 1, 1, 1) # สีขาว: ยังไม่เป็นเจ้าของ
+                btn.text = i18n.t('buy_gems')
+                btn.background_color = (0, 0, 0, 0) # ใส: ใช้ canvas.before จาก KV
 
     def buy_item(self, item_name):
         """ ฟังก์ชันสำหรับซื้อหรือสวมใส่ไอเทมสกิน """

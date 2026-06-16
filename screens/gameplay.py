@@ -1,5 +1,5 @@
 import random
-import resource
+from dataclasses import dataclass, field
 from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
@@ -17,6 +17,7 @@ from kivy.graphics import Color as GColor, Rectangle as GRect
 
 from core.audio import AudioManager
 from core.logger import logger
+from core import i18n
 from core.config import (
     TARGET_FPS, TILE_W, TILE_H, TILE_IMG_H,
     CAMERA_LERP, SHAKE_DECAY, SHAKE_STOP, MAX_IDLE_TIME,
@@ -24,14 +25,14 @@ from core.config import (
     BOX_FRAME_W, BOX_FRAME_H, BOX_DRAW_W, BOX_DRAW_H,
     GEM_FRAME_W, GEM_FRAME_H, GEM_DRAW_W, GEM_DRAW_H, GEM_FLOAT_OFFSET,
     PENGUIN_DRAW_SIZE, PENGUIN_SPRITE_W, VIEW_RADIUS,
+    QUIZ_INTERVAL_MIN, QUIZ_INTERVAL_MAX,
 )
 from game.grid import GridManager
 from game.penguin import Penguin
 from game.chaser import ChaserBlock
 from game.biome import BiomeManager, BIOMES
-from game.event_manager import EventManager
-from game.quiz_manager import QuizManager
-from ui.quiz_popup import QuizPopupWidget
+from game.buffs import GoldBuff, ReverseBuff
+from game.blocks import PROP_BLANK, PROP_ICE1, PROP_ICE2, PROP_ICE3, PROP_FORCE, PROP_REVERSE, PROP_TRAP, hit_ice
 
 # รายการรูปภาพแผ่นน้ำแข็งสำหรับพื้น (The Great Melt)
 ICE_TILES = [
@@ -49,6 +50,25 @@ ICE_TILES = [
 
 ARROW_RIGHT_IMG = 'assets/Component_UI/Vector/arrow_right_normal.png'  
 ARROW_LEFT_IMG  = 'assets/Component_UI/Vector/arrow_left_normal.png'
+
+
+@dataclass
+class RenderState:
+    """
+    รวม parameters ทั้งหมดที่ KivyRenderer.draw() ต้องการไว้ในอ็อบเจกต์เดียว
+    ลดลายเซ็น draw() จาก 13 positional params เหลือ 1 — อ่านง่าย, extend ง่าย
+    """
+    grid:             object          # GridManager
+    penguin:          object          # Penguin
+    path_index:       int
+    dt:               float           = 0.0
+    biome:            object          = None
+    chaser:           object          = None
+    is_shaking_floor: bool            = False
+    gold_active:      bool            = False
+    falling_props:    dict            = field(default_factory=dict)
+    falling_tiles:    dict            = field(default_factory=dict)
+    trap_states:      dict            = field(default_factory=dict)
 
 
 class KivyRenderer(Widget):
@@ -105,10 +125,22 @@ class KivyRenderer(Widget):
         y = (col + row) * (TILE_H // 2)
         return x, y
 
-    def draw(self, grid_manager, penguin, path_index, chaser=None, is_shaking_floor=False, dt=0, biome=None):
-        """ ฟังก์ชันหลักในการวาดทุกอย่างลงบน Canvas """
+    def draw(self, state: RenderState):
+        """ฟังก์ชันหลักในการวาดทุกอย่างลงบน Canvas — รับ RenderState แทน 13 params"""
+        # แกะ state ออกมาใช้ภายใน (ชัดเจน + type-checkable)
+        grid_manager     = state.grid
+        penguin          = state.penguin
+        chaser           = state.chaser
+        biome            = state.biome
+        falling_tiles    = state.falling_tiles
+        trap_states      = state.trap_states
+        falling_props    = state.falling_props
+        gold_active      = state.gold_active
+        is_shaking_floor = state.is_shaking_floor
+        dt               = state.dt
+
         self._anim_dt = dt
-        # 1. คำนวณหาตำแหน่งที่กล้องควรจะหันไป (ศูนย์กลางคือแแพนกวิน)
+        # 1. คำนวณหาตำแหน่งที่กล้องควรจะหันไป (ศูนย์กลางคือแพนกวิน)
         target_x, target_y = self.grid_to_screen(penguin.col, penguin.row)
 
         if self.cam_x is None:
@@ -119,10 +151,10 @@ class KivyRenderer(Widget):
         self.cam_x += (target_x - self.cam_x) * CAMERA_LERP
         self.cam_y += (target_y - self.cam_y) * CAMERA_LERP
 
-        # คำนวณหาค่า Offset เพื่อให้จัดกิ่งกลางหน้าจอ
+        # คำนวณหาค่า Offset เพื่อให้จัดกึ่งกลางหน้าจอ
         ox = Window.width  / 2 - self.cam_x
         oy = Window.height / 2 - self.cam_y
-        
+
         # 3. ตรรกะการสั่นของกล้อง (Camera Shake)
         if self.shake_amount > 0:
             ox += random.uniform(-self.shake_amount, self.shake_amount)
@@ -142,11 +174,11 @@ class KivyRenderer(Widget):
         else:
             cur_textures = self._biome_textures.get('arctic', list(self._biome_textures.values())[0])
 
-        self.canvas.clear() # เคลียร์ภาพเก่าออกก่อนวาดใหม่
+        self.canvas.clear()  # เคลียร์ภาพเก่าออกก่อนวาดใหม่
         with self.canvas:
             view_radius = VIEW_RADIUS
             visible_tiles = []
-            visible_set = set()
+            visible_set   = set()
             for col, row in grid_manager.path_set:
                 if (penguin.col - view_radius <= col <= penguin.col + view_radius) and \
                    (penguin.row - view_radius <= row <= penguin.row + view_radius):
@@ -174,47 +206,93 @@ class KivyRenderer(Widget):
             Color(1, 1, 1, 1)
             for col, row in visible_tiles:
                 is_chaser_here = chaser and chaser.active and col == chaser.col and row == chaser.row
+                pos = (col, row)
 
-                if (col, row) in grid_manager.path_set:
-                    # สีกระเบื้อง: แดงถ้า chaser อยู่, biome fork สีถ้า fork, biome tint ปกติ
-                    if is_chaser_here:
-                        Color(1, 0.18, 0.0, 1)
+                if pos in grid_manager.path_set:
+                    # ── Falling floor tint ──────────────────────────────
+                    fall_t = falling_tiles.get(pos)
+                    # chaser danger — tile ที่ chaser ผ่านมาแล้ว → แดงเต็มๆ
+                    is_danger = (chaser and chaser.active and pos in chaser.visited
+                                 and not is_chaser_here)
+
+                    if is_danger:
+                        Color(1, 0.08, 0.0, 1)                         # แดงเลือด
+                    elif fall_t is not None and not is_chaser_here:
+                        # urgency 0→1 (กะพริบแดงยิ่งใกล้ร่วง)
+                        urgency = max(0.0, min(1.0, 1.0 - fall_t / 3.0))
+                        pulse   = 0.5 + 0.5 * abs(((fall_t * 6) % 2) - 1)
+                        Color(1.0, 1.0 - urgency * pulse, 1.0 - urgency * pulse, 1)
+                    elif is_chaser_here:
+                        Color(1, 0.18, 0.0, 1)                         # ตัว chaser
                     elif grid_manager.is_fork_tile(col, row):
-                        if biome:
-                            Color(*biome.fork_color)
-                        else:
-                            Color(1, 0.9, 0.4, 1)
+                        Color(*(biome.fork_color if biome else (1, 0.9, 0.4, 1)))
                     else:
-                        if biome:
-                            Color(*biome.tile_tint)
-                        else:
-                            Color(1, 1, 1, 1)
+                        Color(*(biome.tile_tint if biome else (1, 1, 1, 1)))
 
                     tex    = self._get_tile_texture(col, row, cur_textures)
                     sx, sy = self.grid_to_screen(col, row)
                     draw_x = sx + ox - (TILE_W // 2)
                     draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
                     Rectangle(texture=tex, pos=(draw_x, draw_y), size=(TILE_W, TILE_IMG_H))
+                    Color(1, 1, 1, 1)
 
                     if is_chaser_here:
-                        # วาด Chaser block ทับไปเลย ไม่วาด obstacle/gem ตรงนั้น
                         self._draw_chaser(draw_x, draw_y + (TILE_IMG_H // 2), chaser.pulse_alpha())
                     else:
-                        # วาดสิ่งกีดขวางและ Gem ปกติ
-                        obs = grid_manager.get_obstacle_at(col, row)
-                        if obs and obs.active:
-                            self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                        prop = grid_manager.get_obstacle_at(col, row)
+                        if prop:
+                            t_state = trap_states.get(pos) if prop == PROP_TRAP else None
+                            self._draw_prop(prop, draw_x, draw_y + (TILE_IMG_H // 2), t_state)
                         gem = grid_manager.get_gem_at(col, row)
                         if gem and gem.active:
                             self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
 
-                # 5. วาดแพนกวินในลำดับ Z ที่ถูกต้อง
+                # 5. วาดแพนกวิน + gold buff glow
                 if col == penguin.col and row == penguin.row:
                     p_ox, p_oy = ox, oy
                     if is_shaking_floor:
                         p_ox += random.uniform(-3, 3)
                         p_oy += random.uniform(-3, 3)
+                    if gold_active:
+                        sx2, sy2 = self.grid_to_screen(col, row)
+                        gx = sx2 + p_ox - 38
+                        gy = sy2 + p_oy - 4
+                        Color(1.0, 0.9, 0.0, 0.35)
+                        Rectangle(pos=(gx, gy), size=(76, 76))
+                        Color(1, 1, 1, 1)
                     self._draw_penguin(penguin, p_ox, p_oy)
+
+            # ── Falling prop animations (block ร่วงลง Y หลังถูกทำลาย) ──────────────
+            tex_fall = self.box_assets['Idle'].get_region(0, 0, BOX_FRAME_W, BOX_FRAME_H)
+            for (fc, fr), fp in falling_props.items():
+                sx2, sy2 = self.grid_to_screen(fc, fr)
+                draw_xf = sx2 + ox - (TILE_W // 2)
+                draw_yf = sy2 + oy - (TILE_IMG_H - TILE_H // 2) + fp['y_offset']
+                bw, bh  = BOX_DRAW_W, BOX_DRAW_H
+                bxf     = draw_xf + (TILE_W - bw) // 2
+                byf     = draw_yf + (TILE_IMG_H // 2)
+                alpha   = max(0.0, fp['alpha'])
+                p       = fp['prop']
+                if p == 'ice1':
+                    Color(0.88, 0.98, 1.0, alpha)
+                    Rectangle(texture=tex_fall, pos=(bxf, byf), size=(bw, bh))
+                elif p == 'ice2':
+                    Color(0.45, 0.78, 1.0, alpha)
+                    Rectangle(texture=tex_fall, pos=(bxf, byf), size=(bw, bh))
+                elif p == 'ice3':
+                    Color(0.18, 0.42, 1.0, alpha)
+                    Rectangle(texture=tex_fall, pos=(bxf, byf), size=(bw, bh))
+                elif p == 'force':
+                    fw2 = int(bw * 1.4); fh2 = int(bh * 1.4)
+                    fxf = draw_xf + (TILE_W - fw2) // 2
+                    Color(1.0, 0.88, 0.05, alpha)
+                    Rectangle(texture=tex_fall, pos=(fxf, byf), size=(fw2, fh2))
+                elif p == 'reverse':
+                    fw2 = int(bw * 1.4); fh2 = int(bh * 1.4)
+                    fxf = draw_xf + (TILE_W - fw2) // 2
+                    Color(0.72, 0.08, 1.0, alpha)
+                    Rectangle(texture=tex_fall, pos=(fxf, byf), size=(fw2, fh2))
+                Color(1, 1, 1, 1)
 
             # Atmosphere overlay (biome tint over full screen)
             if biome and biome.atmo_tint[3] > 0:
@@ -263,17 +341,77 @@ class KivyRenderer(Widget):
             Color(1, 1, 1, 1)
             Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
 
-    def _draw_obstacle(self, obs, tx, ty, ox, oy):
-        """ วาดสิ่งกีดขวางแบบซ้อนทับกันตามขนาด (Stacking) """
-        state = obs.state
-        frame = int(obs.anim_frame)
-        full_tex = self.box_assets.get(state)
-        tex = full_tex.get_region(frame * BOX_FRAME_W, 0, BOX_FRAME_W, BOX_FRAME_H)
+    def _draw_prop(self, prop, tx, ty, trap_state=None):
+        """วาด prop บน tile — ice ซ้อนตามระดับ, buff glow, trap open/close"""
         bw, bh = BOX_DRAW_W, BOX_DRAW_H
-        Color(1, 1, 1, 1)
-        for i in range(obs.size): # วาดซ้อนกันเป็นชั้นๆ ตาม Size (1-5)
-            y_offset = i * (bh * 0.6)
-            Rectangle(texture=tex, pos=(tx + (TILE_W - bw) // 2, ty + y_offset), size=(bw, bh))
+        bx = tx + (TILE_W - bw) // 2
+        tex_idle = self.box_assets['Idle'].get_region(0, 0, BOX_FRAME_W, BOX_FRAME_H)
+
+        if prop in (PROP_ICE1, PROP_ICE2, PROP_ICE3):
+            n = {'ice1': 1, 'ice2': 2, 'ice3': 3}[prop]
+            # ice1=ขาวน้ำแข็ง, ice2=ฟ้าอ่อน, ice3=ฟ้าเข้ม — ใช้ texture จริง
+            tints = {
+                'ice1': (0.88, 0.98, 1.0, 1.0),
+                'ice2': (0.45, 0.78, 1.0, 1.0),
+                'ice3': (0.18, 0.42, 1.0, 1.0),
+            }
+            Color(*tints[prop])
+            for i in range(n):
+                Rectangle(texture=tex_idle, pos=(bx, ty + i * int(bh * 0.5)), size=(bw, bh))
+            Color(1, 1, 1, 1)
+
+        elif prop == PROP_FORCE:
+            # ⚡ Gold Buff — ใหญ่กว่า ice 40%, ทองสด ใช้ texture ทับสี เห็นชัดมาก
+            fw = int(bw * 1.4)
+            fh = int(bh * 1.4)
+            fx = tx + (TILE_W - fw) // 2
+            # outer pulse glow
+            Color(1.0, 0.80, 0.0, 0.45)
+            Rectangle(pos=(fx - 10, ty - 6), size=(fw + 20, fh + 12))
+            # main block ทอง
+            Color(1.0, 0.88, 0.05, 1.0)
+            Rectangle(texture=tex_idle, pos=(fx, ty), size=(fw, fh))
+            # bright core
+            Color(1.0, 1.0, 0.65, 0.70)
+            Rectangle(pos=(fx + fw // 4, ty + fh // 4), size=(fw // 2, fh // 2))
+            Color(1, 1, 1, 1)
+
+        elif prop == PROP_REVERSE:
+            # 🔄 Reverse Buff — ใหญ่กว่า ice 40%, ม่วงสด เห็นชัดมาก
+            fw = int(bw * 1.4)
+            fh = int(bh * 1.4)
+            fx = tx + (TILE_W - fw) // 2
+            # outer glow
+            Color(0.55, 0.0, 1.0, 0.45)
+            Rectangle(pos=(fx - 10, ty - 6), size=(fw + 20, fh + 12))
+            # main block ม่วง
+            Color(0.72, 0.08, 1.0, 1.0)
+            Rectangle(texture=tex_idle, pos=(fx, ty), size=(fw, fh))
+            # highlight
+            Color(0.92, 0.72, 1.0, 0.70)
+            Rectangle(pos=(fx + fw // 4, ty + fh // 4), size=(fw // 2, fh // 2))
+            Color(1, 1, 1, 1)
+
+        elif prop == PROP_TRAP:
+            if trap_state and trap_state.get('open'):
+                t = trap_state.get('type', 'seals')
+                if t == 'seals':
+                    # เปิด+seals = อันตราย → แดงสด
+                    Color(1.0, 0.05, 0.05, 0.95)
+                    Rectangle(pos=(bx - 6, ty), size=(bw + 12, bh * 0.7))
+                    Color(1.0, 0.6, 0.0, 0.6)
+                    Rectangle(pos=(bx, ty + 4), size=(bw, bh * 0.45))
+                else:
+                    # เปิด+tail = whale tail → ฟ้าคราม
+                    Color(0.0, 0.65, 1.0, 0.95)
+                    Rectangle(pos=(bx - 6, ty), size=(bw + 12, bh * 0.7))
+                    Color(0.5, 0.9, 1.0, 0.55)
+                    Rectangle(pos=(bx, ty + 4), size=(bw, bh * 0.45))
+            else:
+                # ปิด = เทา
+                Color(0.45, 0.45, 0.55, 0.75)
+                Rectangle(pos=(bx, ty + 4), size=(bw, bh * 0.5))
+            Color(1, 1, 1, 1)
 
     def _draw_gem(self, gem, tx, ty, ox, oy):
         """ วาด Gem พร้อมเอฟเฟกต์ลอยนิ่่งๆ และหมุนได้ """
@@ -382,14 +520,25 @@ class GamePlayScreen(Screen):
         self.game_started = False       # สถานะว่าเริ่มวิ่งก้าวแรกหรือยัง
         self.chaser = ChaserBlock()     # บล็อกไล่ตามที่ตามมาเรื่อยๆ
 
+        # Buff system — gold buff เท่านั้น (reverse ถูกเอาออกจาก game design)
+        self.gold_buff   = GoldBuff()
+
+        # Falling prop animations — block ร่วงลง Y เมื่อถูกทำลาย/เก็บ
+        # {(col, row): {'prop': str, 'y_offset': float, 'vy': float, 'alpha': float}}
+        self.falling_props = {}
+
+        # Quiz Event (Active Learning) — ทุก 50–100 m
+        self.next_quiz_at = random.randint(QUIZ_INTERVAL_MIN, QUIZ_INTERVAL_MAX)
+        self._quiz_popup  = None
+
         # สร้าง Renderer สำหรับวาดภาพ
         self.renderer = KivyRenderer()
         self.add_widget(self.renderer)
 
         # สร้างส่วนแสดงผลคะแนน (HUD)
         self.hud_label = Label(
-            text="0 m   GEM 0", font_size='24sp', bold=True,
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            text="0 m  GEM 0", font_size='24sp', bold=True,
+            font_name=i18n.FONT_KF,
             pos_hint={'right': 0.98, 'top': 0.98},
             size_hint=(0.3, 0.05), color=(1, 1, 1, 1),
             halign='right'
@@ -397,12 +546,23 @@ class GamePlayScreen(Screen):
         self.hud_label.bind(size=self.hud_label.setter('text_size'))
         self.add_widget(self.hud_label)
 
+        # Buff HUD — gold ⚡ / reverse 🔄 countdown ด้านซ้ายบน
+        self.buff_label = Label(
+            text='', font_size='20sp', bold=True,
+            font_name=i18n.FONT_KF,
+            pos_hint={'x': 0.02, 'top': 0.88},
+            size_hint=(0.35, 0.08), color=(1, 1, 1, 1),
+            halign='left',
+        )
+        self.buff_label.bind(size=self.buff_label.setter('text_size'))
+        self.add_widget(self.buff_label)
+
         # สร้างปุ่มควบคุมการเลี้ยว (ซ้าย/ขวา)
         OFFSET = 0.2
         self.btn_left = ArrowButton(
             move_callback=lambda: self._move(DIR_LEFT),
             source=ARROW_LEFT_IMG, size_hint=(None, None),
-            size=(120, 120), allow_stretch=True, keep_ratio=True,
+            size=(120, 120), fit_mode='contain',
             pos_hint={'center_x': 0.5 - OFFSET, 'center_y': 0.08},
         )
         self.add_widget(self.btn_left)
@@ -410,7 +570,7 @@ class GamePlayScreen(Screen):
         self.btn_right = ArrowButton(
             move_callback=lambda: self._move(DIR_RIGHT),
             source=ARROW_RIGHT_IMG, size_hint=(None, None),
-            size=(120, 120), allow_stretch=True, keep_ratio=True,
+            size=(120, 120), fit_mode='contain',
             pos_hint={'center_x': 0.5 + OFFSET, 'center_y': 0.08},
         )
         self.add_widget(self.btn_right)
@@ -430,30 +590,13 @@ class GamePlayScreen(Screen):
         self.biome_mgr = BiomeManager()
         self.biome_label = Label(
             text='', font_size='30sp', bold=True,
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            font_name=i18n.FONT_KF,
             pos_hint={'center_x': 0.5, 'center_y': 0.60},
             size_hint=(0.9, 0.12),
             color=(1, 1, 1, 0),
             halign='center',
         )
         self.add_widget(self.biome_label)
-
-        # ── Benchmark overlay (FPS + RAM) — toggle with 'b' key ──
-        self._bench_visible   = False
-        self._fps_samples     = []
-        self._bench_tick      = 0.0
-        self.bench_label = Label(
-            text='',
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
-            font_size='14sp',
-            pos_hint={'x': 0.01, 'top': 0.94},
-            size_hint=(0.25, 0.12),
-            color=(0.3, 1.0, 0.3, 0),  # hidden by default
-            halign='left',
-            valign='top',
-        )
-        self.bench_label.bind(size=self.bench_label.setter('text_size'))
-        self.add_widget(self.bench_label)
 
         # หน้าต่างเมนูตอนกดหยุด (Pause Overlay)
         self.pause_overlay = PauseOverlay(opacity=0, disabled=True)
@@ -482,7 +625,7 @@ class GamePlayScreen(Screen):
         ]:
             b = IconButton(
                 source=img_n, size_hint=(None, None), size=(100, 100),
-                allow_stretch=True, keep_ratio=True,
+                fit_mode='contain',
             )
             b.bind(
                 on_press=lambda x, d=img_d: setattr(x, 'source', d),
@@ -492,19 +635,17 @@ class GamePlayScreen(Screen):
 
         self.pause_overlay.add_widget(btn_box)
         self.add_widget(self.pause_overlay)
-        self._keyboard = None
-
-        # ── Quiz / Event System ───────────────────────────────
-        self.event_manager       = EventManager()
-        self.quiz_manager        = QuizManager()
-        self._pending_quiz_answers = []   # [(biome_id, q_idx, correct), ...]
-        self.quiz_popup          = QuizPopupWidget(size_hint=(1, 1))
-        self.add_widget(self.quiz_popup)   # เพิ่มบนสุด — ซ้อนทับทุก widget
+        self._keyboard = None 
 
     def on_enter(self):
         """ ทำงานเมื่อเข้าสู่หน้าจอนี้ (เริ่มเล่นรอบใหม่/เข้าสู่รอบถัดไป) """
         from core.state import StateManager
         logger.info("เข้าสู่หน้า GamePlay")
+
+        # ล้าง quiz popup ที่ค้างจากเกมที่แล้ว (เช่น ตายตอน popup เปิดอยู่)
+        if self._quiz_popup:
+            self.remove_widget(self._quiz_popup)
+            self._quiz_popup = None
         
         # เชื่อมต่อคีย์บอร์ดเพื่อรับคำสั่ง (ลูกศรซ้าย/ขวา)
         if not self._keyboard:
@@ -514,7 +655,10 @@ class GamePlayScreen(Screen):
 
         # โหลดสกินที่ผู้เล่นเลือกไว้ และเริ่มเสียงเพลงประกอบ
         self.penguin.equip_skin(StateManager().selected_skin)
-        self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS) # เริ่มเกมลูป
+        # Cancel game loop เก่าก่อนเสมอ — ป้องกัน double loop เมื่อ retry_game เรียก on_enter
+        if self.game_event:
+            self.game_event.cancel()
+        self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
         AudioManager().play_bgm('Bgm.gameplay.mp3')
         
         # รีเซ็ตพิกัดและข้อมูลทุกอย่างให้พร้อมสำหรับเกมรอบใหม่
@@ -530,9 +674,10 @@ class GamePlayScreen(Screen):
         self.chaser.reset()
         self.renderer.cam_x = None # รีเซ็ตกล้อง
         self.biome_mgr.reset()
-        self.event_manager.reset()
-        self.quiz_manager.reset()
-        self._pending_quiz_answers = []
+        self.gold_buff    = GoldBuff()
+        self.reverse_buff = ReverseBuff()
+        self.falling_props = {}
+        self.next_quiz_at = random.randint(QUIZ_INTERVAL_MIN, QUIZ_INTERVAL_MAX)
 
     def on_leave(self):
         """ ทำงานเมื่อเดินออกจากหน้าจอนี้ (หยุดเกมลูปและเสียง) """
@@ -546,137 +691,242 @@ class GamePlayScreen(Screen):
             self._keyboard = None
 
     def update(self, dt):
-        """ ฟังก์ชัน Game Loop หลักที่รันทุกเฟรม """
-        # Benchmark sampling
-        if self._bench_visible and dt > 0:
-            self._fps_samples.append(1.0 / dt)
-            self._bench_tick += dt
-            if self._bench_tick >= 1.0:
-                fps_avg = sum(self._fps_samples) / len(self._fps_samples)
-                ram_mb  = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024 // 1024
-                self.bench_label.text = f"FPS {fps_avg:.0f}\nRAM {ram_mb} MB"
-                self._fps_samples.clear()
-                self._bench_tick = 0.0
+        """Game Loop หลัก — รันทุกเฟรม"""
+        biome      = self._update_hud_and_biome()
+        self._update_systems(dt)
+        self._update_chaser(dt)
+        is_shaking = self._update_idle_floor(dt)
+        self.renderer.draw(RenderState(
+            grid             = self.grid,
+            penguin          = self.penguin,
+            path_index       = self.path_index,
+            dt               = dt,
+            biome            = biome,
+            chaser           = self.chaser,
+            is_shaking_floor = is_shaking,
+            gold_active      = self.gold_buff.active,
+            falling_props    = self.falling_props,
+            falling_tiles    = self.grid.falling_tiles,
+            trap_states      = self.grid.trap_states,
+        ))
 
-        # 1. อัปเดตระยะทางบนหน้าจอ (HUD)
-        dist = self.grid.get_distance_m()
+    # ── Update sub-methods ───────────────────────────────────────────────────
+
+    def _update_hud_and_biome(self):
+        """อัปเดต HUD label + biome transition — คืน biome ปัจจุบัน"""
+        dist    = self.grid.get_distance_m()
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
-        self.hud_label.text = f"{dist_str}   GEM {self.gems_collected}"
+        self.hud_label.text = f"{dist_str}  +{self.gems_collected}"
 
-        # Update biome and HUD color
         biome, biome_changed = self.biome_mgr.update(dist)
         self.hud_label.color = list(biome.hud_color)
         if biome_changed:
             Animation.cancel_all(self.biome_label)
-            self.biome_label.text = biome.name
+            self.biome_label.text  = biome.name
             self.biome_label.color = list(biome.hud_color[:3]) + [1.0]
             Animation(color=list(biome.hud_color[:3]) + [0.0], duration=2.5, t='out_quad').start(self.biome_label)
+        return biome
 
-        # 2. สั่งให้อุปสรรคและแผ่นพื้นหลังผู้เล่นอัปเดต/ทำลายทิ้งเพื่อประหยัด Memory
+    def _update_systems(self, dt):
+        """อัปเดต gems, falling floor, traps, buffs, falling props, quiz trigger"""
+        dist = self.grid.get_distance_m()
+
         self.grid.update_obstacles(dt, view_radius=VIEW_RADIUS, penguin_pos=(self.penguin.col, self.penguin.row))
+        self.grid.update_falling(dt)
+        self.grid.update_traps(dt)
+        self.gold_buff.update(dt)
         self.grid.cleanup_behind(self.path_index)
 
-        # 2.5 ตรวจ Quiz Event trigger
-        if not self.penguin.is_dead and self.game_started:
-            if self.event_manager.should_trigger(dist):
-                question = self.quiz_manager.get_question(biome.id)
-                if question:
-                    self.event_manager.mark_triggered(dist)
-                    self._show_quiz_popup(question, biome.id)
-                    return  # หยุด update ในเฟรมนี้เลย popup จะ pause loop
+        # Falling prop animation — vy เริ่มสูง (60) ทำให้เห็นการเคลื่อนที่ตั้งแต่เฟรมแรก
+        for key in list(self.falling_props):
+            fp = self.falling_props[key]
+            fp['vy']       += 320 * dt          # gravity
+            fp['y_offset'] -= fp['vy'] * dt     # ร่วงลงแกน Y ของ Kivy
+            fp['alpha']    -= 1.4 * dt           # fade ช้าลง — เห็นนานขึ้น
+            if fp['alpha'] <= 0:
+                del self.falling_props[key]
 
-        # 3. อัปเดต Chaser และตรวจว่าตามทันผู้เล่นหรือยัง
-        if not self.penguin.is_dead:
-            dist = self.grid.get_distance_m()
-            # Spawn chaser หลังจากผู้เล่นมีระยะนำหน้าพอแล้ว
-            if not self.chaser.active and self.path_index >= ChaserBlock.ACTIVATE_AFTER:
-                self.chaser.activate(self.path_index - ChaserBlock.START_GAP, self.grid.path)
-            if self.chaser.active:
-                caught = self.chaser.update(dt, self.path_index, dist, self.grid.path)
-                if caught:
-                    self.penguin.is_dead = True
-                    AudioManager().play_sfx('down')
-                    self.renderer.trigger_shake(20)
-                    Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+        # Buff HUD — แสดงเฉพาะ gold buff
+        if self.gold_buff.active:
+            self.buff_label.text  = f"GOLD {self.gold_buff.timer:.1f}s"
+            self.buff_label.color = (1.0, 0.9, 0.0, 1)
+        else:
+            self.buff_label.text  = ''
+            self.buff_label.color = (1, 1, 1, 0)
 
-        # 4. ตรวจสอบการยืนนิ่งถล่มของพื้น
-        if not self.penguin.is_dead and self.game_started:
-            self.idle_timer += dt
-            is_shaking = self.idle_timer > (self.MAX_IDLE_TIME - 1.0)
+        if self.game_started:
+            self._check_quiz_trigger(dist)
 
-            if self.idle_timer >= self.MAX_IDLE_TIME:
-                logger.warning(f"พื้นถล่ม! ยืนนิ่งนานเกินไปที่ ({self.penguin.col}, {self.penguin.row})")
-                self.grid.remove_tile(self.penguin.col, self.penguin.row)
+    def _update_chaser(self, dt):
+        """Spawn + อัปเดต chaser — ถ้าตามทันให้ game over"""
+        if self.penguin.is_dead:
+            return
+        if not self.chaser.active and self.path_index >= ChaserBlock.ACTIVATE_AFTER:
+            self.chaser.activate(self.path_index - ChaserBlock.START_GAP, self.grid.path)
+        if self.chaser.active:
+            caught = self.chaser.update(dt, self.path_index, self.grid.get_distance_m(), self.grid.path)
+            if caught:
                 self.penguin.is_dead = True
                 AudioManager().play_sfx('down')
+                self.renderer.trigger_shake(20)
                 Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
 
-            self.renderer.draw(self.grid, self.penguin, self.path_index,
-                               chaser=self.chaser, is_shaking_floor=is_shaking, dt=dt, biome=biome)
-        else:
-            self.renderer.draw(self.grid, self.penguin, self.path_index,
-                               chaser=self.chaser, dt=dt, biome=biome)
+    def _update_idle_floor(self, dt):
+        """idle timer — พื้นถล่มถ้ายืนนิ่ง MAX_IDLE_TIME วิ — คืน is_shaking"""
+        if self.penguin.is_dead or not self.game_started:
+            return False
+        self.idle_timer += dt
+        if self.idle_timer >= self.MAX_IDLE_TIME:
+            logger.warning(f"พื้นถล่ม! ยืนนิ่งที่ ({self.penguin.col}, {self.penguin.row})")
+            self.grid.remove_tile(self.penguin.col, self.penguin.row)
+            self.penguin.is_dead = True
+            AudioManager().play_sfx('down')
+            Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+        return self.idle_timer > (self.MAX_IDLE_TIME - 1.0)
 
     def _move(self, direction):
-        """ ฟังก์ชันจัดการการเคลื่อนที่เมื่อกดปุ่มลูกศร (รับเวกเตอร์ทิศทาง) """
+        """ จัดการการเคลื่อนที่ รองรับ reverse buff + prop interactions """
         if self.penguin.is_dead:
             return
 
-        # ปรับหน้าตาแพนกวินให้หันไปตามทิศที่กด
         if direction == DIR_LEFT:
             self.penguin.facing_left = True
         elif direction == DIR_RIGHT:
             self.penguin.facing_left = False
 
-        # คำนวณพิกัดใหม่ที่กำลังจะเดินไป
-        new_col = self.penguin.col + direction[0]
-        new_row = self.penguin.row + direction[1]
+        old_col = self.penguin.col
+        old_row = self.penguin.row
+        new_col = old_col + direction[0]
+        new_row = old_row + direction[1]
 
-        # 1. ตรวจสอบว่ามีสิ่งกีดขวาง (Obstacle) ขวางทางอยู่หรือไม่
-        obs = self.grid.get_obstacle_at(new_col, new_row)
-        if obs and obs.active:
-            if obs.hit():  # ทุบบล็อก (เสียงเล่นใน hit() แล้ว)
+        # --- Prop interaction ---
+        prop = self.grid.get_obstacle_at(new_col, new_row)
+
+        if prop in (PROP_ICE1, PROP_ICE2, PROP_ICE3):
+            if self.gold_buff.active:
+                # Gold buff ทำลาย ice ทันที — เดินผ่านได้ + animation ร่วง
+                self._pop_prop_animated(new_col, new_row)
+                AudioManager().play_sfx('hit')
+            else:
+                # ลด ice level — ไม่เคลื่อนที่ (ice3→ice2→ice1→blank)
+                new_prop = hit_ice(prop)
+                if new_prop == PROP_BLANK:
+                    self._pop_prop_animated(new_col, new_row)   # ice1 หักสุด → ร่วง
+                else:
+                    self.grid.obstacles[(new_col, new_row)] = new_prop  # degrade ใน place
+                AudioManager().play_sfx('hit')
                 self.idle_timer = 0
                 self.game_started = True
-                return  # ยังเดินผ่านไม่ได้ รอ animation จบก่อน
-            else:
                 return
 
-        # 2. ตรวจสอบว่ามี Gem ในช่องนั้นหรือไม่
+        elif prop == PROP_FORCE:
+            self.gold_buff.activate()
+            self._pop_prop_animated(new_col, new_row)   # เก็บ buff → ร่วง
+            AudioManager().play_sfx('coin')
+
+        elif prop == PROP_TRAP:
+            state = self.grid.trap_states.get((new_col, new_row))
+            if state and state['open']:
+                if state['type'] == 'seals':
+                    if self.gold_buff.active:
+                        AudioManager().play_sfx('hit')  # kick trap
+                    else:
+                        self.penguin.is_dead = True
+                        AudioManager().play_sfx('down')
+                        Clock.schedule_once(lambda dt: self._go_gameover(), 0.5)
+                        return
+                elif state['type'] == 'tail':
+                    self._trigger_fly_mode(tiles=random.randint(15, 25))
+                    return
+
+        # --- Gem collection ---
         gem = self.grid.get_gem_at(new_col, new_row)
         if gem and gem.active:
-            val = gem.collect() # เก็บไอเทม
-            self.gems_collected += val
-            AudioManager().play_sfx('coin') # เสียงเก็บเหรียญ
+            self.gems_collected += gem.collect()
+            AudioManager().play_sfx('coin')
             self.grid.gems.pop((new_col, new_row), None)
-            self._spawn_float(f'+{val}', y_frac=0.18)
 
-        # 3. ขยับตัวละครไปยังพิกัดใหม่
+        # --- Move ---
         self.penguin.col = new_col
         self.penguin.row = new_row
         self.game_started = True
 
-        # 4. ตรวจสอบว่าเหยียบอยู่บนเส้นทางที่ถูกต้องหรือไม่
         if self.grid.is_on_path(new_col, new_row):
             self.grid.step_forward()
             idx = self.grid.get_path_index(new_col, new_row)
             if idx >= 0:
                 self.path_index = idx
-                self.grid.extend_if_needed(self.path_index) # ขยายแผนที่ข้างหน้าถ้าเดินมาไกลแล้ว
-                AudioManager().play_sfx('jump') # เสียงกระโดด
-                self.renderer.trigger_shake(5)  # กล้องสั่นเล็กน้อยเพิ่มความมันส์
-                self.idle_timer = 0 
-            
-            # ถ้าถึงปลายทางของ Array แผนที่ (กรณีมีลิมิต)
+                self.grid.extend_if_needed(self.path_index)
+                AudioManager().play_sfx('jump')
+                self.renderer.trigger_shake(5)
+                self.idle_timer = 0
             if self.path_index == len(self.grid.path) - 1:
                 logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
                 self.manager.current = 'gameover'
         else:
-            # ตกพื้น/ออกนอกเส้นทาง
             self.penguin.is_dead = True
             AudioManager().play_sfx('down')
             logger.info(f"ตก! ระยะ {self.grid.get_distance_m()} m")
             Clock.schedule_once(lambda dt: self._go_gameover(), 0.5)
+
+    def _pop_prop_animated(self, col, row):
+        """ลบ prop ออกจาก grid และเริ่ม falling animation (ร่วงลง Y + fade out)"""
+        prop = self.grid.obstacles.pop((col, row), None)
+        if prop:
+            # ถ้าตำแหน่งเดิมมี falling prop อยู่แล้ว ให้ override
+            self.falling_props[(col, row)] = {
+                'prop':     prop,
+                'y_offset': 0.0,
+                'vy':       80.0,   # เริ่มด้วย velocity สูง — เห็นการตกตั้งแต่เฟรมแรก
+                'alpha':    1.0,
+            }
+
+    def _trigger_fly_mode(self, tiles=20):
+        """ Whale-tail trap — กระเด้งผู้เล่นไปข้างหน้า tiles ช่อง """
+        target = min(self.path_index + tiles, len(self.grid.path) - 1)
+        pos = self.grid.path[target]
+        self.penguin.col, self.penguin.row = pos
+        self.path_index = target
+        self.grid.step_forward()
+        AudioManager().play_sfx('jump')
+
+    def _check_quiz_trigger(self, awareness_m):
+        """Active Learning Quiz — แสดง popup ทุก 50–100 m"""
+        if awareness_m >= self.next_quiz_at:
+            self.next_quiz_at = awareness_m + random.randint(QUIZ_INTERVAL_MIN, QUIZ_INTERVAL_MAX)
+            self._show_quiz_popup()
+
+    def _show_quiz_popup(self):
+        """หยุด game loop และแสดง quiz popup"""
+        if self.game_event:
+            self.game_event.cancel()
+            self.game_event = None
+
+        from screens.quiz_popup import QuizPopup
+        biome_id   = self.biome_mgr.current.id
+        biome_name = self.biome_mgr.current.name
+        popup = QuizPopup(
+            on_close=self._on_quiz_close,
+            biome_id=biome_id,
+            biome_name=biome_name,
+            size_hint=(1, 1),
+            pos_hint={'x': 0, 'y': 0},
+        )
+        self._quiz_popup = popup
+        self.add_widget(popup)
+        AudioManager().play_sfx('click')
+
+    def _on_quiz_close(self, gems_earned):
+        """รับ gems จาก quiz แล้วเริ่มเกมต่อ"""
+        if hasattr(self, '_quiz_popup') and self._quiz_popup:
+            self.remove_widget(self._quiz_popup)
+            self._quiz_popup = None
+        self.gems_collected += gems_earned
+        if gems_earned > 0:
+            AudioManager().play_sfx('coin')
+        # เริ่มเกมต่อ
+        if not self.game_event and not self.penguin.is_dead:
+            self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
 
     def _go_gameover(self):
         """ เปลี่ยนหน้าจอไปหน้าจบเกม (Game Over) """
@@ -715,11 +965,14 @@ class GamePlayScreen(Screen):
         self.renderer.cam_x = None
         self.renderer.cam_y = None
         self.biome_mgr.reset()
-        self.event_manager.reset()
-        self.quiz_manager.reset()
-        self._pending_quiz_answers = []
-        self._fps_samples.clear()
-        self._bench_tick = 0.0
+        self.gold_buff    = GoldBuff()
+        self.falling_props = {}
+        self.next_quiz_at = random.randint(QUIZ_INTERVAL_MIN, QUIZ_INTERVAL_MAX)
+        self.buff_label.text = ''
+        self.buff_label.color = (1, 1, 1, 0)
+        if self._quiz_popup:                      # ล้าง widget ก่อนทิ้ง reference
+            self.remove_widget(self._quiz_popup)
+            self._quiz_popup = None
         Animation.cancel_all(self.biome_label)
         self.biome_label.color = (1, 1, 1, 0)
         self.pause_overlay.opacity = 0
@@ -744,14 +997,6 @@ class GamePlayScreen(Screen):
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         """ จัดการคำสั่งจากคีย์บอร์ด (กดปุ่มลง) """
-        # 'b' toggles benchmark overlay — works anytime during gameplay
-        if keycode[1] == 'b':
-            self._bench_visible = not self._bench_visible
-            self.bench_label.color = (0.3, 1.0, 0.3, 1 if self._bench_visible else 0)
-            if not self._bench_visible:
-                self.bench_label.text = ''
-            return True
-
         if self.penguin.is_dead:
             return False
         if not self.game_event:
@@ -775,69 +1020,3 @@ class GamePlayScreen(Screen):
             self.btn_right.handle_release()
             return True
         return False
-
-    # ── Quiz helpers ──────────────────────────────────────────
-
-    def _show_quiz_popup(self, question: dict, biome_id: str):
-        """ หยุด game loop และแสดง Quiz popup """
-        self._pause_game_loop()
-        self.quiz_popup.show(question, biome_id, self._on_quiz_done)
-
-    def _on_quiz_done(self, correct: bool, question: dict, biome_id: str):
-        """ callback หลังผู้เล่นตอบ Quiz (หรือ timeout) """
-        self.event_manager.mark_finished()
-        self._pending_quiz_answers.append((biome_id, question['idx'], correct))
-
-        if correct:
-            self.gems_collected += 5
-            AudioManager().play_sfx('quiz_correct')
-            self._spawn_float('+5 GEM', y_frac=0.22, color=(1.0, 0.85, 0.15, 1.0))
-        else:
-            self.chaser.apply_speed_boost(factor=1.8, steps=15)
-            AudioManager().play_sfx('quiz_wrong')
-            AudioManager().play_sfx('chaser_surge')
-            self._flash_red()
-            self.renderer.trigger_shake(15)
-
-        self._resume_game_loop()
-
-    def _pause_game_loop(self):
-        if self.game_event:
-            self.game_event.cancel()
-            self.game_event = None
-
-    def _resume_game_loop(self):
-        if not self.game_event:
-            self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
-
-    def _flash_red(self):
-        """แฟลชหน้าจอแดงสั้นๆ เมื่อตอบผิด"""
-        overlay = Widget(size_hint=(1, 1), opacity=0)
-        with overlay.canvas:
-            Color(1, 0.08, 0.08, 0.45)
-            rect = Rectangle(pos=overlay.pos, size=overlay.size)
-        overlay.bind(pos=lambda w, v: setattr(rect, 'pos', v),
-                     size=lambda w, v: setattr(rect, 'size', v))
-        self.add_widget(overlay)
-        anim = Animation(opacity=1, duration=0.08) + Animation(opacity=0, duration=0.35)
-        anim.bind(on_complete=lambda *_: self.remove_widget(overlay))
-        anim.start(overlay)
-
-    def _spawn_float(self, text, x_frac=0.5, y_frac=0.15,
-                     color=(1.0, 0.85, 0.15, 1.0)):
-        """ข้อความลอยขึ้นแล้วหาย — ใช้สำหรับ gem และ quiz reward"""
-        lbl = Label(
-            text=text,
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
-            font_size='24sp',
-            bold=True,
-            color=list(color),
-            size_hint=(None, None),
-            size=(200, 48),
-        )
-        self.add_widget(lbl)
-        lbl.center_x = self.width * x_frac
-        lbl.center_y = self.height * y_frac
-        anim = Animation(y=lbl.y + 90, opacity=0, duration=1.1, t='out_quad')
-        anim.bind(on_complete=lambda *_: self.remove_widget(lbl))
-        anim.start(lbl)

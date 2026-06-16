@@ -6,8 +6,8 @@ class ChaserBlock:
     - เริ่ม spawn หลังจากผู้เล่นวิ่งไปแล้ว ACTIVATE_AFTER ก้าว
     - ยิ่งวิ่งไกลยิ่งเร็ว — ถ้าตามทันผู้เล่นก็แพ้
     """
-    ACTIVATE_AFTER = 10   # ผู้เล่นต้องวิ่งถึง path_index นี้ก่อนถึง spawn
-    START_GAP      = 4    # จุดเริ่มต้นห่างจากผู้เล่น (tiles)
+    ACTIVATE_AFTER = 20   # ผู้เล่นต้องวิ่งถึง path_index นี้ก่อนถึง spawn (~20 tiles)
+    START_GAP      = 14   # จุดเริ่มต้นห่างจากผู้เล่น — ให้พื้นที่ตั้งตัว แต่รู้สึกตามมา
 
     def __init__(self):
         self.path_index      = 0
@@ -18,6 +18,7 @@ class ChaserBlock:
         self.pulse_timer     = 0.0
         self._boost_factor   = 1.0   # multiplier ความเร็ว (>1 = เร็วขึ้น)
         self._boost_steps    = 0     # จำนวนก้าวที่ยังมี boost อยู่
+        self.visited         = set() # พิกัดที่ chaser ผ่านมาแล้ว — render แดงในตัว renderer
 
     def activate(self, path_index, path):
         self.path_index = max(0, path_index)
@@ -25,6 +26,7 @@ class ChaserBlock:
         self.move_timer = 0.0
         if self.path_index < len(path):
             self.col, self.row = path[self.path_index]
+            self.visited.add((self.col, self.row))
 
     def reset(self):
         self.path_index      = 0
@@ -35,6 +37,7 @@ class ChaserBlock:
         self.pulse_timer     = 0.0
         self._boost_factor   = 1.0
         self._boost_steps    = 0
+        self.visited.clear()
 
     def apply_speed_boost(self, factor: float = 1.1, steps: int = 30):
         """เพิ่มความเร็ว Chaser ชั่วคราว (penalty เมื่อตอบ Quiz ผิด)"""
@@ -62,11 +65,15 @@ class ChaserBlock:
 
         if self.move_timer >= effective_interval:
             self.move_timer = 0.0
-            self.path_index += 1
-            if self.path_index < len(path):
+            next_idx = self.path_index + 1
+            if next_idx < len(path):           # guard: ไม่ข้ามปลาย path
+                self.path_index = next_idx
                 self.col, self.row = path[self.path_index]
+                self.visited.add((self.col, self.row))  # mark ตำแหน่งที่ผ่านมา → render แดง
+            # ถ้า path ยังไม่ถูก extend ทัน — หยุดรอ ไม่ increment เกิน
 
-        return self.path_index >= player_path_index
+        # caught เฉพาะเมื่อ chaser อยู่บน tile เดียวกับ player จริงๆ
+        return self.path_index >= player_path_index and self.path_index < len(path)
 
     def pulse_alpha(self):
         """ค่า Alpha ที่เต้นเป็น pulse เพื่อใช้ตอนวาด"""

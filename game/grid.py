@@ -23,15 +23,20 @@ class GridManager:
         self.path           = []    # รายการพิกัดกึ่งกลางทางเดิน (Centerline)
         self.path_set       = set() # รวบรวมพิกัดพื้นทั้งหมด (ใช้เช็คการตกพื้น)
         self.turn_points    = []    # เก็บพิกัดจุดที่ต้องหันเลี้ยว
-        self.obstacles      = {}    # เก็บพิกัดและตัววัตถุสิ่งกีดขวาง (พิกัด -> วัตถุ)
+        self.obstacles      = {}    # (col, row) → prop string (ice1/ice2/ice3/force/reverse/trap)
         self.gems           = {}    # เก็บพิกัดและตัว Gem (พิกัด -> วัตถุ)
         self.fork_tiles     = set() # เก็บพิกัดที่เป็นส่วนของทางแยก (เพื่อทาสีต่างออกไป)
         self.merge_points   = []    # เก็บจุดที่ทางแยกกลับมาบรรจบกัน
+        self.falling_tiles  = {}    # (col, row) → seconds_remaining ก่อนพื้นร่วง
+        self.trap_states    = {}    # (col, row) → {'open': bool, 'type': 'seals'|'tail', 'timer': float}
 
-        self._last_pos  = (0, 0)    # ตำแหน่งสุดท้ายที่สร้างพื้นถึง
-        self._last_dir  = self.DIR_A # ทิศทางสุดท้ายที่ใช้ในการสร้างพื้น
-        self._seg_count = 0         # นับจำนวนช่วงทางเดินที่สร้างไปแล้ว
-        self._last_cleaned_idx = 0  # ดัชนีล่าสุดที่ทำการลบพื้นหลังที่เดินผ่านมาแล้ว
+        self._last_pos        = (0, 0)    # ตำแหน่งสุดท้ายที่สร้างพื้นถึง
+        self._last_dir        = self.DIR_A # ทิศทางสุดท้ายที่ใช้ในการสร้างพื้น
+        self._seg_count       = 0          # นับจำนวนช่วงทางเดินที่สร้างไปแล้ว
+        self._last_cleaned_idx= 0          # ดัชนีล่าสุดที่ทำการลบพื้นหลังที่เดินผ่านมาแล้ว
+        self._used_positions  = set()      # ทุก pos ที่เคย add — ป้องกัน spawn ซ้ำหลัง cleanup
+        self.path_index_map   = {}         # (col,row) → index ใน path — O(1) lookup สำหรับ renderer
+        self._last_force_dist = 0          # ระยะทาง tile ล่าสุดที่ spawn force — บังคับ 100m gap
 
     # ═══════════════════════════════════════════
     #  ฟังก์ชันสาธารณะ (Public API)
@@ -39,6 +44,9 @@ class GridManager:
 
     def reset(self):
         """ ล้างข้อมูลทั้งหมดเพื่อเริ่มเกมใหม่ """
+        # คืน gem objects กลับ pool ก่อน clear — ป้องกัน pool leak ระหว่าง restart
+        for gem in self.gems.values():
+            gem.active = False
         self.forward_tiles  = 0
         self.path.clear()
         self.path_set.clear()
@@ -47,10 +55,15 @@ class GridManager:
         self.gems.clear()
         self.fork_tiles.clear()
         self.merge_points.clear()
-        self._last_pos  = (0, 0)
-        self._last_dir  = self.DIR_A
-        self._seg_count = 0
+        self.falling_tiles.clear()
+        self.trap_states.clear()
+        self._last_pos         = (0, 0)
+        self._last_dir         = self.DIR_A
+        self._seg_count        = 0
         self._last_cleaned_idx = 0
+        self._used_positions.clear()
+        self.path_index_map.clear()
+        self._last_force_dist  = 0
         self._build_start_platform() # สร้างพื้นเริ่มเกมขนาด 3x3
         for _ in range(PRELOAD_SEGMENTS):
             self._append_segment() # สร้างช่วงทางเดินล่วงหน้าตามจำนวนที่ตั้งไว้
@@ -64,16 +77,8 @@ class GridManager:
         return self.forward_tiles * TILE_TO_METER
 
     def update_obstacles(self, dt, view_radius, penguin_pos):
-        """ อัปเดตแอนิเมชันของกล่องและ Gem เฉพาะที่อยู่ในระยะการมองเห็นของผู้เล่น """
-        p_col, p_row = penguin_pos # พิกัดปัจจุบันของเพนกวิน
-        for pos, obs in self.obstacles.items():
-            if obs.active:
-                # เช็คว่าอยู่ในรัศมีสายตา (Bounding Box) หรือไม่
-                if (p_col - view_radius <= pos[0] <= p_col + view_radius) and \
-                   (p_row - view_radius <= pos[1] <= p_row + view_radius):
-                    obs.update(dt) # สั่งให้อัปเดตเฟรมภาพ
-        
-        # อัปเดตการหมุนของ Gem
+        """ อัปเดตแอนิเมชัน Gem เฉพาะที่อยู่ในระยะการมองเห็น (obstacles เป็น string ไม่ต้อง update) """
+        p_col, p_row = penguin_pos
         for pos, gem in self.gems.items():
             if gem.active:
                 if (p_col - view_radius <= pos[0] <= p_col + view_radius) and \
@@ -85,11 +90,8 @@ class GridManager:
         return (col, row) in self.path_set
 
     def get_obstacle_at(self, col, row):
-        """ ดึงวัตถุสิ่งกีดขวาง ณ ตำแหน่งนั้น (ถ้ามีและยังเปิดใช้งานอยู่) """
-        obs = self.obstacles.get((col, row))
-        if obs and obs.active:
-            return obs
-        return None
+        """ คืน prop string ณ ตำแหน่งนั้น หรือ "" ถ้าไม่มี """
+        return self.obstacles.get((col, row), "")
 
     def get_gem_at(self, col, row):
         """ ดึงวัตถุ Gem ณ ตำแหน่งนั้น """
@@ -135,6 +137,40 @@ class GridManager:
         self.obstacles.pop(pos, None)
         self.gems.pop(pos, None)
 
+    def mark_falling(self, col, row, awareness_m):
+        """Falling floor — delay = max(0.1, 3*(1 − awareness/1000)) จาก JS FloorBrick.tryDown"""
+        delay = max(0.1, 3.0 * (1.0 - awareness_m / 1000.0))
+        self.falling_tiles[(col, row)] = delay
+
+    def update_falling(self, dt):
+        """ลด timer ของ falling tiles, ลบพื้นออกเมื่อหมดเวลา"""
+        done = [p for p, t in self.falling_tiles.items() if t - dt <= 0]
+        for p in done:
+            self.remove_tile(*p)
+            del self.falling_tiles[p]
+        for p in list(self.falling_tiles):
+            if p not in done:
+                self.falling_tiles[p] -= dt
+
+    def update_traps(self, dt):
+        """สลับสถานะ open/close และ type ของ trap ตาม timer (เหมือน JS Trap.js)"""
+        for state in self.trap_states.values():
+            state['timer'] -= dt
+            if state['timer'] <= 0:
+                state['open'] = not state['open']
+                state['timer'] = 1.5 if state['open'] else 0.5
+                if not state['open']:
+                    state['type'] = 'tail' if state['type'] == 'seals' else 'seals'
+
+    def init_trap(self, col, row):
+        """เรียกตอน spawn trap prop เพื่อเริ่มต้น state"""
+        import random as _r
+        self.trap_states[(col, row)] = {
+            'open':  False,
+            'type':  'seals' if _r.random() < 0.5 else 'tail',
+            'timer': 0.5,
+        }
+
     def cleanup_behind(self, path_index):
         """ ระบบจัดการหน่วยความจำ: ลบสิ่งของ (กล่อง/Gem) ที่ผู้เล่นเดินผ่านมาไกลมากแล้ว """
         target_idx = path_index - 20 # กำหนดระยะปลอดภัยคือกองหลัง 20 ช่อง
@@ -145,9 +181,14 @@ class GridManager:
             if i >= len(self.path): break
             pos = self.path[i]
             self.obstacles.pop(pos, None)
-            self.gems.pop(pos, None)
+            # คืน gem กลับ pool โดย set active=False ก่อน pop — ป้องกัน pool leak
+            gem = self.gems.pop(pos, None)
+            if gem:
+                gem.active = False
+            self.falling_tiles.pop(pos, None)
+            self.trap_states.pop(pos, None)
             self.path_set.discard(pos)  # ลบ tile เก่าออกเพื่อไม่ให้ render loop iterate ตลอด
-            
+
         self._last_cleaned_idx = target_idx # อัปเดตจุดที่ล้างล่าสุด
 
     # ═══════════════════════════════════════════
@@ -155,13 +196,23 @@ class GridManager:
     # ═══════════════════════════════════════════
 
     def _build_start_platform(self):
-        """ สร้างแท่นเริ่มเกมขนาด 3x3 เพื่อให้ผู้เล่นมีพื้นที่ตั้งตัวก่อนเริ่มวิ่ง """
+        """
+        สร้างแท่นเริ่มเกมขนาด 3×3
+        - path เริ่มที่ (1,1) → (2,1) เพื่อให้ต่อเนื่องกับ segment แรก (DIR_A = (1,0))
+        - ถ้าไม่เพิ่ม (2,1) เข้า path ไว้ก่อน _build_straight จะข้ามมันเพราะอยู่ใน path_set แล้ว
+          ทำให้ path มีช่องว่าง (1,1)→(3,1) — แก้ด้วยการ pre-add tile ขอบ platform
+        """
         for c in range(3):
             for r in range(3):
-                self.path_set.add((c, r))
-        center = (1, 1) # กำหนดจุดกึ่งกลาง (1,1) เป็นจุดเริ่มเดิน
-        self.path.append(center)
-        self._last_pos = center # บันทึกไว้เป็นจุดต้นหาครั้งถัดไป
+                pos = (c, r)
+                self.path_set.add(pos)
+                self._used_positions.add(pos)   # ป้องกัน obstacle spawn ที่ start platform
+
+        self.path_index_map[(1, 1)] = 0
+        self.path_index_map[(2, 1)] = 1
+        self.path.append((1, 1))   # จุดเริ่มเดิน
+        self.path.append((2, 1))   # tile ขอบ platform ในทิศ DIR_A — ปิดช่องว่าง path
+        self._last_pos = (2, 1)    # segment แรกเริ่มต่อจากขอบ platform
 
     def _append_segment(self):
         """ สร้างช่วงทางเดิน 1 ช่วง: อาจจะเป็น "ทางตรง" หรือ "ทางแยก" (สุ่ม 30%) """
@@ -184,12 +235,19 @@ class GridManager:
     # ───────────────────────────────────────────
     # ─── Dynamic difficulty helpers ───────────────────────────────────────────
     def _obstacle_chance(self, dist):
-        """Obstacle spawn probability per tile, scaled by distance."""
-        if dist < 30:   return 0.15   # safe intro
-        if dist < 100:  return 0.30   # warming up
-        if dist < 250:  return 0.45   # getting serious
-        if dist < 500:  return 0.58   # intense
-        return 0.68                   # relentless
+        """
+        ความน่าจะเป็นต่อ tile ที่จะมี prop
+        0-15m : 0% (safe zone — ผู้เล่นตั้งตัว)
+        15-80m: 30% (เริ่มเห็น ice/force บ้าง)
+        80-250m: 50% (หนาแน่นขึ้น)
+        250-500m: 65%
+        500m+: 75%
+        """
+        if dist < 15:   return 0.00   # safe zone
+        if dist < 80:   return 0.30
+        if dist < 250:  return 0.50
+        if dist < 500:  return 0.65
+        return 0.75
 
     def _gem_chance(self, dist):
         """Gem spawn probability per non-obstacle tile, scaled by distance."""
@@ -198,29 +256,42 @@ class GridManager:
         return 0.32                   # sparser late-game (harder to collect)
 
     def _build_straight(self, length, mark_fork=False):
-        """ สร้างพื้นตรงไปทางทิศปัจจุบันตามความยาวที่ระบุ """
+        """
+        สร้างพื้นตรงไปทางทิศปัจจุบัน — spawn prop เฉพาะ tile ใหม่เท่านั้น
+        ใช้ตำแหน่ง tile ใน path (ไม่ใช่ตำแหน่ง player) เพื่อคำนวณ dist
+        → แก้บัก preload ที่ dist=0 ทำให้ไม่มี obstacle ใน 60+ tiles แรก
+        """
         col, row = self._last_pos
         cur_dir  = self._last_dir
-        dist     = self.get_distance_m()
         for _ in range(length):
             col += cur_dir[0]
             row += cur_dir[1]
-            self._add_center(col, row)
+            # tile_dist = ระยะทาง tile นี้จากจุดเริ่มต้น (ไม่ใช่ forward_tiles ของ player)
+            tile_dist = len(self.path) * TILE_TO_METER
+            is_new = self._add_center(col, row)   # True = tile ใหม่จริง ไม่เคยมีมาก่อน
             self._add_width(col, row, cur_dir)
             if mark_fork:
                 self.fork_tiles.add((col, row))
 
-            if self._seg_count > 0 and not mark_fork:
-                if random.random() < self._obstacle_chance(dist):
-                    if (col, row) not in self.obstacles:
-                        obs = ObstacleFactory.spawn_obstacle(dist, col, row)
-                        self.obstacles[(col, row)] = obs
-                # Gems are independent — spawn if the tile has no obstacle
+            # Spawn เฉพาะ tile ใหม่แท้จริง (is_new) ไม่ใช่ fork / re-enter หลัง cleanup
+            if self._seg_count > 0 and not mark_fork and is_new:
+                if random.random() < self._obstacle_chance(tile_dist):
+                    prop = ObstacleFactory.spawn_prop(tile_dist, col, row)
+                    if prop:
+                        # force (gold buff): บังคับ gap 100m — ไม่ให้ติดกัน
+                        if prop == 'force':
+                            if tile_dist - self._last_force_dist < 100:
+                                prop = 'ice1'   # ถ้าใกล้เกิน ลด grade เป็น ice
+                            else:
+                                self._last_force_dist = tile_dist
+                        self.obstacles[(col, row)] = prop
+                        if prop == 'trap':
+                            self.init_trap(col, row)
+                # Gem: spawn บน tile ที่ไม่มี prop
                 if (col, row) not in self.obstacles:
-                    if random.random() < self._gem_chance(dist):
-                        if (col, row) not in self.gems:
-                            gem = ObstacleFactory.spawn_gem(col, row)
-                            self.gems[(col, row)] = gem
+                    if random.random() < self._gem_chance(tile_dist):
+                        gem = ObstacleFactory.spawn_gem(col, row)
+                        self.gems[(col, row)] = gem
 
         self._last_pos = (col, row)
 
@@ -310,11 +381,20 @@ class GridManager:
     #  เมธอดช่วยเหลือ (Helpers)
     # ───────────────────────────────────────────
     def _add_center(self, col, row):
-        """ เพิ่มพิกัด (col, row) เข้าไปในรายการทางเดินกึ่งกลางหลัก """
+        """
+        เพิ่มพิกัดเข้าทางเดิน
+        คืน True เฉพาะเมื่อเป็น tile ที่ไม่เคยถูก add เลยในรอบนี้ — ใช้เพื่อ spawn obstacle
+        False = เคยมีแล้ว (fork overlap หรือ cleanup แล้ว re-enter) → ห้าม spawn ซ้ำ
+        """
         pos = (col, row)
+        was_ever_used = pos in self._used_positions   # เคยสร้างไว้แล้วในอดีต?
         if pos not in self.path_set:
+            self.path_index_map[pos] = len(self.path)  # บันทึก index ก่อน append
             self.path.append(pos)
             self.path_set.add(pos)
+            self._used_positions.add(pos)
+            return not was_ever_used   # True = ใหม่จริง, False = เคยผ่านมาแล้ว (re-enter)
+        return False  # ยังอยู่ใน path_set — ซ้ำชัดเจน
 
     def _add_width(self, col, row, direction):
         """ (ฟังก์ชันเสริม) เพิ่มความกว้างของทางเดินออกไปด้านข้าง (ถ้าตั้งค่า PATH_WIDTH > 1) """

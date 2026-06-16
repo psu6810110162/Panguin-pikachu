@@ -93,8 +93,7 @@ class AnimatedSkin(Image):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.allow_stretch = True
-        self.keep_ratio = True
+        self.fit_mode = 'contain'
         self._cached_texture = None  # cache texture เพื่อไม่ต้องโหลดจาก disk ทุกเฟรม
         # ตั้งเวลาให้เปลี่ยนเฟรมแอนิเมชันทุกๆ 1/12 วินาที (12 FPS)
         Clock.schedule_interval(self.update_animation, 1.0 / 12.0)

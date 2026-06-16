@@ -16,8 +16,8 @@ from game.quiz_manager import QUESTIONS
 
 
 QUESTIONS_PER_BIOME = 5
-THAI_FONT = 'assets/Component_UI/Font/Thonburi.ttc'
-KF_FONT   = 'assets/Component_UI/Font/Kenney Future.ttf'
+THAI_FONT = i18n.FONT_THAI
+KF_FONT   = i18n.FONT_KF
 
 # ── Biome metadata ────────────────────────────────────────────
 BIOME_META = [
@@ -121,7 +121,7 @@ class FactsPopupWidget(FloatLayout):
             spacing     = 10,
             padding     = [32, 24, 32, 24],
             size_hint   = (None, None),
-            size        = (680, 500),
+            size        = (700, 560),
         )
         card = self._card
         with card.canvas.before:
@@ -137,11 +137,11 @@ class FactsPopupWidget(FloatLayout):
         self._title_lbl = Label(
             text      = '',
             font_name = THAI_FONT,
-            font_size = 20,
+            font_size = 22,
             bold      = True,
             color     = self.C_GOLD,
             size_hint_y = None,
-            height    = 38,
+            height    = 44,
             halign    = 'center',
             valign    = 'middle',
         )
@@ -153,10 +153,10 @@ class FactsPopupWidget(FloatLayout):
             lbl = Label(
                 text      = '',
                 font_name = THAI_FONT,
-                font_size = 16,
+                font_size = 17,
                 color     = self.C_DIM,
                 size_hint_y = None,
-                height    = 56,
+                height    = 62,
                 halign    = 'left',
                 valign    = 'middle',
             )
@@ -232,6 +232,12 @@ class FactsPopupWidget(FloatLayout):
         slide.bind(on_complete=lambda *_: self._finish())
         slide.start(self._card)
         Animation(a=0, duration=0.22).start(self._bg_color)
+
+    def on_touch_down(self, touch):
+        if self.opacity == 0:
+            return False
+        super().on_touch_down(touch)
+        return self.collide_point(*touch.pos)
 
     def _finish(self):
         self.disabled = True
@@ -369,6 +375,12 @@ class ConfirmDialogWidget(FloatLayout):
         anim.bind(on_complete=lambda *_: self._finish())
         anim.start(self._bg_color)
 
+    def on_touch_down(self, touch):
+        if self.opacity == 0:
+            return False
+        super().on_touch_down(touch)
+        return self.collide_point(*touch.pos)
+
     def _finish(self):
         self.disabled = True
         self.opacity  = 0
@@ -417,16 +429,111 @@ class BiomeCard(BoxLayout):
         lang      = i18n.get_language()
         is_en     = (lang == 'en')
 
-        # ── Widgets added in REVERSE order (last-added = visually at TOP in Kivy vertical BoxLayout) ──
+        # Kivy BoxLayout vertical: first add_widget → top, last → bottom
 
-        # 1. Action row (added first → visually at bottom)
+        # 1. Header row → TOP
+        header_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=50, spacing=10)
+
+        strip = Widget(size_hint=(None, 1), width=8)
+        with strip.canvas:
+            Color(*meta['strip'])
+            _strip_rect = RoundedRectangle(pos=strip.pos, size=strip.size, radius=[4])
+        strip.bind(pos=lambda w, _: setattr(_strip_rect, 'pos', w.pos),
+                   size=lambda w, _: setattr(_strip_rect, 'size', w.size))
+        header_row.add_widget(strip)
+
+        name_lbl = Label(
+            text      = meta['name'],
+            font_name = THAI_FONT,
+            font_size = 23,
+            bold      = True,
+            color     = meta['color'],
+            size_hint = (1, 1),
+            halign    = 'left',
+            valign    = 'middle',
+        )
+        name_lbl.bind(size=lambda w, _: setattr(w, 'text_size', w.size))
+        header_row.add_widget(name_lbl)
+
+        if self._total > 0:
+            pct = int(correct * 100 / self._total) if self._total > 0 else 0
+            acc_lbl = Label(
+                text      = i18n.t('accuracy', pct=pct),
+                font_name = THAI_FONT,
+                font_size = 15,
+                color     = (0.70, 0.90, 0.70, 0.85),
+                size_hint = (None, 1),
+                width     = 100,
+                halign    = 'right',
+                valign    = 'middle',
+            )
+            acc_lbl.bind(size=lambda w, _: setattr(w, 'text_size', w.size))
+            header_row.add_widget(acc_lbl)
+
+        self.add_widget(header_row)
+
+        # 2. Fact preview → fills flexible space
+        fact_text = BIOME_FACTS.get(meta['id'], {}).get('en' if is_en else 'th', '')
+        fact_lbl = Label(
+            text      = fact_text,
+            font_name = THAI_FONT,
+            font_size = 17,
+            color     = (0.68, 0.88, 1.0, 0.72),
+            size_hint_y = 1,
+            halign    = 'left',
+            valign    = 'top',
+        )
+        fact_lbl.bind(size=lambda w, _: setattr(w, 'text_size', (w.width, None)))
+        self.add_widget(fact_lbl)
+
+        # 3. Stats row
+        asked_str = i18n.t('asked_n', n=self._total) if self._total > 0 else i18n.t('not_asked')
+        correct_str = i18n.t('correct_of', c=correct, t=QUESTIONS_PER_BIOME)
+        stats_lbl = Label(
+            text      = f"{correct_str}   •   {asked_str}",
+            font_name = THAI_FONT,
+            font_size = 16,
+            color     = (0.65, 0.82, 1.0, 0.9),
+            size_hint_y = None,
+            height    = 30,
+            halign    = 'left',
+            valign    = 'middle',
+        )
+        stats_lbl.bind(size=lambda w, _: setattr(w, 'text_size', w.size))
+        self.add_widget(stats_lbl)
+
+        # 4. Progress bar
+        bar_fl = FloatLayout(size_hint_y=None, height=14)
+
+        track = Widget(size_hint=(1, 1), pos_hint={'x': 0, 'y': 0})
+        with track.canvas:
+            Color(0.15, 0.25, 0.40, 1)
+            trk = RoundedRectangle(pos=track.pos, size=track.size, radius=[7])
+        track.bind(pos=lambda w, _: setattr(trk, 'pos', w.pos),
+                   size=lambda w, _: setattr(trk, 'size', w.size))
+        bar_fl.add_widget(track)
+
+        fill_ratio = min(correct / QUESTIONS_PER_BIOME, 1.0)
+        self._fill_w = _BarFill(
+            meta['bar'],
+            pos_hint={'x': 0, 'center_y': 0.5},
+            size_hint=(None, 1),
+            width=0,
+        )
+        bar_fl.add_widget(self._fill_w)
+        self._fill_ratio = fill_ratio
+        bar_fl.bind(width=self._start_bar_anim)
+
+        self.add_widget(bar_fl)
+
+        # 5. Action row → BOTTOM
         action_row = BoxLayout(orientation='horizontal', spacing=12,
-                               size_hint_y=None, height=44)
+                               size_hint_y=None, height=50)
 
         facts_btn = Button(
             text             = i18n.t('view_facts'),
             font_name        = THAI_FONT,
-            font_size        = 15,
+            font_size        = 17,
             color            = (0.70, 0.92, 1.0, 1),
             background_color = (0, 0, 0, 0),
             background_normal= '',
@@ -467,102 +574,6 @@ class BiomeCard(BoxLayout):
 
         self.add_widget(action_row)
 
-        # 2. Progress bar (added second → above action row)
-        bar_fl = FloatLayout(size_hint_y=None, height=14)
-
-        track = Widget(size_hint=(1, 1), pos_hint={'x': 0, 'y': 0})
-        with track.canvas:
-            Color(0.15, 0.25, 0.40, 1)
-            trk = RoundedRectangle(pos=track.pos, size=track.size, radius=[7])
-        track.bind(pos=lambda w, _: setattr(trk, 'pos', w.pos),
-                   size=lambda w, _: setattr(trk, 'size', w.size))
-        bar_fl.add_widget(track)
-
-        fill_ratio = min(correct / QUESTIONS_PER_BIOME, 1.0)
-        self._fill_w = _BarFill(
-            meta['bar'],
-            pos_hint={'x': 0, 'center_y': 0.5},
-            size_hint=(None, 1),
-            width=0,
-        )
-        bar_fl.add_widget(self._fill_w)
-        self._fill_ratio = fill_ratio
-        bar_fl.bind(width=self._start_bar_anim)
-
-        self.add_widget(bar_fl)
-
-        # 3. Stats row (added third → above bar)
-        asked_str = i18n.t('asked_n', n=self._total) if self._total > 0 else i18n.t('not_asked')
-        correct_str = i18n.t('correct_of', c=correct, t=QUESTIONS_PER_BIOME)
-        stats_lbl = Label(
-            text      = f"{correct_str}   •   {asked_str}",
-            font_name = THAI_FONT,
-            font_size = 14,
-            color     = (0.65, 0.82, 1.0, 0.9),
-            size_hint_y = None,
-            height    = 28,
-            halign    = 'left',
-            valign    = 'middle',
-        )
-        stats_lbl.bind(size=lambda w, _: setattr(w, 'text_size', w.size))
-        self.add_widget(stats_lbl)
-
-        # 4. Fact preview (added fourth → fills flexible space in middle)
-        fact_text = BIOME_FACTS.get(meta['id'], {}).get('en' if is_en else 'th', '')
-        fact_lbl = Label(
-            text      = fact_text,
-            font_name = THAI_FONT,
-            font_size = 15,
-            color     = (0.68, 0.88, 1.0, 0.72),
-            size_hint_y = 1,
-            halign    = 'left',
-            valign    = 'top',
-        )
-        fact_lbl.bind(size=lambda w, _: setattr(w, 'text_size', (w.width, None)))
-        self.add_widget(fact_lbl)
-
-        # 5. Header row (added last → visually at TOP)
-        header_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=44, spacing=10)
-
-        # colored strip indicator
-        strip = Widget(size_hint=(None, 1), width=8)
-        with strip.canvas:
-            Color(*meta['strip'])
-            _strip_rect = RoundedRectangle(pos=strip.pos, size=strip.size, radius=[4])
-        strip.bind(pos=lambda w, _: setattr(_strip_rect, 'pos', w.pos),
-                   size=lambda w, _: setattr(_strip_rect, 'size', w.size))
-        header_row.add_widget(strip)
-
-        name_lbl = Label(
-            text      = meta['name'],
-            font_name = THAI_FONT,
-            font_size = 20,
-            bold      = True,
-            color     = meta['color'],
-            size_hint = (1, 1),
-            halign    = 'left',
-            valign    = 'middle',
-        )
-        name_lbl.bind(size=lambda w, _: setattr(w, 'text_size', w.size))
-        header_row.add_widget(name_lbl)
-
-        if self._total > 0:
-            pct = int(correct * 100 / self._total) if self._total > 0 else 0
-            acc_lbl = Label(
-                text      = i18n.t('accuracy', pct=pct),
-                font_name = THAI_FONT,
-                font_size = 13,
-                color     = (0.70, 0.90, 0.70, 0.85),
-                size_hint = (None, 1),
-                width     = 90,
-                halign    = 'right',
-                valign    = 'middle',
-            )
-            acc_lbl.bind(size=lambda w, _: setattr(w, 'text_size', w.size))
-            header_row.add_widget(acc_lbl)
-
-        self.add_widget(header_row)
-
     def _start_bar_anim(self, bar_fl, width):
         if width <= 0:
             return
@@ -597,7 +608,7 @@ class LearningPathScreen(Screen):
         if not hasattr(self, '_lang_btn'):
             self._lang_btn = Button(
                 text             = i18n.t('toggle_lang'),
-                font_name        = KF_FONT,
+                font_name        = i18n.FONT_KF,
                 font_size        = 14,
                 bold             = True,
                 color            = (0.20, 0.95, 0.55, 1),
@@ -670,14 +681,18 @@ class LearningPathScreen(Screen):
 
     def _refresh_static_text(self):
         """อัปเดตข้อความ static ที่อยู่ใน style.kv ตาม language ปัจจุบัน"""
+        font = i18n.get_font()
         subtitle = self.ids.get('subtitle_lbl')
         if subtitle:
-            subtitle.text = i18n.t('subtitle')
+            subtitle.text      = i18n.t('subtitle')
+            subtitle.font_name = font
         back = self.ids.get('back_btn')
         if back:
-            back.text = i18n.t('back')
+            back.text      = i18n.t('back')
+            back.font_name = font
         if hasattr(self, '_reset_btn'):
-            self._reset_btn.text = i18n.t('reset')
+            self._reset_btn.text      = i18n.t('reset')
+            self._reset_btn.font_name = font
 
     def _load_stats(self):
         db    = DatabaseManager()
