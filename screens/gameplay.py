@@ -40,14 +40,14 @@ DIR_LEFT  = (0, 1)
 DIR_RIGHT = (1, 0)
 
 
-class KivyRenderer(Widget):
+class KivyRenderer(Widget): 
 
     def on_touch_down(self, touch): return False
     def on_touch_move(self, touch): return False
     def on_touch_up(self, touch):   return False
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **kwargs):  
+        super().__init__(**kwargs) 
         self.tile_textures = {}
         self.anim_frame = 0  
         self._grass_textures = [CoreImage(p).texture for p in GRASS_TILES]
