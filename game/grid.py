@@ -46,6 +46,12 @@ class GridManager:
     #  PUBLIC API
     # ═══════════════════════════════════════════
 
+    @staticmethod
+    def to_isometric(x, y, tile_width, tile_height):
+        iso_x = (x - y) * (tile_width / 2)
+        iso_y = (x + y) * (tile_height / 2)
+        return iso_x, iso_y
+
     def reset(self):
         self.forward_tiles  = 0
         self.path.clear()

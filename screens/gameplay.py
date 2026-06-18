@@ -71,9 +71,7 @@ class KivyRenderer(Widget):
         return self.tile_textures[key]
 
     def grid_to_screen(self, col, row):
-        x = (col - row) * (TILE_W // 2)
-        y = (col + row) * (TILE_H // 2)
-        return x, y
+        return GridManager.to_isometric(col, row, TILE_W, TILE_H)
 
     def draw(self, grid_manager, penguin, path_index, is_shaking_floor=False):
         target_x, target_y = self.grid_to_screen(penguin.col, penguin.row)
@@ -97,46 +95,54 @@ class KivyRenderer(Widget):
         self.canvas.clear()
         with self.canvas:
             view_radius = 15
-            visible_tiles = []
+            render_queue = []
             for col, row in grid_manager.path_set:
                 if (penguin.col - view_radius <= col <= penguin.col + view_radius) and \
                    (penguin.row - view_radius <= row <= penguin.row + view_radius):
-                    visible_tiles.append((col, row))
+                    render_queue.append({'col': col, 'row': row, 'z_index': -(col + row), 'sub_layer': 0, 'type': 'tile', 'obj': None})
+                    
+                    obs = grid_manager.get_obstacle_at(col, row)
+                    if obs and obs.active:
+                        render_queue.append({'col': col, 'row': row, 'z_index': -(col + row), 'sub_layer': 1, 'type': 'obstacle', 'obj': obs})
 
-            p_pos = (penguin.col, penguin.row)
-            if p_pos not in visible_tiles:
-                visible_tiles.append(p_pos)
+                    gem = grid_manager.get_gem_at(col, row)
+                    if gem and gem.active:
+                        render_queue.append({'col': col, 'row': row, 'z_index': -(col + row), 'sub_layer': 1, 'type': 'gem', 'obj': gem})
 
-            visible_tiles.sort(key=lambda t: t[0] + t[1], reverse=True)
+            render_queue.append({'col': penguin.col, 'row': penguin.row, 'z_index': -(penguin.col + penguin.row), 'sub_layer': 2, 'type': 'penguin', 'obj': penguin})
+            render_queue.sort(key=lambda x: (x['z_index'], x['sub_layer']))
 
-            Color(1, 1, 1, 1)
-            for col, row in visible_tiles:
-                if (col, row) in grid_manager.path_set:
+            for item in render_queue:
+                col, row, itype, obj = item['col'], item['row'], item['type'], item['obj']
+                if itype == 'tile':
                     if grid_manager.is_fork_tile(col, row):
                         Color(1, 0.9, 0.4, 1) 
                     else:
                         Color(1, 1, 1, 1)
-
                     tex    = self._get_tile_texture(col, row)
                     sx, sy = self.grid_to_screen(col, row)
                     draw_x = sx + ox - (TILE_W // 2)
                     draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
                     Rectangle(texture=tex, pos=(draw_x, draw_y), size=(TILE_W, TILE_IMG_H))
-
-                    obs = grid_manager.get_obstacle_at(col, row)
-                    if obs and obs.active:
-                        self._draw_obstacle(obs, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
-
-                    gem = grid_manager.get_gem_at(col, row)
-                    if gem and gem.active:
-                        self._draw_gem(gem, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
-
-                if col == penguin.col and row == penguin.row:
+                elif itype == 'obstacle':
+                    Color(1, 1, 1, 1)
+                    sx, sy = self.grid_to_screen(col, row)
+                    draw_x = sx + ox - (TILE_W // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
+                    self._draw_obstacle(obj, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                elif itype == 'gem':
+                    Color(1, 1, 1, 1)
+                    sx, sy = self.grid_to_screen(col, row)
+                    draw_x = sx + ox - (TILE_W // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
+                    self._draw_gem(obj, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                elif itype == 'penguin':
+                    Color(1, 1, 1, 1)
                     p_ox, p_oy = ox, oy
                     if is_shaking_floor:
                         p_ox += random.uniform(-3, 3)
                         p_oy += random.uniform(-3, 3)
-                    self._draw_penguin(penguin, p_ox, p_oy)
+                    self._draw_penguin(obj, p_ox, p_oy)
 
     def _draw_penguin(self, penguin, ox, oy):
         if penguin.is_dead:
