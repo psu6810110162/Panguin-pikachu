@@ -72,6 +72,8 @@ class AudioManager:
             self.bgm = None
 
     def play_sfx(self, name):
+        if self.bgm_muted:
+            return
         sound = self.sounds.get(name.lower())
         if sound:
             # Note: playing an already playing sound depends on the provider.

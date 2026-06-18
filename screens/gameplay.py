@@ -12,7 +12,9 @@ from kivy.animation import Animation
 from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
-from kivy.graphics import Color as GColor, Rectangle as GRect, RoundedRectangle
+from kivy.graphics import Color as GColor, Rectangle as GRect, RoundedRectangle, Line
+
+from ui.components import HoverButton
 
 import math
 from game.particles import ParticleSystem
@@ -157,11 +159,13 @@ class KivyRenderer(Widget):
                         p_oy += random.uniform(-3, 3)
                     self._draw_penguin(obj, p_ox, p_oy)
 
-            # Draw particle shards on top
+            # Draw particle shards on top with alpha fade and variable size
             if hasattr(self.parent, 'particle_system'):
-                Color(0.8, 0.6, 0.4, 1) # wooden color
                 for p in self.parent.particle_system.particles:
-                    Rectangle(pos=(p.x + ox, p.y + oy), size=(6, 6))
+                    alpha = getattr(p, 'alpha', 1.0)
+                    sz = getattr(p, 'size', 6)
+                    Color(0.8, 0.6, 0.4, alpha)  # wooden color with fade
+                    Rectangle(pos=(p.x + ox, p.y + oy), size=(sz, sz))
 
     def _draw_penguin(self, penguin, ox, oy):
         if penguin.is_dead:
@@ -212,13 +216,19 @@ class KivyRenderer(Widget):
             Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy + penguin.anim_offset_y), size=(pw, ph))
 
     def _draw_obstacle(self, obs, tx, ty, ox, oy):
+        """
+        Draw stacked crate layers using stack_height for visual degradation.
+        When hit, the top layer is removed visually before the hit animation plays.
+        """
         state = obs.state
         frame = int(obs.anim_frame)
         full_tex = self.box_assets.get(state)
         tex = full_tex.get_region(frame * 28, 0, 28, 24)
         bw, bh = 56, 48
         Color(1, 1, 1, 1)
-        for i in range(obs.size):
+        # Use stack_height (not hp) for number of layers to render
+        layers = max(1, obs.stack_height) if obs.active else max(1, obs.hp)
+        for i in range(layers):
             y_offset = i * (bh * 0.6)
             Rectangle(texture=tex, pos=(tx + (TILE_W - bw) // 2, ty + y_offset), size=(bw, bh))
 
@@ -231,18 +241,151 @@ class KivyRenderer(Widget):
         Rectangle(texture=tex, pos=(tx + (TILE_W - gw) // 2, ty + float_offset), size=(gw, gh))
 
 
+# ═══════════════════════════════════════════════════════════════
+#  PAUSE OVERLAY — Fantasy UI with reused Main Menu components
+# ═══════════════════════════════════════════════════════════════
+
 class PauseOverlay(FloatLayout):
+    """
+    Centered modal overlay displayed when the game is paused.
+    Reuses the blue rectangular flat button style from Main Menu/Shop/History
+    and the icon-styled Sound Button from the Main Menu layout.
+    """
+    def __init__(self, game_screen=None, **kwargs):
+        super().__init__(**kwargs)
+        self.game_screen = game_screen
+        
+        # Semi-transparent dark background covering the full screen
+        with self.canvas.before:
+            GColor(0, 0, 0, 0.65)
+            self._fullscreen_bg = GRect(pos=self.pos, size=self.size)
+        self.bind(
+            pos=lambda o, v: setattr(self._fullscreen_bg, 'pos', v),
+            size=lambda o, v: setattr(self._fullscreen_bg, 'size', v),
+        )
+        
+        # ── Center container with styled background ──
+        self.container = BoxLayout(
+            orientation='vertical', size_hint=(None, None), size=(380, 480),
+            padding=[35, 35, 35, 35], spacing=22,
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        )
+        
+        # Container background — dark panel with rounded corners and subtle border
+        with self.container.canvas.before:
+            GColor(0.08, 0.08, 0.14, 0.95)
+            self._container_bg = RoundedRectangle(
+                pos=self.container.pos, size=self.container.size, radius=[22]
+            )
+            GColor(0.3, 0.6, 0.9, 0.35)
+            self._container_border = Line(
+                rounded_rectangle=(
+                    self.container.x, self.container.y,
+                    self.container.width, self.container.height, 22
+                ),
+                width=1.5
+            )
+        self.container.bind(pos=self._update_container_bg, size=self._update_container_bg)
+        
+        # ── "PAUSED" title ──
+        title = Label(
+            text="PAUSED", font_size='38sp', bold=True,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            color=(0.6, 0.9, 1.0, 1), outline_width=2, outline_color=(0, 0, 0, 1),
+            size_hint_y=None, height=55
+        )
+        self.container.add_widget(title)
+        
+        # ── Spacer ──
+        from kivy.uix.widget import Widget as SpacerWidget
+        self.container.add_widget(SpacerWidget(size_hint_y=None, height=8))
+        
+        # ── RESUME button — blue flat style matching Main Menu START GAME ──
+        btn_resume = HoverButton(
+            text="RESUME", font_size='24sp', bold=True,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            background_normal='assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png',
+            background_down='assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png',
+            border=(20, 20, 20, 20), size_hint_y=None, height=60,
+            color=(1, 1, 1, 1)
+        )
+        btn_resume.bind(on_release=lambda x: self.game_screen.resume_game() if self.game_screen else None)
+        self.container.add_widget(btn_resume)
+        
+        # ── RESTART button — same blue flat style ──
+        btn_restart = HoverButton(
+            text="RESTART", font_size='24sp', bold=True,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            background_normal='assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png',
+            background_down='assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png',
+            border=(20, 20, 20, 20), size_hint_y=None, height=60,
+            color=(1, 1, 1, 1)
+        )
+        btn_restart.bind(on_release=lambda x: self.game_screen.restart_game() if self.game_screen else None)
+        self.container.add_widget(btn_restart)
+        
+        # ── Spacer before sound ──
+        self.container.add_widget(SpacerWidget(size_hint_y=None, height=5))
+        
+        # ── SOUND toggle — reuses the exact icon-styled Sound Button from Main Menu ──
+        sound_box = BoxLayout(orientation='vertical', spacing=6, size_hint_y=None, height=120)
+        self.btn_sound = HoverButton(
+            size_hint=(None, None), size=(90, 90),
+            pos_hint={'center_x': 0.5},
+            background_color=(1, 1, 1, 1), border=(0, 0, 0, 0)
+        )
+        self.btn_sound.bind(on_release=self.toggle_sound)
+        
+        sound_label = Label(
+            text='SOUND', font_size='16sp',
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            color=(0.7, 0.85, 1.0, 0.9), size_hint_y=None, height=25
+        )
+        sound_box.add_widget(self.btn_sound)
+        sound_box.add_widget(sound_label)
+        self.container.add_widget(sound_box)
+        
+        self.add_widget(self.container)
+        Clock.schedule_once(lambda dt: self.sync_sound_button(), 0.1)
+
+    def _update_container_bg(self, instance, value):
+        """Keep background rect and border line in sync with container layout."""
+        self._container_bg.pos = instance.pos
+        self._container_bg.size = instance.size
+        self._container_border.rounded_rectangle = (
+            instance.x, instance.y,
+            instance.width, instance.height, 22
+        )
+
+    def sync_sound_button(self):
+        from core.audio import AudioManager
+        if AudioManager().bgm_muted:
+            self.btn_sound.background_normal = 'assets/Component_UI/Button Sounds/volume_down.png'
+            self.btn_sound.background_down   = 'assets/Component_UI/Button Sounds/volume_down.png'
+        else:
+            self.btn_sound.background_normal = 'assets/Component_UI/Button Sounds/volume_up.png'
+            self.btn_sound.background_down   = 'assets/Component_UI/Button Sounds/volume_up.png'
+
+    def toggle_sound(self, *args):
+        from core.audio import AudioManager
+        am = AudioManager()
+        am.toggle_mute()
+        self.sync_sound_button()
+
     def on_touch_down(self, touch):
         if self.opacity == 0: return False
-        return super().on_touch_down(touch)
-
+        super().on_touch_down(touch)
+        return True  # Absorb touch when active
+        
     def on_touch_move(self, touch):
         if self.opacity == 0: return False
-        return super().on_touch_move(touch)
-
+        super().on_touch_move(touch)
+        return True
+        
     def on_touch_up(self, touch):
         if self.opacity == 0: return False
-        return super().on_touch_up(touch)
+        super().on_touch_up(touch)
+        return True
 
 
 
@@ -346,6 +489,7 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.btn_right)
 
+        # ── Pause button at top-left corner ──
         self.pause_btn = Button(
             size_hint=(None, None), size=(80, 80),
             pos_hint={'x': 0.02, 'top': 0.98},
@@ -356,15 +500,8 @@ class GamePlayScreen(Screen):
         self.pause_btn.bind(on_release=lambda _: self.pause_game())
         self.add_widget(self.pause_btn)
 
-        # Pause overlay
-        self.pause_overlay = PauseOverlay(opacity=0, disabled=True)
-        with self.pause_overlay.canvas.before:
-            GColor(0, 0, 0, 0.6)
-            self._overlay_bg = GRect(pos=self.pause_overlay.pos, size=self.pause_overlay.size)
-        self.pause_overlay.bind(
-            pos=lambda o, v: setattr(self._overlay_bg, 'pos', v),
-            size=lambda o, v: setattr(self._overlay_bg, 'size', v),
-        )
+        # ── Pause overlay modal ──
+        self.pause_overlay = PauseOverlay(game_screen=self, opacity=0, disabled=True)
         self.add_widget(self.pause_overlay)
 
         # Checkpoint popup label
@@ -482,6 +619,15 @@ class GamePlayScreen(Screen):
             self.renderer.draw(self.grid, self.penguin, self.path_index)
 
     def _move(self, direction):
+        """
+        Handle player movement with ice-block style collision.
+        
+        COLLISION RULES:
+        - Penguin is COMPLETELY BLOCKED at current position when hitting a crate with hp > 0
+        - No bounce, push, or recoil backward
+        - Each hit decrements obstacle hp by 1 and visually removes one crate layer
+        - Final hit (hp → 0): full explosion, obstacle deactivated, path cleared
+        """
         if self.penguin.is_dead:
             return
 
@@ -493,22 +639,37 @@ class GamePlayScreen(Screen):
         new_col = self.penguin.col + direction[0]
         new_row = self.penguin.row + direction[1]
 
+        # ── Obstacle collision check ──
         obs = self.grid.get_obstacle_at(new_col, new_row)
         if obs and obs.active and obs.state != obs.STATE_BREAK:
-            if obs.hit():
-                AudioManager().play_sfx('Hit') 
-                self.idle_timer = 0
-                self.game_started = True 
-                
-                px, py = self.renderer.grid_to_screen(new_col, new_row)
-                self.particle_system.spawn_shards(px, py + TILE_IMG_H//2, count=6)
-                
-                self.penguin.action = 'Hit'
-                self.penguin.action_timer = 0.2
-                return
+            # Hit the obstacle — penguin stays at CURRENT position (no movement)
+            result = obs.hit()
+            AudioManager().play_sfx('Hit') 
+            self.idle_timer = 0
+            self.game_started = True 
+            
+            # Particle effects at the obstacle's screen position
+            px, py = self.renderer.grid_to_screen(new_col, new_row)
+            
+            if result['destroyed']:
+                # Full crate shattering explosion — path is now clear
+                self.particle_system.spawn_explosion(
+                    px, py + TILE_IMG_H // 2, count=10
+                )
+                self.renderer.trigger_shake(8)
             else:
-                return
+                # Partial hit — small top-layer shard burst at the old top layer position
+                shard_y = py + TILE_IMG_H // 2 + (result['old_hp'] * 28)
+                self.particle_system.spawn_shards(px, shard_y, count=3)
+                self.renderer.trigger_shake(4)
+            
+            # Penguin plays hit animation but does NOT move
+            self.penguin.action = 'Hit'
+            self.penguin.action_timer = 0.2
+            self.renderer.anim_frame = 0
+            return  # ← CRITICAL: penguin stays at current grid position
 
+        # ── Gem collection ──
         gem = self.grid.get_gem_at(new_col, new_row)
         if gem and gem.active:
             val = gem.collect()
@@ -518,6 +679,7 @@ class GamePlayScreen(Screen):
             logger.info(f"[COLLECT] Gem ที่ ({new_col}, {new_row}) ชนิด {tile_type} | รวม: {self.gems_collected}")
             self.grid.gems.pop((new_col, new_row), None)
 
+        # ── Move penguin to new position ──
         self.penguin.col = new_col
         self.penguin.row = new_row
         self.game_started = True
@@ -554,14 +716,17 @@ class GamePlayScreen(Screen):
         self.manager.current = 'gameover'
 
     def pause_game(self):
+        """Pause: unschedule game loop, show overlay, sync sound button."""
         if self.game_event:
             self.game_event.cancel()
             self.game_event = None
         self.pause_overlay.opacity = 1
         self.pause_overlay.disabled = False
+        self.pause_overlay.sync_sound_button()
         AudioManager().play_sfx('click')
 
     def resume_game(self):
+        """Resume: hide overlay, re-schedule game loop."""
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:
@@ -569,9 +734,15 @@ class GamePlayScreen(Screen):
         AudioManager().play_sfx('click')
 
     def restart_game(self):
+        """Full restart: clear grid, reset scores/gems, generate fresh 4x4 platform."""
         AudioManager().play_sfx('click')
         self.grid.reset()
         self.penguin.is_dead = False
+        self.penguin.action = 'Idle'
+        self.penguin.action_timer = 0.0
+        self.penguin.anim_offset_y = 0.0
+        self.penguin.visual_x = None
+        self.penguin.visual_y = None
         start = self.grid.path[0]
         self.penguin.col = start[0]
         self.penguin.row = start[1]
@@ -579,8 +750,10 @@ class GamePlayScreen(Screen):
         self.gems_collected = 0
         self.idle_timer = 0
         self.game_started = False
+        self.particle_system.particles.clear()
         self.renderer.cam_x = None
         self.renderer.cam_y = None
+        self.renderer.tile_textures.clear()
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:

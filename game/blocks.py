@@ -1,13 +1,15 @@
 class Obstacle:
     """
-    บล็อกสิ่งกีดขวาง (Obstacle) มีระดับความสูง Size 1-5
-    ใช้รูปจาก Pixel Adventure (Box2) พร้อมแอนิเมชัน Idle, Hit, Break
+    Stacked crate obstacle with ice-block style progressive destruction.
+    Each crate has stack_height (1-4) equal to its hp.
+    Hits decrement hp by 1 and visually degrade the stack.
+    Final hit (hp→0) triggers full break state.
     """
     STATE_IDLE  = 'Idle'
     STATE_HIT   = 'Hit'
     STATE_BREAK = 'Break'
     
-    # จำนวนเฟรมในแต่ละ Spritesheet (Box2)
+    # Frame counts per spritesheet (Box2)
     STATE_FRAMES = {
         'Idle': 1,
         'Hit': 4,
@@ -17,16 +19,18 @@ class Obstacle:
     def __init__(self, size=1):
         self.col = 0
         self.row = 0
-        self.size = size
+        self.size = size            # original stack height (immutable reference)
+        self.stack_height = size    # current visual stack height (decrements on hit)
         self.hp = size
         self.active = True
         self.state = self.STATE_IDLE
         self.anim_frame = 0
         self.anim_timer = 0
-        self.anim_speed = 0.1  # วินาทีต่อเฟรม
+        self.anim_speed = 0.1  # seconds per frame
         
     def reset(self, size=1):
         self.size = size
+        self.stack_height = size
         self.hp = size
         self.active = True
         self.state = self.STATE_IDLE
@@ -34,19 +38,39 @@ class Obstacle:
         self.anim_timer = 0
 
     def hit(self):
-        """เมื่อถูกเพนกวินชน - ปิดการทำงานทันทีเพื่อสปอว์นเศษกระจาย"""
-        if self.state != self.STATE_BREAK:
+        """
+        Called when penguin collides with this obstacle.
+        Returns dict: {'destroyed': bool, 'old_hp': int}
+        - destroyed=False: partial hit, penguin stays blocked
+        - destroyed=True: final hit, obstacle goes inactive
+        """
+        if self.state == self.STATE_BREAK:
+            return {'destroyed': False, 'old_hp': 0}
+        
+        old_hp = self.hp
+        self.hp -= 1
+        
+        if self.hp <= 0:
+            # Final hit — full destruction
             self.hp = 0
+            self.stack_height = 0
             self.state = self.STATE_BREAK
-            self.active = False
             self.anim_frame = 0
             self.anim_timer = 0
-            return True
-        return False
+            self.active = False
+            return {'destroyed': True, 'old_hp': old_hp}
+        else:
+            # Partial hit — degrade visual by one layer
+            self.stack_height = self.hp
+            self.state = self.STATE_HIT
+            self.anim_frame = 0
+            self.anim_timer = 0
+            return {'destroyed': False, 'old_hp': old_hp}
 
     def update(self, dt):
-        """อัปเดตเฟรมแอนิเมชัน"""
-        if not self.active: return
+        """Update animation frames for Hit/Break sequences."""
+        if not self.active:
+            return
 
         max_frames = self.STATE_FRAMES.get(self.state, 1)
         if max_frames > 1:
@@ -55,16 +79,16 @@ class Obstacle:
                 self.anim_timer = 0
                 self.anim_frame += 1
                 
-                # ถ้าเล่นจบแอนิเมชัน
                 if self.anim_frame >= max_frames:
                     if self.state == self.STATE_HIT:
-                        # กลับไป Idle
+                        # Return to idle after hit animation completes
                         self.state = self.STATE_IDLE
                         self.anim_frame = 0
                     elif self.state == self.STATE_BREAK:
-                        # พังเสร็จแล้ว ปิดการทำงาน (หายไป)
+                        # Break animation finished — deactivate fully
                         self.active = False
-                        self.size = 0
+                        self.stack_height = 0
 
     def get_display_blocks(self):
-        return self.size
+        """Return number of crate layers to render."""
+        return self.stack_height

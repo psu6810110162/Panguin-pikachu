@@ -13,7 +13,7 @@ class ObstacleFactory:
         
         # 2. คำนวณความยาก
         # วิ่งไปยิ่งไกล ยิ่งมีโอกาสสุ่มเจอบล็อกระดับ 4-5 มากขึ้น
-        max_size = min(5, 1 + (distance_m // 100)) # เพิ่ม Size สูงสุดทุกๆ 100 เมตร
+        max_size = min(4, 1 + (distance_m // 100)) # เพิ่ม Size สูงสุดทุกๆ 100 เมตร (สูงสุด 4)
         
         # 3. ตั้งค่าแล้วรีเซ็ต
         random_size = random.randint(1, max_size)
