@@ -9,7 +9,7 @@ class Tile:
         self.is_fork = is_fork
         self.is_safe = is_safe
         self.state = 'normal'
-        self.trigger_timer = 0.5
+        self.trigger_timer = 1.2
         self.offset_y = 0.0
         self.fall_velocity = 0.0
 
@@ -52,6 +52,8 @@ class GridManager:
         self._last_dir  = self.DIR_A
         self._seg_count = 0
         self._last_cleaned_idx = 0
+        self._total_generated = 0
+        self.checkpoints_generated = 0
 
     # ═══════════════════════════════════════════
     #  PUBLIC API
@@ -111,7 +113,7 @@ class GridManager:
         if current_tile and current_tile.state == 'normal' and not current_tile.is_safe:
             current_tile.state = 'triggered'
             score = self.get_distance_m()
-            current_tile.trigger_timer = max(0.25, 0.8 - (score * 0.002))
+            current_tile.trigger_timer = max(0.35, 1.2 - (score * 0.002))
             
         to_remove = []
         for pos, tile in self.path_set.items():
@@ -211,32 +213,41 @@ class GridManager:
         if (col, row) not in self.path_set:
             self.path_set[(col, row)] = Tile(col, row, is_fork, is_safe)
 
+
     def _build_start_platform(self):
-        """Generate the initial safe starting zone of exactly 7 tiles.
-        The tiles are placed in a straight line along the initial direction (DIR_A).
-        All generated tiles are marked as safe (is_safe=True) to allow the player to stand still.
-        """
-        # Reset total generated counter for accurate safe zone tracking
+        """Generate a 4x4 safe starting platform at (0,0)."""
         self._total_generated = 0
-        col, row = self._last_pos
-        # Generate 7 consecutive safe tiles in the initial direction
-        for i in range(7):
-            self._add_tile(col, row, is_safe=True)
-            self.path.append((col, row))
-            self._total_generated += 1
-            # Move to next position along the initial direction
-            col += self.DIR_A[0]
-            row += self.DIR_A[1]
-        # Set the last position to the final tile of the safe zone
-        self._last_pos = (col - self.DIR_A[0], row - self.DIR_A[1])
-        # Ensure the path index starts at the first tile
+        self.checkpoints_generated = 0
+        self._last_pos = (0, 0)
+        self._last_dir = self.DIR_A
+        self._build_checkpoint_platform()
         self.path_index = 0
+
+    def _build_checkpoint_platform(self):
+        """Generate a 4x4 safe checkpoint platform at the current end of the path."""
+        col, row = self._last_pos
+        cur_dir = self._last_dir
+        for i in range(4):
+            for j in range(-1, 3):
+                c = col + (i if cur_dir[0] else j)
+                r = row + (j if cur_dir[0] else i)
+                self._add_tile(c, r, is_safe=True)
+                if j == 0:
+                    if (c, r) not in self.path:
+                        self.path.append((c, r))
+                        self._total_generated += 1
+
+        self._last_pos = (col + 3 * cur_dir[0], row + 3 * cur_dir[1])
+        self.checkpoints_generated += 1
+
 
     def _append_segment(self):
         """
         สร้าง 1 segment: straight หรือ diamond fork (30%)
         แล้วต่อด้วย corner เพื่อเปลี่ยนทิศ
         """
+        if self._total_generated >= (self.checkpoints_generated) * 100:
+            self._build_checkpoint_platform()
         if random.random() < FORK_CHANCE and self._seg_count >= 2:
             # ─── Diamond Fork ───
             self._build_diamond_fork()

@@ -14,9 +14,12 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.graphics import Color as GColor, Rectangle as GRect, RoundedRectangle
 
+import math
+from game.particles import ParticleSystem
+
 from core.audio import AudioManager
 from core.logger import logger
-from core.config import TARGET_FPS, TILE_W, TILE_H, TILE_IMG_H
+from core.config import TARGET_FPS, TILE_W, TILE_H, TILE_IMG_H, TILE_TO_METER
 from game.grid import GridManager
 from game.penguin import Penguin
 
@@ -154,10 +157,20 @@ class KivyRenderer(Widget):
                         p_oy += random.uniform(-3, 3)
                     self._draw_penguin(obj, p_ox, p_oy)
 
+            # Draw particle shards on top
+            if hasattr(self.parent, 'particle_system'):
+                Color(0.8, 0.6, 0.4, 1) # wooden color
+                for p in self.parent.particle_system.particles:
+                    Rectangle(pos=(p.x + ox, p.y + oy), size=(6, 6))
+
     def _draw_penguin(self, penguin, ox, oy):
         if penguin.is_dead:
+            penguin.action = 'Fall'
             px, py = self.grid_to_screen(penguin.col, penguin.row)
-            skin_path = penguin.get_skin_path(action='Fall')
+            if penguin.visual_x is not None:
+                px, py = penguin.visual_x, penguin.visual_y
+                
+            skin_path = penguin.get_skin_path()
             if skin_path not in self.tile_textures:
                 self.tile_textures[skin_path] = CoreImage(skin_path).texture
             skin_tex = self.tile_textures[skin_path]
@@ -165,12 +178,25 @@ class KivyRenderer(Widget):
                 skin_tex = skin_tex.get_region(32, 0, -32, 32)
             pw, ph = 64, 64
             Color(1, 1, 1, 1)
-            Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
+            Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy + penguin.anim_offset_y), size=(pw, ph))
         else:
-            px, py = self.grid_to_screen(penguin.col, penguin.row)
-            self.anim_frame = (self.anim_frame + 0.2) % 11
-            frame_idx = int(self.anim_frame)
-            skin_path = penguin.get_skin_path(action='Idle')
+            target_px, target_py = self.grid_to_screen(penguin.col, penguin.row)
+            if penguin.visual_x is None:
+                penguin.visual_x = target_px
+                penguin.visual_y = target_py
+                
+            # smooth follow
+            penguin.visual_x += (target_px - penguin.visual_x) * 0.4
+            penguin.visual_y += (target_py - penguin.visual_y) * 0.4
+            
+            px, py = penguin.visual_x, penguin.visual_y
+            
+            # Action frame cycling
+            frames_count = penguin.ACTION_FRAMES.get(penguin.action, 1)
+            self.anim_frame = (self.anim_frame + 0.3) % max(1, frames_count)
+            frame_idx = int(self.anim_frame) % max(1, frames_count)
+            
+            skin_path = penguin.get_skin_path()
             cache_key = f"{skin_path}_{frame_idx}_{'L' if penguin.facing_left else 'R'}"
             if cache_key not in self.tile_textures:
                 if skin_path not in self.tile_textures:
@@ -183,7 +209,7 @@ class KivyRenderer(Widget):
             skin_tex = self.tile_textures[cache_key]
             pw, ph = 64, 64
             Color(1, 1, 1, 1)
-            Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy), size=(pw, ph))
+            Rectangle(texture=skin_tex, pos=(px + ox - pw // 2, py + oy + penguin.anim_offset_y), size=(pw, ph))
 
     def _draw_obstacle(self, obs, tx, ty, ox, oy):
         state = obs.state
@@ -247,6 +273,7 @@ class GamePlayScreen(Screen):
         self.grid       = GridManager()
         self.penguin    = Penguin()
         self.game_event = None
+        self._keyboard  = None
         self.path_index = 0
         self.gems_collected = 0
         self.grid.reset()
@@ -256,6 +283,7 @@ class GamePlayScreen(Screen):
         self.idle_timer = 0
         self.MAX_IDLE_TIME = 2.0 
         self.game_started = False
+        self.particle_system = ParticleSystem()
 
         self.renderer = KivyRenderer()
         self.add_widget(self.renderer)
@@ -328,6 +356,7 @@ class GamePlayScreen(Screen):
         self.pause_btn.bind(on_release=lambda _: self.pause_game())
         self.add_widget(self.pause_btn)
 
+        # Pause overlay
         self.pause_overlay = PauseOverlay(opacity=0, disabled=True)
         with self.pause_overlay.canvas.before:
             GColor(0, 0, 0, 0.6)
@@ -336,38 +365,28 @@ class GamePlayScreen(Screen):
             pos=lambda o, v: setattr(self._overlay_bg, 'pos', v),
             size=lambda o, v: setattr(self._overlay_bg, 'size', v),
         )
-
-        btn_box = BoxLayout(
-            orientation='horizontal',
-            size_hint=(None, None), size=(360, 100),
-            pos_hint={'center_x': 0.5, 'center_y': 0.35},
-            spacing=20,
-        )
-        # ── 3 ปุ่มใน Overlay ──
-        class IconButton(ButtonBehavior, Image):
-            pass
-
-        for img_n, img_d, cb in [
-            ('assets/Component_UI/Backtomanu/backtomenu.png',
-             'assets/Component_UI/Backtomanu/backtomenu_down.png', self.go_home),
-            ('assets/Component_UI/Reset/reset_up.png',
-             'assets/Component_UI/Reset/reset_down.png',           self.restart_game),
-            ('assets/Component_UI/Resume/resume_on.png',
-             'assets/Component_UI/Resume/resume_down.png',         self.resume_game),
-        ]:
-            b = IconButton(
-                source=img_n, size_hint=(None, None), size=(100, 100),
-                allow_stretch=True, keep_ratio=True,
-            )
-            b.bind(
-                on_press=lambda x, d=img_d: setattr(x, 'source', d),
-                on_release=lambda x, n=img_n, c=cb: (setattr(x, 'source', n), c()),
-            )
-            btn_box.add_widget(b)
-
-        self.pause_overlay.add_widget(btn_box)
         self.add_widget(self.pause_overlay)
-        self._keyboard = None  # request ใน on_enter
+
+        # Checkpoint popup label
+        self.checkpoint_label = Label(
+            text='',
+            font_size='30sp',
+            color=(1, 1, 1, 0),
+            size_hint=(None, None),
+            pos_hint={'center_x': 0.5, 'center_y': 0.75}
+        )
+        self.add_widget(self.checkpoint_label)
+
+    def show_checkpoint_message(self, message: str):
+        """Display a temporary non-blocking message when a checkpoint is reached.
+        The label fades in, stays for 1.5 seconds, then fades out.
+        """
+        self.checkpoint_label.text = message
+        # Fade in
+        anim = Animation(color=(1, 1, 1, 1), duration=0.3) + \
+               Animation(duration=1.5) + \
+               Animation(color=(1, 1, 1, 0), duration=0.5)
+        anim.start(self.checkpoint_label)
 
     def _update_hud_rect(self, instance, value):
         self.hud_rect.pos = instance.pos
@@ -416,6 +435,25 @@ class GamePlayScreen(Screen):
         self.grid.update_obstacles(dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row))
         self.grid.cleanup_behind(self.path_index)
         
+        # Physics update
+        if self.penguin.is_dead:
+            self.penguin.anim_offset_y -= 800.0 * dt
+        elif self.penguin.action_timer > 0:
+            self.penguin.action_timer -= dt
+            
+            if self.penguin.action == 'Jump':
+                t = 1.0 - max(0.0, self.penguin.action_timer / 0.25)
+                self.penguin.anim_offset_y = math.sin(t * math.pi) * 30.0
+            elif self.penguin.action == 'Hit':
+                t = 1.0 - max(0.0, self.penguin.action_timer / 0.2)
+                self.penguin.anim_offset_y = math.sin(t * math.pi) * 15.0
+
+            if self.penguin.action_timer <= 0:
+                self.penguin.action = 'Idle'
+                self.penguin.anim_offset_y = 0.0
+        
+        self.particle_system.update(dt)
+        
         if not self.penguin.is_dead and self.game_started:
             self.grid.update_tiles(dt, (self.penguin.col, self.penguin.row))
             
@@ -456,12 +494,17 @@ class GamePlayScreen(Screen):
         new_row = self.penguin.row + direction[1]
 
         obs = self.grid.get_obstacle_at(new_col, new_row)
-        if obs and obs.active:
+        if obs and obs.active and obs.state != obs.STATE_BREAK:
             if obs.hit():
                 AudioManager().play_sfx('Hit') 
-                self.grid.obstacles.pop((new_col, new_row), None)
                 self.idle_timer = 0
                 self.game_started = True 
+                
+                px, py = self.renderer.grid_to_screen(new_col, new_row)
+                self.particle_system.spawn_shards(px, py + TILE_IMG_H//2, count=6)
+                
+                self.penguin.action = 'Hit'
+                self.penguin.action_timer = 0.2
                 return
             else:
                 return
@@ -479,6 +522,10 @@ class GamePlayScreen(Screen):
         self.penguin.row = new_row
         self.game_started = True
 
+        self.penguin.action = 'Jump'
+        self.penguin.action_timer = 0.25
+        self.renderer.anim_frame = 0
+
         if self.grid.is_on_path(new_col, new_row):
             self.grid.step_forward()
             idx = self.grid.get_path_index(new_col, new_row)
@@ -489,6 +536,10 @@ class GamePlayScreen(Screen):
                 self.renderer.trigger_shake(5)
                 self.idle_timer = 0 
                 self.renderer.shake_amount = 5
+                # Checkpoint notification
+                if self.grid.forward_tiles % 100 == 0:
+                    meters = self.grid.forward_tiles * TILE_TO_METER
+                    self.show_checkpoint_message(f"{meters}M REACHED!")
             
             if self.path_index == len(self.grid.path) - 1:
                 logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")

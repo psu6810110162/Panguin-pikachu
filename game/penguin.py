@@ -16,6 +16,18 @@ class Penguin:
         self.skin = 'Ninja Frog'
         self.facing_left = False  # ทิศทางการหัน (False = ขวา, True = ซ้าย)
         
+        # ระบบ Animation & Interpolation
+        self.action = 'Idle'
+        self.action_timer = 0.0
+        self.visual_x = None
+        self.visual_y = None
+        self.anim_offset_y = 0.0
+        
+        self.ACTION_FRAMES = {
+            'Idle': 11, 'Run': 12, 'Jump': 1, 'Fall': 1, 
+            'Hit': 7, 'Double Jump': 6, 'Wall Jump': 5
+        }
+        
         # Mapping skin_id -> Folder Name ใน Pixel Adventure
         self.SKIN_ASSETS = {
             'Mask Dude': 'Mask Dude',
@@ -28,13 +40,11 @@ class Penguin:
         if skin_id in self.SKIN_ASSETS:
             self.skin = skin_id
 
-    def get_skin_path(self, action='Idle'):
+    def get_skin_path(self, action=None):
+        if action is None:
+            action = self.action
         folder = self.SKIN_ASSETS.get(self.skin, 'Ninja Frog')
-        if action == 'Idle':
-            return f'assets/pixelAdventure/Free/Main Characters/{folder}/Idle (32x32).png'
-        elif action == 'Fall':
-            return f'assets/pixelAdventure/Free/Main Characters/{folder}/Fall (32x32).png'
-        return f'assets/pixelAdventure/Free/Main Characters/{folder}/Idle (32x32).png'
+        return f'assets/pixelAdventure/Free/Main Characters/{folder}/{action} (32x32).png'
 
     def move_forward(self):
         """วิ่งตรงต่อไปข้างหน้า 1 หน่วยบนเส้นทางในเกม"""

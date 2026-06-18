@@ -34,15 +34,13 @@ class Obstacle:
         self.anim_timer = 0
 
     def hit(self):
-        """เมื่อถูกเพนกวินชน - ปรับให้พังและหายไปทันที"""
+        """เมื่อถูกเพนกวินชน - ปิดการทำงานทันทีเพื่อสปอว์นเศษกระจาย"""
         if self.state != self.STATE_BREAK:
-            from core.audio import AudioManager
             self.hp = 0
             self.state = self.STATE_BREAK
-            self.active = False # หายไปทันทีตามสั่ง
+            self.active = False
             self.anim_frame = 0
             self.anim_timer = 0
-            AudioManager().play_sfx('hit') # ใช้ lowercase ตาม AudioManager pattern
             return True
         return False
 
