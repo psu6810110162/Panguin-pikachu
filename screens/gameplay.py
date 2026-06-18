@@ -12,7 +12,7 @@ from kivy.animation import Animation
 from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
-from kivy.graphics import Color as GColor, Rectangle as GRect
+from kivy.graphics import Color as GColor, Rectangle as GRect, RoundedRectangle
 
 from core.audio import AudioManager
 from core.logger import logger
@@ -96,10 +96,15 @@ class KivyRenderer(Widget):
         with self.canvas:
             view_radius = 15
             render_queue = []
-            for col, row in grid_manager.path_set:
+            
+            for col, row in list(grid_manager.path_set.keys()):
+                tile = grid_manager.path_set.get((col, row))
+                if not tile or tile.state == 'destroyed':
+                    continue
+
                 if (penguin.col - view_radius <= col <= penguin.col + view_radius) and \
                    (penguin.row - view_radius <= row <= penguin.row + view_radius):
-                    render_queue.append({'col': col, 'row': row, 'z_index': -(col + row), 'sub_layer': 0, 'type': 'tile', 'obj': None})
+                    render_queue.append({'col': col, 'row': row, 'z_index': -(col + row), 'sub_layer': 0, 'type': 'tile', 'obj': tile})
                     
                     obs = grid_manager.get_obstacle_at(col, row)
                     if obs and obs.active:
@@ -114,31 +119,36 @@ class KivyRenderer(Widget):
 
             for item in render_queue:
                 col, row, itype, obj = item['col'], item['row'], item['type'], item['obj']
+                
+                tile = grid_manager.path_set.get((col, row))
+                y_off = tile.offset_y if tile else 0
+
                 if itype == 'tile':
-                    if grid_manager.is_fork_tile(col, row):
+                    if obj.is_fork:
                         Color(1, 0.9, 0.4, 1) 
                     else:
                         Color(1, 1, 1, 1)
                     tex    = self._get_tile_texture(col, row)
                     sx, sy = self.grid_to_screen(col, row)
                     draw_x = sx + ox - (TILE_W // 2)
-                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2) + y_off
                     Rectangle(texture=tex, pos=(draw_x, draw_y), size=(TILE_W, TILE_IMG_H))
                 elif itype == 'obstacle':
                     Color(1, 1, 1, 1)
                     sx, sy = self.grid_to_screen(col, row)
                     draw_x = sx + ox - (TILE_W // 2)
-                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2) + y_off
                     self._draw_obstacle(obj, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
                 elif itype == 'gem':
                     Color(1, 1, 1, 1)
                     sx, sy = self.grid_to_screen(col, row)
                     draw_x = sx + ox - (TILE_W // 2)
-                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2) + y_off
                     self._draw_gem(obj, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
                 elif itype == 'penguin':
                     Color(1, 1, 1, 1)
                     p_ox, p_oy = ox, oy
+                    p_oy += y_off
                     if is_shaking_floor:
                         p_ox += random.uniform(-3, 3)
                         p_oy += random.uniform(-3, 3)
@@ -250,15 +260,46 @@ class GamePlayScreen(Screen):
         self.renderer = KivyRenderer()
         self.add_widget(self.renderer)
 
-        self.hud_label = Label(
-            text="0 m | 💎 0", font_size='24sp', bold=True,
-            font_name='assets/Component_UI/Font/Kenney Future.ttf',
-            pos_hint={'right': 0.98, 'top': 0.98},
-            size_hint=(0.3, 0.05), color=(1, 1, 1, 1),
-            halign='right'
+        self.hud_bg = BoxLayout(
+            orientation='horizontal', size_hint=(None, None),
+            height=60, spacing=30, padding=[20, 10, 20, 10],
+            pos_hint={'right': 0.98, 'top': 0.98}
         )
-        self.hud_label.bind(size=self.hud_label.setter('text_size'))
-        self.add_widget(self.hud_label)
+        self.hud_bg.bind(minimum_width=self.hud_bg.setter('width'))
+        
+        with self.hud_bg.canvas.before:
+            GColor(0, 0, 0, 0.6)
+            self.hud_rect = RoundedRectangle(radius=[15])
+        self.hud_bg.bind(pos=self._update_hud_rect, size=self._update_hud_rect)
+
+        self.score_label = Label(
+            text="SCORE: 0", font_size='26sp', bold=True,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            outline_width=2, outline_color=(0, 0, 0, 1),
+            size_hint_x=None
+        )
+        self.score_label.bind(texture_size=self.score_label.setter('size'))
+
+        gem_box = BoxLayout(orientation='horizontal', size_hint=(None, None), height=40, spacing=10)
+        gem_box.bind(minimum_width=gem_box.setter('width'))
+        
+        gem_tex = CoreImage('assets/Gem/Coin_Gems/spr_coin_strip4.png').texture.get_region(0, 0, 16, 16)
+        gem_icon = Image(texture=gem_tex, size_hint=(None, None), size=(40, 40))
+        
+        self.gem_label = Label(
+            text="x 0", font_size='26sp', bold=True,
+            font_name='assets/Component_UI/Font/Kenney Future.ttf',
+            outline_width=2, outline_color=(0, 0, 0, 1),
+            size_hint_x=None
+        )
+        self.gem_label.bind(texture_size=self.gem_label.setter('size'))
+        
+        gem_box.add_widget(gem_icon)
+        gem_box.add_widget(self.gem_label)
+
+        self.hud_bg.add_widget(self.score_label)
+        self.hud_bg.add_widget(gem_box)
+        self.add_widget(self.hud_bg)
 
         OFFSET = 0.2
         self.btn_left = ArrowButton(
@@ -328,6 +369,10 @@ class GamePlayScreen(Screen):
         self.add_widget(self.pause_overlay)
         self._keyboard = None  # request ใน on_enter
 
+    def _update_hud_rect(self, instance, value):
+        self.hud_rect.pos = instance.pos
+        self.hud_rect.size = instance.size
+
     def on_enter(self):
         from core.state import StateManager
         logger.info("เข้าสู่หน้า GamePlay")
@@ -365,24 +410,37 @@ class GamePlayScreen(Screen):
     def update(self, dt):
         dist = self.grid.get_distance_m()
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
-        self.hud_label.text = f"{dist_str} | 💎 {self.gems_collected}"
+        self.score_label.text = f"SCORE: {dist_str}"
+        self.gem_label.text = f"x {self.gems_collected}"
         
         self.grid.update_obstacles(dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row))
         self.grid.cleanup_behind(self.path_index)
         
         if not self.penguin.is_dead and self.game_started:
+            self.grid.update_tiles(dt, (self.penguin.col, self.penguin.row))
+            
+            # Check if penguin's tile is falling
+            current_tile = self.grid.path_set.get((self.penguin.col, self.penguin.row))
+            if current_tile and current_tile.state == 'falling':
+                self.penguin.is_dead = True
+                AudioManager().play_sfx('Down') 
+                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+
             self.idle_timer += dt
-            is_shaking = self.idle_timer > (self.MAX_IDLE_TIME - 1.0)
+            is_shaking = current_tile and current_tile.state == 'triggered'
             
             if self.idle_timer >= self.MAX_IDLE_TIME:
                 logger.warning(f"พื้นถล่ม! ยืนนิ่งนานเกินไปที่ ({self.penguin.col}, {self.penguin.row})")
-                self.grid.remove_tile(self.penguin.col, self.penguin.row)
+                if current_tile and not current_tile.is_safe:
+                    current_tile.state = 'falling'
+                    current_tile.fall_velocity = 0.0
                 self.penguin.is_dead = True
                 AudioManager().play_sfx('Down') 
                 Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
             
             self.renderer.draw(self.grid, self.penguin, self.path_index, is_shaking_floor=is_shaking)
         else:
+            self.grid.update_tiles(dt, (self.penguin.col, self.penguin.row))
             self.renderer.draw(self.grid, self.penguin, self.path_index)
 
     def _move(self, direction):

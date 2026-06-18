@@ -2,6 +2,17 @@ from core.config import TILE_TO_METER
 import random
 from game.obstacle_factory import ObstacleFactory
 
+class Tile:
+    def __init__(self, col, row, is_fork=False, is_safe=False):
+        self.col = col
+        self.row = row
+        self.is_fork = is_fork
+        self.is_safe = is_safe
+        self.state = 'normal'
+        self.trigger_timer = 0.5
+        self.offset_y = 0.0
+        self.fall_velocity = 0.0
+
 PATH_WIDTH       = 1    # กว้าง 1 tile (ผอมลงตามสั่ง)
 SEGMENT_LEN_MIN  = 2    # สั้นลงเพื่อให้ซิกแซกถี่ขึ้น (ตามสั่ง)
 SEGMENT_LEN_MAX  = 6    # สั้นลงเพื่อให้ซิกแซกถี่ขึ้น
@@ -30,7 +41,7 @@ class GridManager:
     def __init__(self):
         self.forward_tiles  = 0
         self.path           = []    # centerline ที่เพนกวินเดิน
-        self.path_set       = set() # ทุก tile รวม width
+        self.path_set       = {} # ทุก tile รวม width
         self.turn_points    = []    # จุดที่ต้องกดเปลี่ยนทิศ
         self.obstacles      = {}    # (col, row) -> Obstacle
         self.gems           = {}    # (col, row) -> Gem
@@ -91,6 +102,37 @@ class GridManager:
                 if (p_col - view_radius <= pos[0] <= p_col + view_radius) and \
                    (p_row - view_radius <= pos[1] <= p_row + view_radius):
                     gem.update(dt)
+
+
+    def update_tiles(self, dt, penguin_pos):
+        p_col, p_row = penguin_pos
+        
+        current_tile = self.path_set.get((p_col, p_row))
+        if current_tile and current_tile.state == 'normal' and not current_tile.is_safe:
+            current_tile.state = 'triggered'
+            score = self.get_distance_m()
+            current_tile.trigger_timer = max(0.25, 0.8 - (score * 0.002))
+            
+        to_remove = []
+        for pos, tile in self.path_set.items():
+            if tile.is_safe: continue
+            
+            if tile.state == 'triggered':
+                tile.trigger_timer -= dt
+                if tile.trigger_timer <= 0:
+                    tile.state = 'falling'
+                    tile.fall_velocity = 0.0
+            elif tile.state == 'falling':
+                tile.fall_velocity += 1500.0 * dt
+                tile.offset_y -= tile.fall_velocity * dt
+                if tile.offset_y < -1500:
+                    tile.state = 'destroyed'
+                    to_remove.append(pos)
+                    
+        for pos in to_remove:
+            self.path_set.pop(pos, None)
+            self.obstacles.pop(pos, None)
+            self.gems.pop(pos, None)
 
     def is_on_path(self, col, row):
         return (col, row) in self.path_set
@@ -164,14 +206,31 @@ class GridManager:
     #  INTERNAL BUILDERS
     # ═══════════════════════════════════════════
 
+
+    def _add_tile(self, col, row, is_fork=False, is_safe=False):
+        if (col, row) not in self.path_set:
+            self.path_set[(col, row)] = Tile(col, row, is_fork, is_safe)
+
     def _build_start_platform(self):
-        """Platform 3×3 สำหรับจุดเริ่ม (ตามสั่ง)"""
-        for c in range(3):
-            for r in range(3):
-                self.path_set.add((c, r))
-        center = (1, 1) # กึ่งกลาง 3x3
-        self.path.append(center)
-        self._last_pos = center
+        """Generate the initial safe starting zone of exactly 7 tiles.
+        The tiles are placed in a straight line along the initial direction (DIR_A).
+        All generated tiles are marked as safe (is_safe=True) to allow the player to stand still.
+        """
+        # Reset total generated counter for accurate safe zone tracking
+        self._total_generated = 0
+        col, row = self._last_pos
+        # Generate 7 consecutive safe tiles in the initial direction
+        for i in range(7):
+            self._add_tile(col, row, is_safe=True)
+            self.path.append((col, row))
+            self._total_generated += 1
+            # Move to next position along the initial direction
+            col += self.DIR_A[0]
+            row += self.DIR_A[1]
+        # Set the last position to the final tile of the safe zone
+        self._last_pos = (col - self.DIR_A[0], row - self.DIR_A[1])
+        # Ensure the path index starts at the first tile
+        self.path_index = 0
 
     def _append_segment(self):
         """
@@ -199,8 +258,8 @@ class GridManager:
         for _ in range(length):
             col += cur_dir[0]
             row += cur_dir[1]
-            self._add_center(col, row)
-            self._add_width(col, row, cur_dir)
+            is_safe = self._add_center(col, row)
+            self._add_width(col, row, cur_dir, is_safe=is_safe)
             if mark_fork:
                 self.fork_tiles.add((col, row))
             
@@ -252,8 +311,8 @@ class GridManager:
         for _ in range(FORK_SHORT_LEN):
             col += cur_dir[0]
             row += cur_dir[1]
-            self._add_center(col, row)
-            self._add_width(col, row, cur_dir)
+            is_safe = self._add_center(col, row)
+            self._add_width(col, row, cur_dir, is_safe=is_safe)
         # short_end คือ merge point
         merge_col, merge_row = col, row
 
@@ -266,14 +325,14 @@ class GridManager:
         for _ in range(SIDE_OFFSET):
             lc += perp[0]
             lr += perp[1]
-            self.path_set.add((lc, lr))
+            self._add_tile(lc, lr, is_fork=True)
             self.fork_tiles.add((lc, lr))
 
         # วิ่งตรงขนาน (เพิ่ม Gem ที่นี่)
         for _ in range(FORK_LONG_LEN):
             lc += cur_dir[0]
             lr += cur_dir[1]
-            self.path_set.add((lc, lr))
+            self._add_tile(lc, lr, is_fork=True)
             self.fork_tiles.add((lc, lr))
             
             # สุ่มวาง Gem บนทางแยก (Long Branch)
@@ -286,7 +345,7 @@ class GridManager:
         for _ in range(SIDE_OFFSET):
             lc -= perp[0]
             lr -= perp[1]
-            self.path_set.add((lc, lr))
+            self._add_tile(lc, lr, is_fork=True)
             self.fork_tiles.add((lc, lr))
 
         # บันทึก merge point
@@ -323,9 +382,17 @@ class GridManager:
         pos = (col, row)
         if pos not in self.path_set:
             self.path.append(pos)
-            self.path_set.add(pos)
+            self._total_generated += 1
+            is_safe = False
+            if self._total_generated <= 7:
+                is_safe = True
+            elif self._total_generated % 100 < 6:
+                is_safe = True
+            self._add_tile(col, row, is_safe=is_safe)
+            return is_safe
+        return False
 
-    def _add_width(self, col, row, direction):
+    def _add_width(self, col, row, direction, is_safe=False):
         """ขยาย PATH_WIDTH ตั้งฉากกับ direction (ถ้ามากกว่า 1)"""
         if PATH_WIDTH <= 1:
             return
@@ -334,5 +401,5 @@ class GridManager:
         half = PATH_WIDTH // 2
         for sign in [1, -1]:
             for d in range(1, half + 1):
-                self.path_set.add((col + perp[0]*d*sign,
-                                   row + perp[1]*d*sign))
+                self._add_tile(col + perp[0]*d*sign,
+                               row + perp[1]*d*sign, is_safe=is_safe)
