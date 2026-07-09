@@ -1,4 +1,4 @@
-# � PENGUIN DASH - Kivy Project Assignment
+# 🐧 PENGUIN DASH - Kivy Project Assignment
 
 **Penguin Dash** เป็นโปรเจกต์เกมแนว Endless Runner พัฒนาด้วย Kivy Framework (Python) สำหรับส่งวิชาการเขียนโปรแกรม โดยเน้นการสร้าง Application ที่มีความสวยงาม ลื่นไหล และมีระบบ Logic ที่ซับซ้อนตามเงื่อนไขที่อาจารย์กำหนด
 
@@ -80,13 +80,76 @@
 
 ---
 
-## วิธีการรันโปรแกรม (How to Run)
+## 🚀 Dev Setup (5 นาที)
 
-1. **เตรียม Environment:**
-   ```bash
-   pip install kivy[base] ffpyplayer
-   ```
-2. **เริ่มเกม:**
-   ```bash
-   python main.py
-   ```
+```bash
+python3.12 -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements-dev.txt
+pre-commit install --install-hooks -t pre-commit -t pre-push
+python main.py
+```
+
+`requirements-dev.txt` ติดตั้ง Kivy/ffpyplayer (`requirements.txt`) บวกเครื่องมือ dev ทั้งหมด: pytest, ruff, mypy, pre-commit
+
+## 🗂 Architecture Map
+
+```
+main.py            # entry point — ScreenManager + Builder.load_file("style.kv")
+style.kv            # Kivy UI/layout definitions (kv language) ของทุกหน้าจอ
+
+core/               # ระบบกลาง ไม่ผูกกับหน้าจอใดหน้าจอหนึ่ง — มี type hints ครบ
+  config.py           ค่าคงที่: ขนาดหน้าจอ, grid, ความเร็ว
+  state.py            StateManager (Singleton) — สถานะเกมภาพรวม (MENU/PLAYING/...)
+  database.py         DatabaseManager — SQLite: player, session, score, owned skins
+  audio.py            AudioManager — BGM/SFX ผ่าน Kivy SoundLoader
+  logger.py           logger กลางของแอป
+
+game/               # gameplay logic
+  grid.py             GridManager — สร้างเส้นทาง zigzag/fork แบบ procedural, isometric mapping
+  penguin.py          ตัวละครผู้เล่น
+  blocks.py           Obstacle (กล่องน้ำแข็งแบบ stack, ถูกชนแล้วแตกทีละชั้น)
+  gem.py              ไอเทมสะสม
+  pool.py             ObjectPool — reuse obstacle/gem objects กัน GC กระตุก
+  obstacle_factory.py สุ่มความยากของ obstacle/gem ตามระยะทาง
+  particles.py        เอฟเฟกต์อนุภาค
+  entity.py           base class ของ entity ในเกม
+
+screens/            # แต่ละไฟล์ = 1 หน้าจอ (ScreenManager screen)
+  menu.py, gameplay.py, gameover.py, history.py, shop.py, pause.py
+
+ui/                 # widget ที่ใช้ซ้ำข้ามหลายหน้าจอ
+  components.py       HoverButton, AnimatedSkin ฯลฯ
+
+tests/              # pytest — ดู "Testing" ด้านล่าง
+assets/             # sprites, fonts, sounds
+```
+
+## ✅ Testing & Quality Gates
+
+```bash
+# รัน test suite ทั้งหมด (KIVY_WINDOW=mock ไม่เปิดหน้าต่างจริง)
+env KIVY_NO_ARGS=1 KIVY_WINDOW=mock pytest -v
+
+# lint + format + type check (เหมือนที่ CI รัน)
+ruff check .
+ruff format --check .
+mypy
+
+# รัน quality gate เดียวกับที่ pre-commit จะรันตอน commit/push
+pre-commit run --all-files
+pre-commit run --hook-stage pre-push --all-files
+```
+
+- **ruff/ruff-format** และ hygiene hooks (trailing whitespace, large files ฯลฯ) รันทุกครั้งที่ `git commit`
+- **pytest + mypy** รันทุกครั้งที่ `git push` (pre-push hook) — ช้ากว่าแต่กันโค้ดพังไม่ให้หลุดขึ้น remote
+- `core/` ต้องมี type hints ครบ (`mypy` บังคับ `disallow_untyped_defs`) เพราะเป็นเลเยอร์ที่ backend ในอนาคตจะ import ตรง — `game/`/`screens/`/`ui/` ยังไม่บังคับ (Kivy ไม่มี type stubs)
+- CI (`.github/workflows/ci.yml`) รัน job เดียวกันทุก push เข้า `main` และทุก PR
+
+## 🤝 Contributing
+
+1. Branch ตั้งชื่อด้วย prefix: `feat/`, `fix/`, `chore/`, `test/`, `docs/`, `ci/` — ห้าม push ตรงเข้า `main`
+2. Commit message แบบ [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): message`
+3. ก่อนเปิด PR: รัน `pre-commit run --all-files` และ `pre-commit run --hook-stage pre-push --all-files` ให้ผ่านทั้งคู่
+4. ทุก PR ต้องมี CI เขียว + อีกคน review (CODEOWNERS auto-request ทั้งสองคน)
+5. คำถาม/policy/quiz ข้อมูลเก็บเป็น JSON แยกจาก logic — แก้เนื้อหาไม่ต้องแตะโค้ด
