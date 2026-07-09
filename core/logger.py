@@ -3,7 +3,7 @@ import sys
 
 
 # สร้างระบบ Logger เพื่อใช้ดูสถานะและ Debug ภายในเกม
-def setup_logger(name="PenguinDash"):
+def setup_logger(name: str = "PenguinDash") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
 

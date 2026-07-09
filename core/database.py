@@ -1,4 +1,5 @@
 import sqlite3
+from typing import Any
 
 DB_FILE = "game.db"
 
@@ -6,21 +7,23 @@ DB_FILE = "game.db"
 class DatabaseManager:
     # คลาส Singleton สำหรับจัดการฐานข้อมูล SQLite
     # ใช้สำหรับสร้าง Schema, เก็บประวัติและสถิติของคนเล่น
-    _instance = None
+    _instance: "DatabaseManager | None" = None
+    conn: sqlite3.Connection | None
 
-    def __new__(cls):
+    def __new__(cls) -> "DatabaseManager":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.conn = None
         return cls._instance
 
-    def connect(self):
+    def connect(self) -> None:
         if not self.conn:
             self.conn = sqlite3.connect(DB_FILE)
             self.conn.row_factory = sqlite3.Row
             self._ensure_tables()
 
-    def _ensure_tables(self):
+    def _ensure_tables(self) -> None:
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS players (
@@ -58,14 +61,15 @@ class DatabaseManager:
         """)
         self.conn.commit()
 
-    def close(self):
+    def close(self) -> None:
         if self.conn:
             self.conn.close()
             self.conn = None
 
-    def init_db(self):
+    def init_db(self) -> None:
         """สร้างและเตรียมความพร้อมตารางในฐานข้อมูล SQLite"""
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
 
         # 1. แฟ้มประวัติและกระเป๋าตัวละคร (Players Table)
@@ -120,6 +124,7 @@ class DatabaseManager:
     def get_or_create_player(self, name: str) -> int:
         """ดึง ID ตัวละครตามชื่อ (ถ้าไม่มีชื่อในระบบจะสร้างให้ใหม่)"""
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
 
         # ค้นหาไอดีจากชื่อ
@@ -127,17 +132,21 @@ class DatabaseManager:
         row = cursor.fetchone()
 
         if row:
-            return row["id"]
+            return int(row["id"])
 
         # สร้างโปรไฟล์ใหม่
         cursor.execute("INSERT INTO players (name) VALUES (?)", (name,))
         self.conn.commit()
+        assert cursor.lastrowid is not None
         return cursor.lastrowid
 
-    def save_game_session(self, player_name: str, distance: int, gems: int, duration: float = 0.0):
+    def save_game_session(
+        self, player_name: str, distance: int, gems: int, duration: float = 0.0
+    ) -> None:
         """บันทึกคะแนน ระยะทาง และไอเทม เมื่อจบเกมแต่ละรอบ"""
         player_id = self.get_or_create_player(player_name)
 
+        assert self.conn is not None
         cursor = self.conn.cursor()
 
         # ทบจำนวน Gem เข้ากระเป๋าหลัก
@@ -162,6 +171,7 @@ class DatabaseManager:
     def get_gem_balance(self, player_name: str) -> int:
         """เช็คจำนวน Gem ที่มีในกระเป๋าปัจจุบัน"""
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute("SELECT gem_balance FROM players WHERE name = ?", (player_name,))
         row = cursor.fetchone()
@@ -173,6 +183,7 @@ class DatabaseManager:
         if current_balance < amount:
             return False
 
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute(
             "UPDATE players SET gem_balance = gem_balance - ? WHERE name = ?", (amount, player_name)
@@ -183,6 +194,7 @@ class DatabaseManager:
     def get_personal_best(self, player_name: str) -> int:
         """ดึงคะแนนสูงสุด (Personal Best) ของผู้เล่นชื่อนี้"""
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -198,9 +210,10 @@ class DatabaseManager:
         row = cursor.fetchone()
         return row["pb"] if row and row["pb"] else 0
 
-    def get_history(self, player_name: str, limit: int = 100) -> list[dict]:
+    def get_history(self, player_name: str, limit: int = 100) -> list[dict[str, Any]]:
         """ดึงประวัติการวิ่งย้อนหลัง ไว้แสดงผลในหน้า History - เพิ่มขีดจำกัดเป็น 100"""
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -220,6 +233,7 @@ class DatabaseManager:
     def get_last_player_name(self) -> str:
         """ดึงชื่อผู้เล่นล่าสุดที่บันทึกไว้"""
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT p.name
@@ -234,6 +248,7 @@ class DatabaseManager:
     def is_skin_owned(self, player_name: str, skin_id: str) -> bool:
         """เช็คว่าผู้เล่นคนนี้มีสกินนี้แล้วหรือยัง"""
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -245,10 +260,11 @@ class DatabaseManager:
         )
         return cursor.fetchone() is not None
 
-    def add_owned_skin(self, player_name: str, skin_id: str):
+    def add_owned_skin(self, player_name: str, skin_id: str) -> None:
         """เพิ่มสกินที่ซื้อแล้วลงในฐานข้อมูล"""
         player_id = self.get_or_create_player(player_name)
         self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cursor.execute(
             """

@@ -1,18 +1,27 @@
+from typing import Any
+
 from kivy.core.audio import SoundLoader
 
 SOUND_DIR = "assets/Component_UI/Sounds/"
 
 
 class AudioManager:
-    _instance = None
+    _instance: "AudioManager | None" = None
+    _initialized: bool
+    bgm: Any
+    bgm_volume: float
+    sfx_volume: float
+    bgm_muted: bool
+    sfx_paths: dict[str, str]
+    sounds: dict[str, Any]
 
-    def __new__(cls):
+    def __new__(cls) -> "AudioManager":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         if self._initialized:
             return
         self._initialized = True
@@ -41,13 +50,13 @@ class AudioManager:
             if s:
                 self.sounds[name] = s
 
-    def toggle_mute(self):  # สลับเปิด/ปิดเสียง BGM
+    def toggle_mute(self) -> bool:  # สลับเปิด/ปิดเสียง BGM
         self.bgm_muted = not self.bgm_muted
         if self.bgm:
             self.bgm.volume = 0 if self.bgm_muted else self.bgm_volume
         return self.bgm_muted  # คืนค่า state ให้ UI อัปเดตปุ่ม
 
-    def play_bgm(self, filename, loop=True):
+    def play_bgm(self, filename: str, loop: bool = True) -> None:
         self.stop_bgm()
         path = f"{SOUND_DIR}{filename}"
         self.bgm = SoundLoader.load(path)
@@ -59,12 +68,12 @@ class AudioManager:
         else:
             print(f"[AudioManager] ⚠️ โหลด BGM ไม่ได้: {filename}")
 
-    def stop_bgm(self):
+    def stop_bgm(self) -> None:
         if self.bgm:
             self.bgm.stop()
             self.bgm = None
 
-    def play_sfx(self, name):
+    def play_sfx(self, name: str) -> None:
         if self.bgm_muted:
             return
         sound = self.sounds.get(name.lower())
@@ -77,7 +86,7 @@ class AudioManager:
         else:
             print(f"[AudioManager] ⚠️ ไม่พบหรือโหลด SFX ไม่ได้: {name}")
 
-    def set_bgm_volume(self, volume):
+    def set_bgm_volume(self, volume: float) -> None:
         self.bgm_volume = volume
         if self.bgm:
             self.bgm.volume = volume
