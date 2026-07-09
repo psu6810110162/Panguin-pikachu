@@ -1,27 +1,27 @@
-from game.gem import Gem       # นำเข้าคลาสไอเทม Gem
-from core.logger import logger
+from game.blocks import Obstacle
+from game.gem import Gem
 
 class ObjectPool:
     """
-    ระบบ Object Pooling สำหรับ Gem
-    - ช่วยลดปัญหาการสร้างและลบวัตถุใหม่ซ้ำๆ (Frequent Allocation/Deallocation)
-    - obstacles ย้ายไปใช้ prop string แทน (ไม่ต้อง pool แล้ว)
+    ระบบ Object Pooling สำหรับ Obstacle และ Gem 
+    ลดปัญหา Framerate ตกจากการใช้ Garbage Collector บ่อยเกินไปในเกมแนววิ่ง
     """
-    def __init__(self, create_func, initial_size=20, max_size=200):
+    def __init__(self, create_func, initial_size=20):
         self.create_func = create_func
-        self.max_size = max_size
         self.pool = [self.create_func() for _ in range(initial_size)]
-
+        
     def get(self):
+        # หา Object ที่ถูกปิดการใช้งานเพื่อนำกลับมาใช้ใหม่
         for obj in self.pool:
-            if not getattr(obj, 'active', False):
+            if not getattr(obj, 'active', False): 
                 return obj
-        if len(self.pool) >= self.max_size:
-            logger.warning(f"ObjectPool exceeded max_size={self.max_size}; possible leak")
+                
+        # หากใช้หมดแล้วจริงๆ ให้ขยาย Pool เพิ่ม
         new_obj = self.create_func()
         self.pool.append(new_obj)
         return new_obj
 
+# สร้างระบบสระเก็บไว้เรียกใช้งานได้ทันที 
 class Pools:
-    # Gem pool ยังใช้ Object Pooling (มี animation state)
+    obstacles = ObjectPool(lambda: Obstacle(), initial_size=20)
     gems = ObjectPool(lambda: Gem(), initial_size=10)

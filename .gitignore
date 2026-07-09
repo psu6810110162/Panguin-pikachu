@@ -1,28 +1,5 @@
-# OS
-.DS_Store
-**/.DS_Store
-
-# Python
-__pycache__/
-*.pyc
-venv/
-.venv/
-
-# Node
-node_modules/
-# keep package-lock.json for reproducibility
-
-# Local DB & dev notes
-game.db
 Doc.md
+game.db
 
-# Claude
-.claude/worktrees/
-
-# Test / coverage caches
-.pytest_cache/
-.coverage
-
-# Generated report artifacts
-assets/report_figures/captures/
-NSC2026_Report_TheGreatMelt.docx
+**/__pycache__/
+*.pyc

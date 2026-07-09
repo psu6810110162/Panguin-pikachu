@@ -1,22 +1,22 @@
 import logging
 import sys
 
+# สร้างระบบ Logger เพื่อใช้ดูสถานะและ Debug ภายในเกม
 def setup_logger(name="PenguinDash"):
-    """ ฟังก์ชันตั้งค่าพื้นฐานสำหรับระบบ Logger (บันทึกเหตุการณ์) """
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG) # ตั้งระดับความละเอียดที่ DEBUG (เห็นข้อความทั้งหมด)
+    logger.setLevel(logging.DEBUG)
 
-    # ตรวจสอบเพื่อป้องกันการสร้าง Handler ซ้ำซ้อน (หลีกเลี่ยง Log บรรทัดเดียวพิมพ์หลายครั้ง)
+    # ไม่ให้ log ซ้ำซ้อนถ้ามีการเรียก setup ซ้ำ
     if not logger.handlers:
-        # กำหนดรูปแบบการแสดงผล: เวลา [ระดับความสำคัญ] ชื่อไฟล์สคริปต์: ข้อความแจ้งเตือน
+        # กำหนดรูปแบบการแสดงผล: เวลา [ระดับ] ชื่อสคริปต์: ข้อความ
         formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(module)s: %(message)s', datefmt='%H:%M:%S')
 
-        # กำหนดให้ผลลัพธ์พิมพ์ออกทางจอภาพ (Console/Stdout)
+        # พิมพ์ออกหน้าจอคอนโซล
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
     return logger
 
-# สร้างตัวแปร Global logger เพื่อให้ไฟล์อื่นๆ import ไปใช้งานได้ทันที
+# สร้าง Global logger ไว้เรียกใช้งาน
 logger = setup_logger()

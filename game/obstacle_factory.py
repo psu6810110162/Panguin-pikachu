@@ -1,65 +1,32 @@
 import random
-from game.blocks import PROP_ICE1, PROP_ICE2, PROP_ICE3, PROP_FORCE, PROP_TRAP
 from game.pool import Pools
-
 
 class ObstacleFactory:
     """
-    Biome-aware prop factory — density ควบคุมโดย grid._obstacle_chance()
-    _pick_prop() เลือก *ประเภท* ไม่คืน BLANK (ทำให้มองเห็นได้ชัดเจน)
-    หมายเหตุ: PROP_REVERSE ถูกเอาออกจาก game design แล้ว
+    ตัวนำวัตถุดิบจาก Object Pool มาประกอบสร้างและส่งให้ตัวเกม
+    หน้าที่หลัก: สุ่มระดับความยาก (Size 1-5) ตามระยะทางที่ผู้เล่นวิ่งมา
     """
-
     @staticmethod
-    def spawn_prop(awareness_m, col_position, row_position):
-        """คืน prop string — เรียกเฉพาะเมื่อ obstacle_chance ผ่านแล้ว"""
-        return ObstacleFactory._pick_prop(awareness_m)
-
-    @staticmethod
-    def _pick_prop(d):
-        """
-        เลือกประเภท prop ตาม Awareness Index
-        ไม่คืน BLANK — density ถูกควบคุมที่ grid._obstacle_chance() แล้ว
-        force spacing (max 1/100m) บังคับที่ grid._build_straight()
-
-        Biome zones:
-          0–15 m   : safe start (grid ไม่เรียก factory ช่วงนี้)
-          15–80 m  : Arctic Ice  — ice1 + force
-          80–250 m : Drought     — ice1/ice2 + force
-          250–500 m: Flood       — ice1/2/3 + force + trap
-          500+ m   : Wildfire    — full mix หนาแน่น
-        """
-        r = random.random()
-
-        # Zone 1: Arctic Ice — สอนผู้เล่นก่อน
-        if d < 80:
-            if r < 0.70: return PROP_ICE1
-            return PROP_FORCE
-
-        # Zone 2: Drought — ice2 โผล่
-        if d < 250:
-            if r < 0.40: return PROP_ICE1
-            if r < 0.70: return PROP_ICE2
-            return PROP_FORCE
-
-        # Zone 3: Flood — ice3 + trap เริ่มโผล่
-        if d < 500:
-            if r < 0.25: return PROP_ICE1
-            if r < 0.50: return PROP_ICE2
-            if r < 0.68: return PROP_ICE3
-            if r < 0.84: return PROP_FORCE
-            return PROP_TRAP
-
-        # Zone 4: Wildfire — full mix, ice3/trap หนัก
-        if r < 0.15: return PROP_ICE1
-        if r < 0.35: return PROP_ICE2
-        if r < 0.55: return PROP_ICE3
-        if r < 0.72: return PROP_FORCE
-        return PROP_TRAP
-
+    def spawn_obstacle(distance_m, col_position, row_position):
+        # 1. ขอบล็อกที่ไม่ได้ถูกใช้งานจาก Pool
+        obs = Pools.obstacles.get()
+        
+        # 2. คำนวณความยาก
+        # วิ่งไปยิ่งไกล ยิ่งมีโอกาสสุ่มเจอบล็อกระดับ 4-5 มากขึ้น
+        max_size = min(4, 1 + (distance_m // 100)) # เพิ่ม Size สูงสุดทุกๆ 100 เมตร (สูงสุด 4)
+        
+        # 3. ตั้งค่าแล้วรีเซ็ต
+        random_size = random.randint(1, max_size)
+        obs.reset(size=random_size)
+        
+        # 4. (ตัวแปรเสริมสำหรับประกอบร่างลงหน้าจอ)
+        obs.col = col_position
+        obs.row = row_position
+        
+        return obs
+        
     @staticmethod
     def spawn_gem(col_position, row_position):
-        """สร้าง Gem จาก Object Pool"""
         gem = Pools.gems.get()
         gem.reset()
         gem.col = col_position

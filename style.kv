@@ -1,908 +1,474 @@
 #:kivy 2.1.0
 
-# ═══════════════════════════════════════════════════════════════
-#  THE GREAT MELT  —  Arctic Ice Design System
-#  Color tokens:
-#    NAVY    (0.06, 0.12, 0.26, 0.90)  panel background
-#    ICE     (0.22, 0.60, 0.88, 1.00)  primary button / accent
-#    DARK    (0.10, 0.22, 0.42, 0.95)  secondary / pressed
-#    FROST   (0.70, 0.90, 1.00, 1.00)  subtitle / muted text
-#    CRACK   (1.00, 0.50, 0.15, 1.00)  danger / game-over
-#    GOLD    (1.00, 0.80, 0.20, 1.00)  gems / score
-# ═══════════════════════════════════════════════════════════════
-
-
-# ── MENU SCREEN ──────────────────────────────────────────────────────────────
 <MenuScreen>:
     canvas.before:
         Rectangle:
-            source: 'assets/great_melt/background/arctic_bg.png'
-            pos: self.pos
-            size: self.size
-        # Dark vignette overlay so text pops
-        Color:
-            rgba: 0, 0, 0, 0.35
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
-    FloatLayout:
-
-        # ── Centre panel ──────────────────────────────────────
-        BoxLayout:
-            orientation: 'vertical'
-            size_hint: (0.55, 0.78)
-            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-            spacing: 18
-            padding: [0, 0, 0, 0]
-            canvas.before:
-                Color:
-                    rgba: 0.06, 0.12, 0.26, 0.88
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [24,]
-                Color:
-                    rgba: 0.22, 0.60, 0.88, 0.40
-                Line:
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 24)
-                    width: 1.5
-
-            # Title
-            Label:
-                text: 'THE GREAT MELT'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                font_size: '52sp'
-                bold: True
-                size_hint_y: 0.22
-                color: 0.70, 0.92, 1.0, 1
-                outline_color: 0.06, 0.12, 0.26, 1
-                outline_width: 3
-
-            # Subtitle tagline
-            Label:
-                id: tagline_lbl
-                text: 'Every step counts. The ice won\'t wait.'
-                font_name: 'assets/Component_UI/Font/Kenney Future Narrow.ttf'
-                font_size: '16sp'
-                size_hint_y: 0.08
-                color: 0.70, 0.90, 1.0, 0.70
-
-            Widget:
-                size_hint_y: 0.02
-
-            # START GAME button (primary — ice blue fill)
-            HoverButton:
-                id: start_btn
-                text: 'START GAME'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                font_size: '22sp'
-                bold: True
-                size_hint: (0.78, 0.14)
-                pos_hint: {'center_x': 0.5}
-                background_normal: ''
-                background_down: ''
-                background_color: 0, 0, 0, 0
-                color: 1, 1, 1, 1
-                on_release: root.start_game()
-                canvas.before:
-                    Color:
-                        rgba: (0.18, 0.52, 0.82, 1) if self.state == 'normal' else (0.10, 0.35, 0.62, 1)
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [14,]
-                    Color:
-                        rgba: 0.50, 0.80, 1.0, 0.35
-                    Line:
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 14)
-                        width: 1.2
-
-            # SHOP button (secondary — dark fill)
-            HoverButton:
-                id: skins_btn
-                text: 'SKINS'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                font_size: '20sp'
-                size_hint: (0.78, 0.12)
-                pos_hint: {'center_x': 0.5}
-                background_normal: ''
-                background_down: ''
-                background_color: 0, 0, 0, 0
-                color: 0.70, 0.92, 1.0, 1
-                on_release: root.go_to_shop()
-                canvas.before:
-                    Color:
-                        rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [14,]
-                    Color:
-                        rgba: 0.22, 0.60, 0.88, 0.30
-                    Line:
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 14)
-                        width: 1
-
-            # HISTORY button (secondary)
-            HoverButton:
-                id: history_btn
-                text: 'HISTORY'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                font_size: '20sp'
-                size_hint: (0.78, 0.12)
-                pos_hint: {'center_x': 0.5}
-                background_normal: ''
-                background_down: ''
-                background_color: 0, 0, 0, 0
-                color: 0.70, 0.92, 1.0, 1
-                on_release: root.go_to_history()
-                canvas.before:
-                    Color:
-                        rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [14,]
-                    Color:
-                        rgba: 0.22, 0.60, 0.88, 0.30
-                    Line:
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 14)
-                        width: 1
-
-            # CLIMATE REPORT button
-            HoverButton:
-                id: climate_btn
-                text: 'CLIMATE REPORT'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                font_size: '18sp'
-                size_hint: (0.78, 0.12)
-                pos_hint: {'center_x': 0.5}
-                background_normal: ''
-                background_down: ''
-                background_color: 0, 0, 0, 0
-                color: 1.00, 0.80, 0.20, 1
-                on_release: root.go_to_climate_report()
-                canvas.before:
-                    Color:
-                        rgba: (0.10, 0.22, 0.14, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.09, 1)
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [14,]
-                    Color:
-                        rgba: 0.20, 0.80, 0.35, 0.40
-                    Line:
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 14)
-                        width: 1
-
-            Widget:
-                size_hint_y: 0.08
-
-        # ── EXIT (bottom-left) ───────────────────────────────
-        HoverButton:
-            id: exit_btn
-            text: 'EXIT'
-            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            font_size: '16sp'
-            size_hint: (None, None)
-            size: (110, 44)
-            pos_hint: {'x': 0.02, 'y': 0.02}
-            background_normal: ''
-            background_down: ''
-            background_color: 0, 0, 0, 0
-            color: 0.60, 0.80, 1.0, 0.80
-            on_release: root.exit_game()
-            canvas.before:
-                Color:
-                    rgba: 0.08, 0.18, 0.35, 0.85
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [10,]
-                Color:
-                    rgba: 0.22, 0.60, 0.88, 0.25
-                Line:
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 10)
-                    width: 1
-
-        # ── Sound toggle (bottom-right) ──────────────────────
-        HoverButton:
-            id: sound_btn
-            background_normal: 'assets/Component_UI/Button Sounds/volume_up.png'
-            background_down: 'assets/Component_UI/Button Sounds/volume_down.png'
-            background_color: 0.70, 0.92, 1.0, 0.85
-            border: (0, 0, 0, 0)
-            size_hint: (None, None)
-            size: (72, 72)
-            pos_hint: {'right': 0.98, 'y': 0.02}
-            on_release: root.toggle_sound()
-
-
-# ── GAMEPLAY SCREEN ───────────────────────────────────────────────────────────
-<GamePlayScreen>:
-    canvas.before:
-        Rectangle:
-            source: 'assets/great_melt/background/arctic_bg.png'
-            pos: self.pos
-            size: self.size
-
-
-# ── GAME OVER SCREEN ──────────────────────────────────────────────────────────
-<GameOverScreen>:
-    canvas.before:
-        Rectangle:
-            source: 'assets/great_melt/background/arctic_bg.png'
-            pos: self.pos
-            size: self.size
-        Color:
-            rgba: 0, 0, 0, 0.65
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
-    # Centre card
-    RelativeLayout:
-        size_hint: (0.52, 0.80)
-        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-        canvas.before:
-            Color:
-                rgba: 0.06, 0.12, 0.26, 0.92
-            RoundedRectangle:
-                pos: 0, 0
-                size: self.size
-                radius: [22,]
-            Color:
-                rgba: 1.0, 0.50, 0.15, 0.55
-            Line:
-                rounded_rectangle: (0, 0, self.width, self.height, 22)
-                width: 2
-
-        BoxLayout:
-            orientation: 'vertical'
-            padding: [40, 40, 40, 40]
-            spacing: 18
-
-            # Title
-            Label:
-                text: 'GAME OVER'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                font_size: '52sp'
-                bold: True
-                size_hint_y: 0.20
-                color: 1.0, 0.50, 0.15, 1
-                outline_color: 0.06, 0.12, 0.26, 1
-                outline_width: 3
-
-            # Score (Awareness Index)
-            Label:
-                id: score_label
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                text: 'AWARENESS INDEX: -- M'
-                font_size: '26sp'
-                size_hint_y: 0.12
-                color: 1.0, 0.80, 0.20, 1
-
-            # Climate fact
-            Label:
-                id: climate_fact_label
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                text: ''
-                font_size: '13sp'
-                size_hint_y: 0.13
-                color: 0.55, 0.88, 1.0, 0.90
-                halign: 'center'
-                valign: 'middle'
-                text_size: self.size
-
-            # Divider
-            Widget:
-                size_hint_y: 0.02
-                canvas:
-                    Color:
-                        rgba: 0.22, 0.60, 0.88, 0.30
-                    Rectangle:
-                        pos: self.x + 20, self.center_y
-                        size: self.width - 40, 1
-
-            # Name input
-            TextInput:
-                id: name_input
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                hint_text: 'ENTER YOUR NAME'
-                font_size: '18sp'
-                multiline: False
-                size_hint: (0.88, 0.13)
-                pos_hint: {'center_x': 0.5}
-                background_color: 0.08, 0.18, 0.38, 0.90
-                foreground_color: 1, 1, 1, 1
-                cursor_color: 0.70, 0.92, 1.0, 1
-                hint_text_color: 0.40, 0.65, 0.85, 0.60
-                padding: [16, 12, 16, 12]
-                canvas.after:
-                    Color:
-                        rgba: 0.22, 0.60, 0.88, 0.45
-                    Line:
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 8)
-                        width: 1.2
-
-            # RETRY button (primary)
-            HoverButton:
-                id: retry_btn
-                text: 'PLAY AGAIN'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                font_size: '24sp'
-                bold: True
-                size_hint: (0.88, 0.15)
-                pos_hint: {'center_x': 0.5}
-                background_normal: ''
-                background_down: ''
-                background_color: 0, 0, 0, 0
-                color: 1, 1, 1, 1
-                on_release: root.retry_game()
-                canvas.before:
-                    Color:
-                        rgba: (0.18, 0.52, 0.82, 1) if self.state == 'normal' else (0.10, 0.35, 0.62, 1)
-                    RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [13,]
-                    Color:
-                        rgba: 0.50, 0.80, 1.0, 0.30
-                    Line:
-                        rounded_rectangle: (self.x, self.y, self.width, self.height, 13)
-                        width: 1
-
-            # Bottom row: HISTORY + HOME
-            BoxLayout:
-                orientation: 'horizontal'
-                size_hint: (0.88, 0.11)
-                pos_hint: {'center_x': 0.5}
-                spacing: 12
-
-                HoverButton:
-                    id: go_history_btn
-                    text: 'HISTORY'
-                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                    font_size: '17sp'
-                    background_normal: ''
-                    background_down: ''
-                    background_color: 0, 0, 0, 0
-                    color: 0.70, 0.92, 1.0, 1
-                    on_release: root.view_history()
-                    canvas.before:
-                        Color:
-                            rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                        RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [12,]
-                        Color:
-                            rgba: 0.22, 0.60, 0.88, 0.28
-                        Line:
-                            rounded_rectangle: (self.x, self.y, self.width, self.height, 12)
-                            width: 1
-
-                HoverButton:
-                    id: home_btn
-                    text: 'HOME'
-                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                    font_size: '17sp'
-                    background_normal: ''
-                    background_down: ''
-                    background_color: 0, 0, 0, 0
-                    color: 0.70, 0.92, 1.0, 1
-                    on_release: root.go_home()
-                    canvas.before:
-                        Color:
-                            rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                        RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [12,]
-                        Color:
-                            rgba: 0.22, 0.60, 0.88, 0.28
-                        Line:
-                            rounded_rectangle: (self.x, self.y, self.width, self.height, 12)
-                            width: 1
-
-
-# ── HISTORY SCREEN ────────────────────────────────────────────────────────────
-<HistoryScreen>:
-    canvas.before:
-        Rectangle:
-            source: 'assets/great_melt/background/arctic_bg.png'
-            pos: self.pos
-            size: self.size
-        Color:
-            rgba: 0, 0, 0, 0.50
-        Rectangle:
+            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
             pos: self.pos
             size: self.size
 
     BoxLayout:
         orientation: 'vertical'
-        size_hint: (0.70, 0.82)
-        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-        padding: [40, 30, 40, 30]
-        spacing: 18
-        canvas.before:
-            Color:
-                rgba: 0.06, 0.12, 0.26, 0.90
-            RoundedRectangle:
-                pos: self.pos
-                size: self.size
-                radius: [20,]
-            Color:
-                rgba: 0.22, 0.60, 0.88, 0.35
-            Line:
-                rounded_rectangle: (self.x, self.y, self.width, self.height, 20)
-                width: 1.5
+        padding: [0, 50, 0, 50]
+        spacing: 0
 
-        # Title
+        # ── Title ──
         Label:
-            id: leaderboard_lbl
+            text: 'Penguin Dash'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            text: 'LEADERBOARD'
-            font_size: '36sp'
+            font_size: '64sp'
             bold: True
-            size_hint_y: None
-            height: 60
-            color: 0.70, 0.92, 1.0, 1
-            outline_color: 0.06, 0.12, 0.26, 1
+            size_hint_y: 0.25
+            color: 1, 1, 1, 1
+            outline_color: 0, 0, 0, 1
             outline_width: 2
 
-        # Divider
+        # ── Spacer ──
         Widget:
-            size_hint_y: None
-            height: 1
-            canvas:
-                Color:
-                    rgba: 0.22, 0.60, 0.88, 0.40
-                Rectangle:
-                    pos: self.x + 10, self.y
-                    size: self.width - 20, 1
+            size_hint_y: 0.08
 
-        # Scroll list
+        # ── Hero START GAME ──
+        HoverButton:
+            text: 'START GAME'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '32sp'
+            size_hint: (0.45, 0.18)
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (20, 20, 20, 20)
+            color: 1, 1, 1, 1
+            on_release: root.start_game()
+
+        # ── Spacer ──
+        Widget:
+            size_hint_y: 0.12
+
+        # ── Icon Row ──
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: (0.6, 0.22)
+            pos_hint: {'center_x': 0.5}
+            spacing: 0
+
+            # SHOP
+            BoxLayout:
+                orientation: 'vertical'
+                spacing: 8
+                HoverButton:
+                    size_hint: (None, None)
+                    size: (90, 90)
+                    pos_hint: {'center_x': 0.5}
+                    background_normal: 'assets/Component_UI/shop/medal_normal.png'
+                    background_down: 'assets/Component_UI/shop/medal_normal.png'
+                    background_color: (1, 1, 1, 1)
+                    border: (0, 0, 0, 0)
+                    on_release: root.go_to_shop()
+                Label:
+                    text: 'SHOP'
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    font_size: '14sp'
+                    color: 1, 1, 1, 0.8
+                    size_hint_y: None
+                    height: 22
+                    halign: 'center'
+
+            # SOUND
+            BoxLayout:
+                orientation: 'vertical'
+                spacing: 8
+                HoverButton:
+                    id: sound_btn
+                    size_hint: (None, None)
+                    size: (90, 90)
+                    pos_hint: {'center_x': 0.5}
+                    background_normal: 'assets/Component_UI/Button Sounds/volume_up.png'
+                    background_down: 'assets/Component_UI/Button Sounds/volume_down.png'
+                    background_color: (1, 1, 1, 1)
+                    border: (0, 0, 0, 0)
+                    on_release: root.toggle_sound()
+                Label:
+                    text: 'SOUND'
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    font_size: '14sp'
+                    color: 1, 1, 1, 0.8
+                    size_hint_y: None
+                    height: 22
+                    halign: 'center'
+
+            # HISTORY
+            BoxLayout:
+                orientation: 'vertical'
+                spacing: 8
+                HoverButton:
+                    size_hint: (None, None)
+                    size: (90, 90)
+                    pos_hint: {'center_x': 0.5}
+                    background_normal: 'assets/Component_UI/history/trophy_normal.png'
+                    background_down: 'assets/Component_UI/history/trophy_normal.png'
+                    background_color: (1, 1, 1, 1)
+                    border: (0, 0, 0, 0)
+                    on_release: root.go_to_history()
+                Label:
+                    text: 'HISTORY'
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    font_size: '14sp'
+                    color: 1, 1, 1, 0.8
+                    size_hint_y: None
+                    height: 22
+                    halign: 'center'
+
+        # ── Spacer ──
+        Widget:
+            size_hint_y: 0.08
+
+        # ── EXIT (กลางล่าง) ──
+        HoverButton:
+            text: 'EXIT'
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            font_size: '18sp'
+            size_hint: (0.2, 0.08)
+            pos_hint: {'center_x': 0.5}
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (20, 20, 20, 20)
+            color: 1, 1, 1, 1
+            on_release: root.exit_game()
+
+            
+<GamePlayScreen>:
+    canvas.before:
+        Rectangle:
+            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
+            pos: self.pos
+            size: self.size
+    # เนื้อหาเดิมของ Gameplay จะถูกย้ายมาที่นี่ในภายหลังถ้าย้ายออกจาก python
+
+<GameOverScreen>:
+    canvas.before:
+        # Semi-transparent dark overlay for background
+        Color:
+            rgba: 0, 0, 0, 0.7
+        Rectangle:
+            pos: self.pos
+            size: self.size
+            
+    BoxLayout:
+        orientation: 'vertical'
+        padding: [50, 100, 50, 100]
+        spacing: 30
+        
+        # Glass Panel
+        RelativeLayout:
+            size_hint: (1, 1)
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 0.1  # Glass transparency
+                RoundedRectangle:
+                    pos: 0, 0
+                    size: self.size
+                    radius: [20,]
+                Color:
+                    rgba: 1, 1, 1, 0.2  # Glass border
+                Line:
+                    rounded_rectangle: (0, 0, self.width, self.height, 20)
+                    width: 1.2
+
+            BoxLayout:
+                orientation: 'vertical'
+                padding: [20, 40, 20, 40]
+                spacing: 20
+                
+                Label:
+                    text: 'GAME OVER'
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    font_size: '56sp'
+                    bold: True
+                    color: 1, 0.3, 0.3, 1
+                    outline_color: 0, 0, 0, 1
+                    outline_width: 2
+                    size_hint_y: 0.25
+                    
+                Label:
+                    id: score_label
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    text: 'DISTANCE: -- M'
+                    font_size: '32sp'
+                    color: 1, 1, 1, 0.9
+                    size_hint_y: 0.15
+                    
+                TextInput:
+                    id: name_input
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    hint_text: 'ENTER YOUR NAME'
+                    font_size: '20sp'
+                    multiline: False
+                    size_hint: (0.8, 0.15)
+                    pos_hint: {'center_x': 0.5}
+                    background_color: 1, 1, 1, 0.05
+                    foreground_color: 1, 1, 1, 1
+                    cursor_color: 1, 1, 1, 1
+                    hint_text_color: 1, 1, 1, 0.4
+                    padding: [15, 10, 15, 10]
+                    canvas.after:
+                        Color:
+                            rgba: 1, 1, 1, 0.2
+                        Line:
+                            rounded_rectangle: (self.x, self.y, self.width, self.height, 5)
+                    
+                HoverButton:
+                    text: 'RETRY'
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    font_size: '28sp'
+                    size_hint: (0.9, 0.2)
+                    pos_hint: {'center_x': 0.5}
+                    background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                    background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                    border: (10, 10, 10, 10)
+                    on_release: root.retry_game()
+                    
+                BoxLayout:
+                    orientation: 'horizontal'
+                    size_hint: (0.9, 0.15)
+                    pos_hint: {'center_x': 0.5}
+                    spacing: 15
+                    
+                    HoverButton:
+                        text: 'HISTORY'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '18sp'
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.view_history()
+                        
+                    HoverButton:
+                        text: 'HOME'
+                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                        font_size: '18sp'
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.go_home()
+<HistoryScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 50
+        spacing: 20
+        
+        Label:
+            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+            text: 'LEADERBOARD & HISTORY'
+            font_size: '36sp'
+            bold: True
+            size_hint_y: 0.2
+            
         ScrollView:
-            size_hint_y: 1
-            bar_color: 0.22, 0.60, 0.88, 0.60
-            bar_inactive_color: 0.22, 0.60, 0.88, 0.20
-            bar_width: 4
+            size_hint_y: 0.6
             BoxLayout:
                 id: history_list
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: 6
-                padding: [0, 4, 0, 4]
-
-        # BACK button
+                
+                # Placeholder for History Rows
+                Label:
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    text: '1. 24/02/2569: 120 m (5 Gems) 🏆'
+                    font_size: '20sp'
+                    size_hint_y: None
+                    height: 50
+                    
+                Label:
+                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                    text: '2. 24/02/2569: 80 m (3 Gems)'
+                    font_size: '20sp'
+                    size_hint_y: None
+                    height: 50
+                    
         HoverButton:
-            id: back_btn
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             text: 'BACK'
             font_size: '20sp'
-            size_hint: (0.55, None)
-            height: 52
+            size_hint: (0.6, 0.12)
             pos_hint: {'center_x': 0.5}
-            background_normal: ''
-            background_down: ''
-            background_color: 0, 0, 0, 0
-            color: 0.70, 0.92, 1.0, 1
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (10, 10, 10, 10)
             on_release: root.go_back()
-            canvas.before:
-                Color:
-                    rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [13,]
-                Color:
-                    rgba: 0.22, 0.60, 0.88, 0.30
-                Line:
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 13)
-                    width: 1
 
-
-# ── SHOP SCREEN ───────────────────────────────────────────────────────────────
 <ShopScreen>:
     canvas.before:
         Rectangle:
-            source: 'assets/great_melt/background/arctic_bg.png'
+            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
             pos: self.pos
             size: self.size
-        Color:
-            rgba: 0, 0, 0, 0.45
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
     BoxLayout:
         orientation: 'vertical'
-        size_hint: (0.80, 0.88)
-        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-        padding: [36, 28, 36, 28]
+        padding: 50
         spacing: 20
-        canvas.before:
-            Color:
-                rgba: 0.06, 0.12, 0.26, 0.90
-            RoundedRectangle:
-                pos: self.pos
-                size: self.size
-                radius: [22,]
-            Color:
-                rgba: 0.22, 0.60, 0.88, 0.35
-            Line:
-                rounded_rectangle: (self.x, self.y, self.width, self.height, 22)
-                width: 1.5
-
-        # ── Header row ──────────────────────────────────
+        
         BoxLayout:
-            size_hint_y: None
-            height: 60
+            size_hint_y: 0.2
             Label:
-                id: shop_title_lbl
-                text: 'SKINS'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                text: 'SHOP'
                 font_size: '36sp'
                 bold: True
-                size_hint_x: 0.65
-                color: 0.70, 0.92, 1.0, 1
-                outline_color: 0.06, 0.12, 0.26, 1
-                outline_width: 2
-                halign: 'left'
-                text_size: self.size
-                valign: 'middle'
+                size_hint_x: 0.7
             Label:
                 id: gem_label
-                text: 'GEM --'
-                font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
+                text: 'Gems: 💎 --'
                 font_size: '24sp'
-                size_hint_x: 0.35
-                color: 1.0, 0.80, 0.20, 1
-                halign: 'right'
-                text_size: self.size
-                valign: 'middle'
-
-        # Divider
-        Widget:
-            size_hint_y: None
-            height: 1
-            canvas:
-                Color:
-                    rgba: 0.22, 0.60, 0.88, 0.35
-                Rectangle:
-                    pos: self.x, self.y
-                    size: self.width, 1
-
-        # ── Skin cards grid ─────────────────────────────
+                color: 0.2, 0.8, 1, 1
+                size_hint_x: 0.3
+                
         ScrollView:
-            size_hint_y: 1
-            bar_color: 0.22, 0.60, 0.88, 0.60
-            bar_inactive_color: 0.22, 0.60, 0.88, 0.20
-            bar_width: 4
+            size_hint_y: 0.6
             GridLayout:
                 cols: 2
-                spacing: 16
+                spacing: 20
                 size_hint_y: None
                 height: self.minimum_height
-                padding: [0, 4, 0, 4]
-
-                # ── Classic ──────────────────────────────
+                
+                # ─── Skin 1: Ninja Frog ───
                 BoxLayout:
                     orientation: 'vertical'
                     size_hint_y: None
                     height: 220
-                    padding: [16, 16, 16, 14]
-                    spacing: 10
+                    padding: 15
+                    spacing: 12
                     canvas.before:
                         Color:
-                            rgba: 0.10, 0.20, 0.38, 0.92
+                            rgba: 0.2, 0.2, 0.3, 0.9
                         RoundedRectangle:
                             pos: self.pos
                             size: self.size
-                            radius: [16,]
-                        Color:
-                            rgba: 0.22, 0.60, 0.88, 0.30
-                        Line:
-                            rounded_rectangle: (self.x, self.y, self.width, self.height, 16)
-                            width: 1
+                            radius: [15,]
                     AnimatedSkin:
-                        source: 'assets/great_melt/characters/classic/idle.png'
-                        size_hint_y: 0.48
+                        source: 'assets/pixelAdventure/Free/Main Characters/Ninja Frog/Idle (32x32).png'
+                        size_hint_y: 0.5
                     Label:
-                        text: 'CLASSIC'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '15sp'
-                        size_hint_y: 0.18
-                        color: 0.70, 0.92, 1.0, 1
-                    HoverButton:
-                        id: classic_btn
-                        text: 'EQUIPPED'
+                        text: 'NINJA FROG'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                         font_size: '14sp'
-                        size_hint: (0.92, 0.28)
+                        size_hint_y: 0.2
+                    HoverButton:
+                        id: ninja_frog_btn
+                        text: 'EQUIP'
+                        font_size: '14sp'
+                        size_hint: (0.9, 0.25)
                         pos_hint: {'center_x': 0.5}
-                        background_normal: ''
-                        background_down: ''
-                        background_color: 0, 0, 0, 0
-                        color: 1, 1, 1, 1
-                        on_release: root.buy_item('Classic')
-                        canvas.before:
-                            Color:
-                                rgba: (0.18, 0.52, 0.82, 1) if self.state == 'normal' else (0.10, 0.35, 0.62, 1)
-                            RoundedRectangle:
-                                pos: self.pos
-                                size: self.size
-                                radius: [10,]
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.buy_item('Ninja Frog')
 
-                # ── Arctic ───────────────────────────────
+                # ─── Skin 2: Mask Dude ───
                 BoxLayout:
                     orientation: 'vertical'
                     size_hint_y: None
                     height: 220
-                    padding: [16, 16, 16, 14]
-                    spacing: 10
+                    padding: 15
+                    spacing: 12
                     canvas.before:
                         Color:
-                            rgba: 0.10, 0.20, 0.38, 0.92
+                            rgba: 0.2, 0.2, 0.3, 0.9
                         RoundedRectangle:
                             pos: self.pos
                             size: self.size
-                            radius: [16,]
-                        Color:
-                            rgba: 0.22, 0.60, 0.88, 0.30
-                        Line:
-                            rounded_rectangle: (self.x, self.y, self.width, self.height, 16)
-                            width: 1
+                            radius: [15,]
                     AnimatedSkin:
-                        source: 'assets/great_melt/characters/arctic/idle.png'
-                        size_hint_y: 0.48
+                        source: 'assets/pixelAdventure/Free/Main Characters/Mask Dude/Idle (32x32).png'
+                        size_hint_y: 0.5
                     Label:
-                        text: 'ARCTIC'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '15sp'
-                        size_hint_y: 0.18
-                        color: 0.70, 0.92, 1.0, 1
-                    HoverButton:
-                        id: arctic_btn
-                        text: 'BUY GEM 10'
+                        text: 'MASK DUDE'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                         font_size: '14sp'
-                        size_hint: (0.92, 0.28)
+                        size_hint_y: 0.2
+                    HoverButton:
+                        id: mask_dude_btn
+                        text: 'EQUIP'
+                        font_size: '14sp'
+                        size_hint: (0.9, 0.25)
                         pos_hint: {'center_x': 0.5}
-                        background_normal: ''
-                        background_down: ''
-                        background_color: 0, 0, 0, 0
-                        color: 1, 1, 1, 1
-                        on_release: root.buy_item('Arctic')
-                        canvas.before:
-                            Color:
-                                rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                            RoundedRectangle:
-                                pos: self.pos
-                                size: self.size
-                                radius: [10,]
-                            Color:
-                                rgba: 0.22, 0.60, 0.88, 0.30
-                            Line:
-                                rounded_rectangle: (self.x, self.y, self.width, self.height, 10)
-                                width: 1
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.buy_item('Mask Dude')
 
-                # ── Emperor ──────────────────────────────
+                # ─── Skin 3: Pink Man ───
                 BoxLayout:
                     orientation: 'vertical'
                     size_hint_y: None
                     height: 220
-                    padding: [16, 16, 16, 14]
-                    spacing: 10
+                    padding: 15
+                    spacing: 12
                     canvas.before:
                         Color:
-                            rgba: 0.10, 0.20, 0.38, 0.92
+                            rgba: 0.2, 0.2, 0.3, 0.9
                         RoundedRectangle:
                             pos: self.pos
                             size: self.size
-                            radius: [16,]
-                        Color:
-                            rgba: 1.0, 0.80, 0.20, 0.35
-                        Line:
-                            rounded_rectangle: (self.x, self.y, self.width, self.height, 16)
-                            width: 1
+                            radius: [15,]
                     AnimatedSkin:
-                        source: 'assets/great_melt/characters/emperor/idle.png'
-                        size_hint_y: 0.48
+                        source: 'assets/pixelAdventure/Free/Main Characters/Pink Man/Idle (32x32).png'
+                        size_hint_y: 0.5
                     Label:
-                        text: 'EMPEROR'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '15sp'
-                        size_hint_y: 0.18
-                        color: 1.0, 0.85, 0.35, 1
-                    HoverButton:
-                        id: emperor_btn
-                        text: 'BUY GEM 10'
+                        text: 'PINK MAN'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                         font_size: '14sp'
-                        size_hint: (0.92, 0.28)
+                        size_hint_y: 0.2
+                    HoverButton:
+                        id: pink_man_btn
+                        text: 'EQUIP'
+                        font_size: '14sp'
+                        size_hint: (0.9, 0.25)
                         pos_hint: {'center_x': 0.5}
-                        background_normal: ''
-                        background_down: ''
-                        background_color: 0, 0, 0, 0
-                        color: 1, 1, 1, 1
-                        on_release: root.buy_item('Emperor')
-                        canvas.before:
-                            Color:
-                                rgba: (0.38, 0.28, 0.04, 0.95) if self.state == 'normal' else (0.25, 0.18, 0.02, 1)
-                            RoundedRectangle:
-                                pos: self.pos
-                                size: self.size
-                                radius: [10,]
-                            Color:
-                                rgba: 1.0, 0.80, 0.20, 0.40
-                            Line:
-                                rounded_rectangle: (self.x, self.y, self.width, self.height, 10)
-                                width: 1
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.buy_item('Pink Man')
 
-                # ── Crystal ──────────────────────────────
+                # ─── Skin 4: Virtual Guy ───
                 BoxLayout:
                     orientation: 'vertical'
                     size_hint_y: None
                     height: 220
-                    padding: [16, 16, 16, 14]
-                    spacing: 10
+                    padding: 15
+                    spacing: 12
                     canvas.before:
                         Color:
-                            rgba: 0.10, 0.20, 0.38, 0.92
+                            rgba: 0.2, 0.2, 0.3, 0.9
                         RoundedRectangle:
                             pos: self.pos
                             size: self.size
-                            radius: [16,]
-                        Color:
-                            rgba: 0.60, 0.90, 1.0, 0.45
-                        Line:
-                            rounded_rectangle: (self.x, self.y, self.width, self.height, 16)
-                            width: 1
+                            radius: [15,]
                     AnimatedSkin:
-                        source: 'assets/great_melt/characters/crystal/idle.png'
-                        size_hint_y: 0.48
+                        source: 'assets/pixelAdventure/Free/Main Characters/Virtual Guy/Idle (32x32).png'
+                        size_hint_y: 0.5
                     Label:
-                        text: 'CRYSTAL'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '15sp'
-                        size_hint_y: 0.18
-                        color: 0.80, 0.95, 1.0, 1
-                    HoverButton:
-                        id: crystal_btn
-                        text: 'BUY GEM 10'
+                        text: 'VIRTUAL GUY'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                         font_size: '14sp'
-                        size_hint: (0.92, 0.28)
+                        size_hint_y: 0.2
+                    HoverButton:
+                        id: virtual_guy_btn
+                        text: 'EQUIP'
+                        font_size: '14sp'
+                        size_hint: (0.9, 0.25)
                         pos_hint: {'center_x': 0.5}
-                        background_normal: ''
-                        background_down: ''
-                        background_color: 0, 0, 0, 0
-                        color: 1, 1, 1, 1
-                        on_release: root.buy_item('Crystal')
-                        canvas.before:
-                            Color:
-                                rgba: (0.12, 0.30, 0.48, 0.95) if self.state == 'normal' else (0.08, 0.20, 0.35, 1)
-                            RoundedRectangle:
-                                pos: self.pos
-                                size: self.size
-                                radius: [10,]
-                            Color:
-                                rgba: 0.60, 0.90, 1.0, 0.35
-                            Line:
-                                rounded_rectangle: (self.x, self.y, self.width, self.height, 10)
-                                width: 1
-
-        # ── BACK button ─────────────────────────────────
+                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
+                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
+                        border: (10, 10, 10, 10)
+                        on_release: root.buy_item('Virtual Guy')
+                        
         HoverButton:
-            id: shop_back_btn
             text: 'BACK'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             font_size: '20sp'
-            size_hint: (0.50, None)
-            height: 52
+            size_hint: (0.6, 0.12)
             pos_hint: {'center_x': 0.5}
-            background_normal: ''
-            background_down: ''
-            background_color: 0, 0, 0, 0
-            color: 0.70, 0.92, 1.0, 1
+            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
+            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
+            border: (10, 10, 10, 10)
             on_release: root.go_back()
-            canvas.before:
-                Color:
-                    rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [13,]
-                Color:
-                    rgba: 0.22, 0.60, 0.88, 0.28
-                Line:
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 13)
-                    width: 1
-
-
-# ── LEARNING PATH (CLIMATE REPORT) SCREEN ────────────────────────────────────
-<LearningPathScreen>:
-    canvas.before:
-        Rectangle:
-            source: 'assets/great_melt/background/arctic_bg.png'
-            pos: self.pos
-            size: self.size
-        Color:
-            rgba: 0, 0, 0, 0.55
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
-    BoxLayout:
-        orientation: 'vertical'
-        padding: [32, 28, 32, 24]
-        spacing: 14
-
-        # ── Header ────────────────────────────────────────
-        Label:
-            text: 'CLIMATE REPORT'
-            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            font_size: '42sp'
-            bold: True
-            size_hint_y: None
-            height: 66
-            color: 1.00, 0.80, 0.20, 1
-
-        Label:
-            id: subtitle_lbl
-            text: 'สิ่งที่คุณได้เรียนรู้จากการวิ่ง'
-            font_name: 'assets/Component_UI/Font/Thonburi.ttc'
-            font_size: '19sp'
-            size_hint_y: None
-            height: 34
-            color: 0.70, 0.90, 1.0, 0.80
-
-        # ── Global score ───────────────────────────────────
-        Label:
-            id: global_score_lbl
-            text: ''
-            font_name: 'assets/Component_UI/Font/Thonburi.ttc'
-            font_size: '21sp'
-            bold: True
-            size_hint_y: None
-            height: 38
-            halign: 'center'
-            color: 0.3, 1.0, 0.3, 0.9
-
-        # ── Biome cards grid (filled from Python) ─────────
-        GridLayout:
-            id: biome_grid
-            cols: 2
-            spacing: 16
-            size_hint_y: 1
-
-        # ── BACK button ───────────────────────────────────
-        HoverButton:
-            id: back_btn
-            text: 'BACK'
-            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            font_size: '22sp'
-            size_hint: (0.35, None)
-            height: 58
-            pos_hint: {'center_x': 0.5}
-            background_normal: ''
-            background_down: ''
-            background_color: 0, 0, 0, 0
-            color: 0.70, 0.92, 1.0, 1
-            on_release: root.go_back()
-            canvas.before:
-                Color:
-                    rgba: (0.10, 0.22, 0.42, 0.95) if self.state == 'normal' else (0.06, 0.14, 0.30, 1)
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [13,]
-                Color:
-                    rgba: 0.22, 0.60, 0.88, 0.28
-                Line:
-                    rounded_rectangle: (self.x, self.y, self.width, self.height, 13)
-                    width: 1
