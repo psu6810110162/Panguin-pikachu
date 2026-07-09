@@ -187,8 +187,7 @@ class GridManager:
     def remove_tile(self, col, row):
         """ลบ Tile ออกจากแผนที่ (ใช้สำหรับระบบทางเดินถล่ม)"""
         pos = (col, row)
-        if pos in self.path_set:
-            self.path_set.remove(pos)
+        self.path_set.pop(pos, None)
         # ลบ object ที่อาจจะอยู่บนนั้นด้วย
         self.obstacles.pop(pos, None)
         self.gems.pop(pos, None)
