@@ -1,5 +1,26 @@
 Doc.md
 game.db
 
+# Python
 **/__pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+
+# Virtual environments
+venv/
+.venv/
+venv_plot/
+
+# Node (report generator tooling, if used locally)
+node_modules/
+
+# OS / editor cruft
+.DS_Store
+*.zip
+
+# Local report artifacts
+NSC2026_Report_TheGreatMelt.docx
+assets/report_figures/
