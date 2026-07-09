@@ -187,7 +187,7 @@ class DatabaseManager:
         cursor.execute(
             """
             SELECT MAX(s.distance_m) as pb
-            FROM scores s 
+            FROM scores s
             JOIN sessions ss ON s.session_id = ss.id
             JOIN players p ON ss.player_id = p.id
             WHERE p.name = ?
@@ -205,11 +205,11 @@ class DatabaseManager:
         cursor.execute(
             """
             SELECT ss.played_at, s.distance_m, s.gems_collected
-            FROM scores s 
+            FROM scores s
             JOIN sessions ss ON s.session_id = ss.id
             JOIN players p ON ss.player_id = p.id
             WHERE p.name = ?
-            ORDER BY ss.played_at DESC 
+            ORDER BY ss.played_at DESC
             LIMIT ?
         """,
             (player_name, limit),
@@ -222,7 +222,7 @@ class DatabaseManager:
         self.connect()
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT p.name 
+            SELECT p.name
             FROM players p
             JOIN sessions s ON p.id = s.player_id
             ORDER BY s.played_at DESC

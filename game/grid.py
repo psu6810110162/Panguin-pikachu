@@ -95,20 +95,22 @@ class GridManager:
         """อัปเดตแอนิเมชันของอุปสรรคที่อยู่ในระยะมองเห็น"""
         p_col, p_row = penguin_pos
         for pos, obs in self.obstacles.items():
-            if obs.active:
-                # เช็คระยะแบบหยาบๆ (Bounding Box)
-                if (p_col - view_radius <= pos[0] <= p_col + view_radius) and (
-                    p_row - view_radius <= pos[1] <= p_row + view_radius
-                ):
-                    obs.update(dt)
+            # เช็คระยะแบบหยาบๆ (Bounding Box)
+            if (
+                obs.active
+                and p_col - view_radius <= pos[0] <= p_col + view_radius
+                and p_row - view_radius <= pos[1] <= p_row + view_radius
+            ):
+                obs.update(dt)
 
         # อัปเดต Gem
         for pos, gem in self.gems.items():
-            if gem.active:
-                if (p_col - view_radius <= pos[0] <= p_col + view_radius) and (
-                    p_row - view_radius <= pos[1] <= p_row + view_radius
-                ):
-                    gem.update(dt)
+            if (
+                gem.active
+                and p_col - view_radius <= pos[0] <= p_col + view_radius
+                and p_row - view_radius <= pos[1] <= p_row + view_radius
+            ):
+                gem.update(dt)
 
     def update_tiles(self, dt, penguin_pos):
         p_col, p_row = penguin_pos
@@ -237,10 +239,9 @@ class GridManager:
                 c = col + (i if cur_dir[0] else j)
                 r = row + (j if cur_dir[0] else i)
                 self._add_tile(c, r, is_safe=True)
-                if j == 0:
-                    if (c, r) not in self.path:
-                        self.path.append((c, r))
-                        self._total_generated += 1
+                if j == 0 and (c, r) not in self.path:
+                    self.path.append((c, r))
+                    self._total_generated += 1
 
         self._last_pos = (col + 3 * cur_dir[0], row + 3 * cur_dir[1])
         self.checkpoints_generated += 1
@@ -288,11 +289,16 @@ class GridManager:
                     self.obstacles[(col, row)] = obs
 
             # สุ่มวาง Gem บน centerline (ถ้าไม่มีกล่อง และไม่มี Gem ที่จุดเดิม)
-            elif self._seg_count > 0 and random.random() < 0.4 and not mark_fork:
-                # [FIX] เช็คให้ชัวร์ว่าไม่ทับ Obstacle ที่เพิ่งวางไปหมาดๆ หรือที่มีอยู่แล้ว
-                if (col, row) not in self.obstacles and (col, row) not in self.gems:
-                    gem = ObstacleFactory.spawn_gem(col, row)
-                    self.gems[(col, row)] = gem
+            # [FIX] เช็คให้ชัวร์ว่าไม่ทับ Obstacle ที่เพิ่งวางไปหมาดๆ หรือที่มีอยู่แล้ว
+            elif (
+                self._seg_count > 0
+                and random.random() < 0.4
+                and not mark_fork
+                and (col, row) not in self.obstacles
+                and (col, row) not in self.gems
+            ):
+                gem = ObstacleFactory.spawn_gem(col, row)
+                self.gems[(col, row)] = gem
 
         self._last_pos = (col, row)
 
@@ -318,10 +324,6 @@ class GridManager:
         perp = self.DIR_B if cur_dir == self.DIR_A else self.DIR_A
 
         # ── Branch Short (centerline หลัก) ──
-        short_end = (
-            start_col + cur_dir[0] * FORK_SHORT_LEN,
-            start_row + cur_dir[1] * FORK_SHORT_LEN,
-        )
         col, row = start_col, start_row
         for _ in range(FORK_SHORT_LEN):
             col += cur_dir[0]
@@ -351,10 +353,9 @@ class GridManager:
             self.fork_tiles.add((lc, lr))
 
             # สุ่มวาง Gem บนทางแยก (Long Branch)
-            if random.random() < 0.6:  # โอกาสเยอะหน่อยให้คุ้มที่อ้อม
-                if (lc, lr) not in self.gems:
-                    gem = ObstacleFactory.spawn_gem(lc, lr)
-                    self.gems[(lc, lr)] = gem
+            if random.random() < 0.6 and (lc, lr) not in self.gems:  # โอกาสเยอะหน่อยให้คุ้มที่อ้อม
+                gem = ObstacleFactory.spawn_gem(lc, lr)
+                self.gems[(lc, lr)] = gem
 
         # กลับเข้า merge point
         for _ in range(SIDE_OFFSET):
