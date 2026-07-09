@@ -1,18 +1,16 @@
 import sqlite3
-import os
-from datetime import datetime
-from typing import List, Dict, Optional
 
 DB_FILE = "game.db"
+
 
 class DatabaseManager:
     # คลาส Singleton สำหรับจัดการฐานข้อมูล SQLite
     # ใช้สำหรับสร้าง Schema, เก็บประวัติและสถิติของคนเล่น
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(DatabaseManager, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance.conn = None
         return cls._instance
 
@@ -24,7 +22,7 @@ class DatabaseManager:
 
     def _ensure_tables(self):
         cursor = self.conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
@@ -32,16 +30,16 @@ class DatabaseManager:
             equipped_skin TEXT DEFAULT "default",
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
-        cursor.execute('''
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             player_id INTEGER REFERENCES players(id),
             played_at TEXT DEFAULT CURRENT_TIMESTAMP,
             duration_s REAL DEFAULT 0.0
             )
-        ''')
-        cursor.execute('''
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS scores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id INTEGER REFERENCES sessions(id),
@@ -49,29 +47,29 @@ class DatabaseManager:
             gems_collected INTEGER DEFAULT 0,
             obstacles_cleared INTEGER DEFAULT 0
             )
-        ''')
-        cursor.execute('''
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_skins (
             player_id INTEGER REFERENCES players(id),
             skin_id TEXT NOT NULL,
             purchased_at TEXT DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (player_id, skin_id)
             )
-        ''')
+        """)
         self.conn.commit()
-            
+
     def close(self):
         if self.conn:
             self.conn.close()
             self.conn = None
 
     def init_db(self):
-        """ สร้างและเตรียมความพร้อมตารางในฐานข้อมูล SQLite """
+        """สร้างและเตรียมความพร้อมตารางในฐานข้อมูล SQLite"""
         self.connect()
         cursor = self.conn.cursor()
-        
+
         # 1. แฟ้มประวัติและกระเป๋าตัวละคร (Players Table)
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS players (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
@@ -79,20 +77,20 @@ class DatabaseManager:
                 equipped_skin TEXT DEFAULT "default",
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
-        
+        """)
+
         # 2. บันทึกประวัติการเล่นเป็นรอบๆ (Sessions Table)
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 player_id INTEGER REFERENCES players(id),
                 played_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 duration_s REAL DEFAULT 0.0
             )
-        ''')
-        
+        """)
+
         # 3. เก็บคะแนนและระยะทางผูกกับรอบการเล่น (Scores Table)
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS scores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id INTEGER REFERENCES sessions(id),
@@ -100,100 +98,112 @@ class DatabaseManager:
                 gems_collected INTEGER DEFAULT 0,
                 obstacles_cleared INTEGER DEFAULT 0
             )
-        ''')
-        
+        """)
+
         # 4. ตารางสกินตัวละครที่ซื้อแล้ว (Player Skins Table)
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_skins (
                 player_id INTEGER REFERENCES players(id),
                 skin_id TEXT NOT NULL,
                 purchased_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (player_id, skin_id)
             )
-        ''')
-        
+        """)
+
         self.conn.commit()
         print("[DB] Initialized tables successfully.")
 
     # ==========================
     # ระบบ Leaderboard & Queries
     # ==========================
-        
+
     def get_or_create_player(self, name: str) -> int:
-        """ ดึง ID ตัวละครตามชื่อ (ถ้าไม่มีชื่อในระบบจะสร้างให้ใหม่) """
+        """ดึง ID ตัวละครตามชื่อ (ถ้าไม่มีชื่อในระบบจะสร้างให้ใหม่)"""
         self.connect()
         cursor = self.conn.cursor()
-        
+
         # ค้นหาไอดีจากชื่อ
         cursor.execute("SELECT id FROM players WHERE name = ?", (name,))
         row = cursor.fetchone()
-        
+
         if row:
-            return row['id']
-            
+            return row["id"]
+
         # สร้างโปรไฟล์ใหม่
         cursor.execute("INSERT INTO players (name) VALUES (?)", (name,))
         self.conn.commit()
         return cursor.lastrowid
 
     def save_game_session(self, player_name: str, distance: int, gems: int, duration: float = 0.0):
-        """ บันทึกคะแนน ระยะทาง และไอเทม เมื่อจบเกมแต่ละรอบ """
+        """บันทึกคะแนน ระยะทาง และไอเทม เมื่อจบเกมแต่ละรอบ"""
         player_id = self.get_or_create_player(player_name)
-        
+
         cursor = self.conn.cursor()
-        
+
         # ทบจำนวน Gem เข้ากระเป๋าหลัก
-        cursor.execute("UPDATE players SET gem_balance = gem_balance + ? WHERE id = ?", (gems, player_id))
-        
+        cursor.execute(
+            "UPDATE players SET gem_balance = gem_balance + ? WHERE id = ?", (gems, player_id)
+        )
+
         # สร้างใบประวัติ Session ใหม่
-        cursor.execute("INSERT INTO sessions (player_id, duration_s) VALUES (?, ?)", (player_id, duration))
+        cursor.execute(
+            "INSERT INTO sessions (player_id, duration_s) VALUES (?, ?)", (player_id, duration)
+        )
         session_id = cursor.lastrowid
-        
+
         # บันทึกคะแนนลง Score ผูกกับ Session
-        cursor.execute("INSERT INTO scores (session_id, distance_m, gems_collected) VALUES (?, ?, ?)", 
-                       (session_id, distance, gems))
-        
+        cursor.execute(
+            "INSERT INTO scores (session_id, distance_m, gems_collected) VALUES (?, ?, ?)",
+            (session_id, distance, gems),
+        )
+
         self.conn.commit()
 
     def get_gem_balance(self, player_name: str) -> int:
-        """ เช็คจำนวน Gem ที่มีในกระเป๋าปัจจุบัน """
+        """เช็คจำนวน Gem ที่มีในกระเป๋าปัจจุบัน"""
         self.connect()
         cursor = self.conn.cursor()
         cursor.execute("SELECT gem_balance FROM players WHERE name = ?", (player_name,))
         row = cursor.fetchone()
-        return row['gem_balance'] if row else 0
+        return row["gem_balance"] if row else 0
 
     def deduct_gems(self, player_name: str, amount: int) -> bool:
-        """ หัก Gem จากกระเป๋าหลัก (ใช้ในหน้า Shop) """
+        """หัก Gem จากกระเป๋าหลัก (ใช้ในหน้า Shop)"""
         current_balance = self.get_gem_balance(player_name)
         if current_balance < amount:
             return False
-            
+
         cursor = self.conn.cursor()
-        cursor.execute("UPDATE players SET gem_balance = gem_balance - ? WHERE name = ?", (amount, player_name))
+        cursor.execute(
+            "UPDATE players SET gem_balance = gem_balance - ? WHERE name = ?", (amount, player_name)
+        )
         self.conn.commit()
         return True
 
     def get_personal_best(self, player_name: str) -> int:
-        """ ดึงคะแนนสูงสุด (Personal Best) ของผู้เล่นชื่อนี้ """
+        """ดึงคะแนนสูงสุด (Personal Best) ของผู้เล่นชื่อนี้"""
         self.connect()
         cursor = self.conn.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             SELECT MAX(s.distance_m) as pb
             FROM scores s 
             JOIN sessions ss ON s.session_id = ss.id
             JOIN players p ON ss.player_id = p.id
             WHERE p.name = ?
-        ''', (player_name,))
-        
-        row = cursor.fetchone()
-        return row['pb'] if row and row['pb'] else 0
+        """,
+            (player_name,),
+        )
 
-    def get_history(self, player_name: str, limit: int = 100) -> List[Dict]:
-        """ ดึงประวัติการวิ่งย้อนหลัง ไว้แสดงผลในหน้า History - เพิ่มขีดจำกัดเป็น 100 """
+        row = cursor.fetchone()
+        return row["pb"] if row and row["pb"] else 0
+
+    def get_history(self, player_name: str, limit: int = 100) -> list[dict]:
+        """ดึงประวัติการวิ่งย้อนหลัง ไว้แสดงผลในหน้า History - เพิ่มขีดจำกัดเป็น 100"""
         self.connect()
         cursor = self.conn.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             SELECT ss.played_at, s.distance_m, s.gems_collected
             FROM scores s 
             JOIN sessions ss ON s.session_id = ss.id
@@ -201,56 +211,65 @@ class DatabaseManager:
             WHERE p.name = ?
             ORDER BY ss.played_at DESC 
             LIMIT ?
-        ''', (player_name, limit))
-        
+        """,
+            (player_name, limit),
+        )
+
         return [dict(row) for row in cursor.fetchall()]
 
     def get_last_player_name(self) -> str:
-        """ ดึงชื่อผู้เล่นล่าสุดที่บันทึกไว้ """
+        """ดึงชื่อผู้เล่นล่าสุดที่บันทึกไว้"""
         self.connect()
         cursor = self.conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT p.name 
             FROM players p
             JOIN sessions s ON p.id = s.player_id
             ORDER BY s.played_at DESC
             LIMIT 1
-        ''')
+        """)
         row = cursor.fetchone()
-        return row['name'] if row else "Penguin"
+        return row["name"] if row else "Penguin"
 
     def is_skin_owned(self, player_name: str, skin_id: str) -> bool:
-        """ เช็คว่าผู้เล่นคนนี้มีสกินนี้แล้วหรือยัง """
+        """เช็คว่าผู้เล่นคนนี้มีสกินนี้แล้วหรือยัง"""
         self.connect()
         cursor = self.conn.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             SELECT 1 FROM player_skins ps
             JOIN players p ON ps.player_id = p.id
             WHERE p.name = ? AND ps.skin_id = ?
-        ''', (player_name, skin_id))
+        """,
+            (player_name, skin_id),
+        )
         return cursor.fetchone() is not None
 
     def add_owned_skin(self, player_name: str, skin_id: str):
-        """ เพิ่มสกินที่ซื้อแล้วลงในฐานข้อมูล """
+        """เพิ่มสกินที่ซื้อแล้วลงในฐานข้อมูล"""
         player_id = self.get_or_create_player(player_name)
         self.connect()
         cursor = self.conn.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             INSERT OR IGNORE INTO player_skins (player_id, skin_id)
             VALUES (?, ?)
-        ''', (player_id, skin_id))
+        """,
+            (player_id, skin_id),
+        )
         self.conn.commit()
+
 
 if __name__ == "__main__":
     db = DatabaseManager()
     db.init_db()
-    
+
     print("Testing record insertion...")
     db.save_game_session("Arm", distance=150, gems=5)
     db.save_game_session("Arm", distance=200, gems=12)
     db.save_game_session("Pikachu", distance=85, gems=1)
-    
+
     print(f"Arm's PB: {db.get_personal_best('Arm')} m")
     print(f"Arm's History: {db.get_history('Arm')}")
-    
+
     db.close()

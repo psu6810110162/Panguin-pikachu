@@ -2,14 +2,15 @@ class Gem:
     """
     ไอเทมเพชรสำหรับเก็บสะสม - รองรับแอนิเมชัน 4 เฟรม
     """
+
     def __init__(self):
         self.col = 0
         self.row = 0
         self.active = True
         self.anim_frame = 0
         self.anim_timer = 0
-        self.anim_speed = 0.15 # วินาทีต่อเฟรม
-        
+        self.anim_speed = 0.15  # วินาทีต่อเฟรม
+
     def reset(self):
         self.active = True
         self.anim_frame = 0
@@ -24,4 +25,4 @@ class Gem:
 
     def collect(self):
         self.active = False
-        return 1 # มูลค่า 1 Gem
+        return 1  # มูลค่า 1 Gem
