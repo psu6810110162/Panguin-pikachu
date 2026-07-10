@@ -147,11 +147,71 @@ def test_end_session_marks_it_ended(client: FlaskClient):
     assert response.json["ended"] is True
 
 
+def test_dashboard_index_offers_a_create_session_affordance(client: FlaskClient):
+    response = client.get("/dashboard/")
+    assert response.status_code == 200
+    assert b"Create Session" in response.data
+
+
 def test_dashboard_view_renders_for_a_known_session(client: FlaskClient):
     room_code = client.post("/api/sessions").json["room_code"]
     response = client.get(f"/dashboard/{room_code}")
     assert response.status_code == 200
     assert room_code.encode() in response.data
+
+
+def test_leaderboard_payload_includes_player_id(client: FlaskClient):
+    room_code = client.post("/api/sessions").json["room_code"]
+    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+        "player_id"
+    ]
+    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+
+    leaderboard = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    assert leaderboard[0]["player_id"] == player_id
+
+
+def test_leaderboard_tie_break_order_is_stable_across_calls(client: FlaskClient):
+    room_code = client.post("/api/sessions").json["room_code"]
+    alice_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+        "player_id"
+    ]
+    bob_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Bob"}).json["player_id"]
+
+    # identical events/state for both -> identical environmental_score and distance_m,
+    # so only the player_id tie-break decides the order
+    client.post(
+        f"/api/sessions/{room_code}/runs",
+        json=_make_signed_run_body(alice_id, run_id="run-alice"),
+    )
+    client.post(
+        f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(bob_id, run_id="run-bob")
+    )
+
+    first = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    second = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    expected_order = sorted([alice_id, bob_id])
+
+    assert [row["player_id"] for row in first] == expected_order
+    assert [row["player_id"] for row in second] == expected_order
+
+
+def test_player_name_with_markup_is_never_interpreted_as_html(client: FlaskClient):
+    room_code = client.post("/api/sessions").json["room_code"]
+    malicious_name = "<script>alert(1)</script>"
+    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": malicious_name}).json[
+        "player_id"
+    ]
+    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+
+    leaderboard = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    assert leaderboard[0]["player_name"] == malicious_name
+
+    dashboard_html = client.get(f"/dashboard/{room_code}").data.decode()
+    # the raw tag must never appear unescaped in the server-rendered page - Jinja's
+    # |tojson filter escapes it into the #initial-leaderboard <script> payload instead
+    assert malicious_name not in dashboard_html
+    assert "\\u003cscript\\u003e" in dashboard_html
 
 
 def test_dashboard_export_csv_contains_the_leaderboard_row(client: FlaskClient):
