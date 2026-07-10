@@ -17,7 +17,9 @@ from server.extensions import socketio
 
 if __name__ == "__main__":
     config = load_config()
-    app = create_app(db_uri=config.database_uri, sync_secret=config.sync_secret)
+    app = create_app(
+        db_uri=config.database_uri, sync_secret=config.sync_secret, rate_limit=config.rate_limit
+    )
     socketio.run(
         app,
         host="0.0.0.0",

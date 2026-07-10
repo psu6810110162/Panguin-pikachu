@@ -8,13 +8,18 @@ from typing import Any
 
 from flask import Blueprint, current_app, jsonify, request
 from flask import Response as FlaskResponse
+from flask_limiter.errors import RateLimitExceeded
 
 from core.sync import SignedPayload, VerificationError
 from server import services
-from server.extensions import socketio
+from server.extensions import limiter, socketio
 from server.models import PlayerModel, SessionModel
 
 api = Blueprint("api", __name__, url_prefix="/api/v1")
+# ค่า limit มาจาก app.config["RATELIMIT_DEFAULT"] (ตั้งจาก create_app(rate_limit=...)) อ่าน
+# แบบ lambda เพื่อให้ยังปรับได้ต่อ-app instance (เช่น test ตั้ง limit ต่ำเพื่อ trigger 429 ได้ไว)
+# แทนที่จะ fix ค่าตายตัวตอน import module
+limiter.limit(lambda: current_app.config["RATELIMIT_DEFAULT"])(api)
 
 # Blueprint แยกไม่มี url_prefix เพราะ health check ควรอยู่ที่ /healthz เฉยๆ (ตำแหน่งมาตรฐาน
 # ที่ Docker HEALTHCHECK / Railway / load balancer คาดหวัง) ไม่ใช่ /api/healthz
@@ -54,6 +59,11 @@ def _handle_verification_error(error: VerificationError) -> tuple[FlaskResponse,
 @api.errorhandler(services.ValidationError)
 def _handle_validation_error(error: services.ValidationError) -> tuple[FlaskResponse, int]:
     return jsonify({"error": str(error)}), 400
+
+
+@api.errorhandler(RateLimitExceeded)
+def _handle_rate_limit_exceeded(error: RateLimitExceeded) -> tuple[FlaskResponse, int]:
+    return jsonify({"error": "rate limit exceeded, slow down"}), 429
 
 
 @api.post("/sessions")

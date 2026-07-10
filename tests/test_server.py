@@ -19,8 +19,12 @@ def app():
     ปกติแบบ function-scoped) จะได้ server ใหม่ที่ handler เดิมไม่ผูกด้วย — ห้อง
     join_dashboard จะเงียบ ไม่มี error ให้เห็น เป็น pattern เดียวกับที่แอปจริงรันเป็น
     process เดียวตลอดอายุ server อยู่แล้ว
+
+    rate_limit ตั้งสูงมากเพื่อไม่ให้ suite นี้ (หลาย test x หลาย request ต่อ test) ชน
+    default 60/min เอง — การทดสอบ rate limit ตัวจริงอยู่ใน test_rate_limit_returns_429
+    ซึ่งสร้าง app แยกที่ตั้ง limit ต่ำเจาะจง
     """
-    flask_app = create_app(db_uri="sqlite:///:memory:")
+    flask_app = create_app(db_uri="sqlite:///:memory:", rate_limit="10000 per minute")
     with flask_app.app_context():
         yield flask_app
 
@@ -260,3 +264,20 @@ def test_socketio_emits_leaderboard_update_on_run_ingestion(
     updates = [e for e in received if e["name"] == "leaderboard_update"]
     assert len(updates) == 1
     assert updates[0]["args"][0][0]["player_name"] == "Alice"
+
+
+def test_rate_limit_returns_429_once_exceeded():
+    """limiter (server/extensions.py) เป็น singleton ที่ init_app() ใหม่ทุกครั้ง แต่ storage
+    (in-memory) ใช้ร่วมกันข้าม app instance — reset ก่อนเพื่อไม่ให้ hit count จาก test อื่น
+    ในไฟล์นี้ (ที่ตั้ง rate_limit สูงมาก) มาปนกับ app ที่ตั้ง limit ต่ำเจาะจงตัวนี้
+    """
+    from server.extensions import limiter
+
+    limiter.storage.reset()
+    low_limit_app = create_app(db_uri="sqlite:///:memory:", rate_limit="2 per minute")
+    with low_limit_app.app_context():
+        low_limit_client = low_limit_app.test_client()
+        responses = [low_limit_client.post("/api/v1/sessions") for _ in range(3)]
+
+    assert [r.status_code for r in responses] == [201, 201, 429]
+    assert responses[-1].json["error"]
