@@ -5,7 +5,7 @@ Teacher -> Session -> Players -> Runs -> (Reports คือ query/aggregate จ�
 
 from datetime import UTC, datetime
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from server.extensions import Base
@@ -48,8 +48,10 @@ class RunModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"))
-    run_id: Mapped[str] = mapped_column(unique=True, index=True)
+    run_id: Mapped[str] = mapped_column(index=True)
     player_id: Mapped[str] = mapped_column(index=True)
+
+    __table_args__ = (UniqueConstraint("session_id", "run_id"),)
     player_name: Mapped[str]
 
     status: Mapped[str] = mapped_column(default="ACTIVE")  # ACTIVE / RESPAWNING / FINISHED

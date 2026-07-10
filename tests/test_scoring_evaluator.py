@@ -31,8 +31,26 @@ def test_evaluate_assigns_and_returns_the_same_result():
     assert record.result is result
 
 
-def test_evaluate_computes_distance_from_the_last_event():
+def test_evaluate_computes_max_distance():
     record = _record_with_representative_events()
+    result = evaluate(record, pretest_pct=40.0, posttest_pct=90.0, total_missions=2)
+    assert result.distance_m == 1000
+
+
+def test_evaluate_computes_max_distance_despite_respawn_regression():
+    from core.events import RespawnEvent
+
+    record = _record_with_representative_events()
+    record.record(
+        RespawnEvent(
+            timestamp=0.5,
+            distance_m=500,
+            checkpoint_col=1,
+            checkpoint_row=0,
+            respawn_count=1,
+            score_penalty=0.1,
+        )
+    )
     result = evaluate(record, pretest_pct=40.0, posttest_pct=90.0, total_missions=2)
     assert result.distance_m == 1000
 

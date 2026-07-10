@@ -107,7 +107,7 @@ def ingest_signed_run(
         total_missions=TOTAL_MISSIONS,
     )
 
-    run = db.session.query(RunModel).filter_by(run_id=record.run_id).first()
+    run = db.session.query(RunModel).filter_by(run_id=record.run_id, session_id=session.id).first()
     if run is None:
         run = RunModel(session_id=session.id, run_id=record.run_id, player_id=record.player_id)
         db.session.add(run)

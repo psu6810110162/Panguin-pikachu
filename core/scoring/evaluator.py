@@ -22,7 +22,7 @@ def evaluate(
 ) -> RunResult:
     """คำนวณ RunResult จาก record.events แล้ว assign เข้า record.result ก่อน return"""
     events = record.events
-    distance_m = events[-1].distance_m if events else 0
+    distance_m = max((e.distance_m for e in events), default=0)
 
     m_score = rules.mission_score(events, total_missions)
     q_score = sum(rules.quiz_score(events, phase) for phase in _QUIZ_PHASES) / len(_QUIZ_PHASES)
