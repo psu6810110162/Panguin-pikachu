@@ -14,6 +14,7 @@ import io
 from flask import Blueprint, Response, render_template, request
 from flask_socketio import join_room
 
+from core.state import BOSS_MIN_DISTANCE_M
 from server import services
 from server.api import TEACHER_TOKEN_HEADER, ForbiddenError, require_teacher_token
 from server.extensions import socketio
@@ -47,6 +48,11 @@ def view(room_code: str) -> str | tuple[str, int]:
         "dashboard.html",
         room_code=room_code,
         teacher_token=session.teacher_token,
+        # single source of truth ของเส้นชัย — JS อ่านจาก data attribute แทน hardcode
+        # ตัวเลข 1000 ซ้ำอีกที่ (ถ้า backend เปลี่ยนค่า progress bar ต้องตามเอง)
+        finish_distance_m=BOSS_MIN_DISTANCE_M,
+        # ให้หน้า reload หลัง session จบแล้วยังเห็น banner — ไม่ใช่แค่ตอนรับ socket event
+        session_active=session.is_active,
         leaderboard=services.leaderboard_payload(session),
     )
 

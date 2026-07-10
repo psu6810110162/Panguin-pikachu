@@ -7,7 +7,10 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
-<body data-room-code="{{ room_code }}">
+<body data-room-code="{{ room_code }}"
+      data-teacher-token="{{ teacher_token }}"
+      data-finish-distance-m="{{ finish_distance_m }}"
+      data-session-active="{{ 'true' if session_active else 'false' }}">
   <main>
     <header class="dashboard-header">
       <div class="room-code-block">
