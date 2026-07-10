@@ -217,5 +217,11 @@ class HttpTransport:
         try:
             with urllib.request.urlopen(request, timeout=self._timeout_s) as response:  # noqa: S310
                 return 200 <= response.status < 300
+        except urllib.error.HTTPError as error:
+            # 4xx (signature/validation ผิด) จะไม่มีวันสำเร็จถึงจะ retry กี่ครั้งก็ตาม —
+            # ถือว่า "จัดการแล้ว" (True) เพื่อให้ SyncClient.flush() เอาออกจากคิว ไม่ใช่
+            # เก็บไว้ retry จนครบ max_retries โดยเปล่าประโยชน์ ส่วน 5xx เป็นปัญหาฝั่ง server
+            # ชั่วคราว ยังคุ้มที่จะ retry (False)
+            return 400 <= error.code < 500
         except (urllib.error.URLError, TimeoutError):
             return False

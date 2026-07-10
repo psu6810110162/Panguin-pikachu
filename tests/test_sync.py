@@ -1,9 +1,14 @@
+import io
+import urllib.error
+from unittest.mock import patch
+
 import pytest
 
 from core.schema import RunRecord
 from core.sync import (
     DEFAULT_BACKOFF_BASE_S,
     DEFAULT_MAX_RETRIES,
+    HttpTransport,
     InMemoryNonceStore,
     SignedPayload,
     SyncClient,
@@ -142,3 +147,45 @@ def test_backoff_delay_grows_exponentially():
     assert client.backoff_delay(0) == 2.0
     assert client.backoff_delay(1) == 4.0
     assert client.backoff_delay(2) == 8.0
+
+
+# ── HttpTransport ─────────────────────────────────────────
+
+
+def _make_payload() -> SignedPayload:
+    return sign_run_record(_make_record(), SECRET, timestamp=1000.0, nonce="n1")
+
+
+def test_http_transport_returns_true_on_2xx():
+    transport = HttpTransport("https://example.test/runs")
+    fake_response = io.BytesIO(b"{}")
+    fake_response.status = 200
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value = fake_response
+        assert transport.send(_make_payload()) is True
+
+
+def test_http_transport_gives_up_without_retry_on_4xx():
+    """400/401 = server จะไม่มีวันรับ payload นี้ ไม่ว่า retry กี่ครั้ง — dequeue ทันที (True)"""
+    transport = HttpTransport("https://example.test/runs")
+    error = urllib.error.HTTPError(
+        url="https://example.test/runs", code=401, msg="unauthorized", hdrs=None, fp=None
+    )
+    with patch("urllib.request.urlopen", side_effect=error):
+        assert transport.send(_make_payload()) is True
+
+
+def test_http_transport_retries_on_5xx():
+    """500 = ปัญหาชั่วคราวฝั่ง server — ยังคุ้มที่จะ retry (False = ยังอยู่ในคิว)"""
+    transport = HttpTransport("https://example.test/runs")
+    error = urllib.error.HTTPError(
+        url="https://example.test/runs", code=500, msg="server error", hdrs=None, fp=None
+    )
+    with patch("urllib.request.urlopen", side_effect=error):
+        assert transport.send(_make_payload()) is False
+
+
+def test_http_transport_retries_on_network_error():
+    transport = HttpTransport("https://example.test/runs")
+    with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("network down")):
+        assert transport.send(_make_payload()) is False

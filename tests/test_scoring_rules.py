@@ -54,8 +54,8 @@ def test_quiz_score_counts_correct_answers_for_the_given_phase_only():
     assert rules.quiz_score(events, phase="posttest") == 75.0
 
 
-def test_quiz_score_is_zero_when_no_answers_for_that_phase():
-    assert rules.quiz_score([], phase="posttest") == 0.0
+def test_quiz_score_is_none_when_no_answers_for_that_phase():
+    assert rules.quiz_score([], phase="posttest") is None
 
 
 def test_heat_controlled_pct_applies_policy_deltas_in_order_and_clamps():

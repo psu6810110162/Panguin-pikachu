@@ -83,6 +83,18 @@ def test_create_session_returns_a_room_code(client: FlaskClient):
     assert response.json["room_code"].startswith("PENGUIN-")
 
 
+def test_create_session_retries_past_a_room_code_collision(client: FlaskClient, monkeypatch):
+    from server import services
+
+    taken = client.post("/api/sessions").json["room_code"]
+    codes = iter([taken, "PENGUIN-9999"])
+    monkeypatch.setattr(services, "generate_room_code", lambda: next(codes))
+
+    session = services.create_session()
+
+    assert session.room_code == "PENGUIN-9999"
+
+
 def test_join_session_returns_a_player_id(client: FlaskClient):
     room_code = client.post("/api/sessions").json["room_code"]
 

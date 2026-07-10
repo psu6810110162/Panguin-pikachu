@@ -73,3 +73,18 @@ def test_evaluate_with_no_events_gives_zero_distance_and_scores():
     assert result.distance_m == 0
     assert result.mission_score == 0.0
     assert result.respawn_count == 0
+
+
+def test_evaluate_quiz_score_averages_only_phases_the_player_has_reached():
+    """1 posttest answer (correct) ไม่ควรถูกหารด้วย 3 phase ทั้งที่อีก 2 phase ยังไม่มีข้อมูล
+    (mid-run sync ก่อนถึง pretest/boss_debunk ไม่ควรโดนหักคะแนนเหมือนตอบผิดหมด)
+    """
+    record = _record_with_representative_events()  # มีแค่ posttest 1 ข้อ, ตอบถูก
+    result = evaluate(record, pretest_pct=40.0, posttest_pct=90.0, total_missions=2)
+    assert result.quiz_score == 100.0
+
+
+def test_evaluate_quiz_score_is_zero_when_no_phase_has_any_answer():
+    record = RunRecord(run_id="run-3", player_id="player-3")
+    result = evaluate(record, pretest_pct=40.0, posttest_pct=90.0, total_missions=2)
+    assert result.quiz_score == 0.0

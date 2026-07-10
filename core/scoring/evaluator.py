@@ -25,7 +25,10 @@ def evaluate(
     distance_m = max((e.distance_m for e in events), default=0)
 
     m_score = rules.mission_score(events, total_missions)
-    q_score = sum(rules.quiz_score(events, phase) for phase in _QUIZ_PHASES) / len(_QUIZ_PHASES)
+    answered_scores = [
+        s for s in (rules.quiz_score(events, phase) for phase in _QUIZ_PHASES) if s is not None
+    ]
+    q_score = sum(answered_scores) / len(answered_scores) if answered_scores else 0.0
     heat_pct = rules.heat_controlled_pct(events, starting_heat=starting_heat)
     p_score = rules.policy_score(events)
     env_score = rules.environmental_score(p_score, heat_pct, m_score)

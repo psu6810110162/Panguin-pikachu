@@ -26,11 +26,17 @@ def mission_score(events: list[GameEvent], total_missions: int) -> float:
     return min(completed, total_missions) / total_missions * 100
 
 
-def quiz_score(events: list[GameEvent], phase: str) -> float:
-    """% ตอบถูกของ QuizAnswerEvent ในช่วง phase ที่ระบุ (pretest/posttest/boss_debunk)"""
+def quiz_score(events: list[GameEvent], phase: str) -> float | None:
+    """% ตอบถูกของ QuizAnswerEvent ในช่วง phase ที่ระบุ (pretest/posttest/boss_debunk)
+
+    Returns:
+        None ถ้ายังไม่มี QuizAnswerEvent ของ phase นี้เลย (ผู้เล่นยังไปไม่ถึง phase นั้น) —
+        แยกจาก 0.0 (ตอบครบแล้วแต่ผิดหมด) เพื่อไม่ให้ "ยังไม่ถึง" ถูกนับเป็น "ตอบผิดหมด"
+        ตอนเฉลี่ยรวมหลาย phase ใน evaluator.py
+    """
     answers = [e for e in events if isinstance(e, QuizAnswerEvent) and e.phase == phase]
     if not answers:
-        return 0.0
+        return None
     correct = sum(1 for a in answers if a.correct)
     return correct / len(answers) * 100
 

@@ -10,6 +10,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
+
 from core.events import GameEvent
 from core.schema import RunRecord
 from core.scoring import rules
@@ -22,6 +24,10 @@ from server.models import PlayerModel, RunModel, SessionModel
 # จำนวน mission ทั้งหมดต่อ run — ตรงกับ "3 modules" ใน docs/OVERVIEW.md (mission ย่อยละ 1
 # ต่อ module) ค่านี้ควรมาจาก config ของเนื้อหาเกมจริงในอนาคต ตอนนี้ hardcode ไว้ก่อน
 TOTAL_MISSIONS = 3
+
+# room_code มีแค่ 9000 ค่าที่เป็นไปได้ (secrets.randbelow(9000)) — ชนกันได้จริงเมื่อมีหลาย
+# session พร้อมกัน จำนวน attempt นี้เผื่อไว้มากกว่าพอสำหรับสเกลห้องเรียน (< 5 session พร้อมกัน)
+_MAX_ROOM_CODE_ATTEMPTS = 5
 
 _STATE_TO_DASHBOARD_STATUS: dict[RunState, str] = {
     RunState.LOBBY: "ACTIVE",
@@ -42,10 +48,17 @@ def generate_room_code() -> str:
 
 
 def create_session() -> SessionModel:
-    session = SessionModel(room_code=generate_room_code())
-    db.session.add(session)
-    db.session.commit()
-    return session
+    for _ in range(_MAX_ROOM_CODE_ATTEMPTS):
+        session = SessionModel(room_code=generate_room_code())
+        db.session.add(session)
+        try:
+            db.session.commit()
+            return session
+        except IntegrityError:
+            db.session.rollback()
+    raise RuntimeError(
+        f"failed to generate a unique room code after {_MAX_ROOM_CODE_ATTEMPTS} attempts"
+    )
 
 
 def get_session_by_code(room_code: str) -> SessionModel | None:
@@ -98,8 +111,8 @@ def ingest_signed_run(
     player = db.session.query(PlayerModel).filter_by(player_id=record.player_id).first()
     player_name = player.name if player else record.player_id
 
-    pretest_pct = rules.quiz_score(record.events, phase="pretest")
-    posttest_pct = rules.quiz_score(record.events, phase="posttest")
+    pretest_pct = rules.quiz_score(record.events, phase="pretest") or 0.0
+    posttest_pct = rules.quiz_score(record.events, phase="posttest") or 0.0
     result = evaluate(
         record,
         pretest_pct=pretest_pct,
