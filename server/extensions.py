@@ -4,6 +4,7 @@
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
@@ -16,6 +17,7 @@ class Base(DeclarativeBase):
 
 db = SQLAlchemy(model_class=Base)
 socketio = SocketIO()
+migrate = Migrate()
 
 # in-memory storage (ไม่ใช่ redis/db) — พอสำหรับ single-process server (ADR-007) และ
 # trusted-LAN classroom deployment เดียวกับที่ InMemoryNonceStore (core/sync.py) ใช้อยู่แล้ว

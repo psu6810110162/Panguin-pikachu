@@ -104,6 +104,7 @@ Player 1..N (Kivy .exe) ──HTTPS + Socket.IO──▶ Flask API + Flask-Socke
 5. **Scale:** 30-50 คนต่อห้อง, JSON เล็ก ๆ ทุก 2-5 วิ — Flask-SocketIO พอสำหรับเดโม (ไม่ทำ MMO)
 6. **API versioning:** REST endpoints อยู่ใต้ `/api/v1/` (ไม่ใช่ `/api/` เฉย ๆ) — ใส่ตั้งแต่ตอนนี้เพราะยังไม่มี client จริงเชื่อมอยู่ (D1-D6 ฝั่งเพื่อนยังไม่เริ่ม) เป็นจุดที่เปลี่ยนได้ถูกที่สุดแล้ว ไม่ต้อง breaking change ทีหลัง — `/healthz` ไม่ใส่ version เพราะเป็น infra probe ไม่ใช่ application contract
 7. **Rate limiting:** `/api/v1/` ทั้ง blueprint จำกัด 60 requests/นาที (Flask-Limiter, in-memory store) กัน client bug/loop ยิงรัว ๆ ใส่ server โดยไม่ตั้งใจ — ไม่ใช่ DDoS protection จริงจัง (สมมติฐาน trusted LAN ยังอยู่)
+8. **Schema migrations (Flask-Migrate/Alembic):** `server/migrations/` เก็บ migration script — **DB ใหม่เอี่ยม** (dev, test, deploy ครั้งแรก) ยังใช้ `db.create_all()` อัตโนมัติเหมือนเดิม (เร็ว ไม่ต้องคิดอะไร) แต่ **DB ที่มีข้อมูลจริงอยู่แล้ว** (เช่น deploy ทับของเดิมหลัง demo ครั้งแรก) ต้องรัน `flask db upgrade` (หรือ `make upgrade`) แทน ห้ามรัน `python -m server`/`db.create_all()` ทับ เพราะจะไม่มีทาง apply schema change ใหม่ — แก้ `server/models.py` แล้วต้อง `make migrate msg="..."` (หรือ `flask db migrate -m "..."`) ทุกครั้งหลัง deploy ครั้งแรกไปแล้ว
 
 ## เส้นตัด (ตัดจากบนลงล่างเมื่อเวลาบีบ)
 

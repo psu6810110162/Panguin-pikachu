@@ -6,7 +6,7 @@ from core.events import CheckpointReachedEvent, MissionCompleteEvent, RespawnEve
 from core.schema import RunRecord
 from core.state import RunState
 from core.sync import sign_run_record
-from server import create_app
+from server import create_all_tables, create_app
 from server.config import DEFAULT_SYNC_SECRET as DEV_SYNC_SECRET
 from server.extensions import db, socketio
 
@@ -25,6 +25,7 @@ def app():
     ซึ่งสร้าง app แยกที่ตั้ง limit ต่ำเจาะจง
     """
     flask_app = create_app(db_uri="sqlite:///:memory:", rate_limit="10000 per minute")
+    create_all_tables(flask_app)
     with flask_app.app_context():
         yield flask_app
 
@@ -275,6 +276,7 @@ def test_rate_limit_returns_429_once_exceeded():
 
     limiter.storage.reset()
     low_limit_app = create_app(db_uri="sqlite:///:memory:", rate_limit="2 per minute")
+    create_all_tables(low_limit_app)
     with low_limit_app.app_context():
         low_limit_client = low_limit_app.test_client()
         responses = [low_limit_client.post("/api/v1/sessions") for _ in range(3)]
