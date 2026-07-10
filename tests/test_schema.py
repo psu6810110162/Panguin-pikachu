@@ -72,3 +72,24 @@ def test_run_record_round_trip_with_no_result():
     record = _make_record()
     restored = RunRecord.from_dict(record.to_dict())
     assert restored.result is None
+
+
+# ── Malformed data — บันทึกพฤติกรรมปัจจุบันของ contract ──────────────────
+# from_dict ใช้ plain dataclass (ไม่ใช่ pydantic) จึง raise TypeError/KeyError ดิบ ๆ
+# กับข้อมูลเสีย — ฝั่งที่รับข้อมูลจาก client จริง (server) ต้อง catch แล้วแปลงเป็น
+# validation error ของตัวเองก่อนเสมอ test เหล่านี้ตรึงพฤติกรรมนั้นไว้เป็นลายลักษณ์อักษร
+
+
+def test_run_record_from_dict_missing_required_field_raises_key_error():
+    with pytest.raises(KeyError):
+        RunRecord.from_dict({"run_id": "run-1"})  # ไม่มี player_id
+
+
+def test_run_record_from_dict_unknown_state_name_raises_key_error():
+    with pytest.raises(KeyError):
+        RunRecord.from_dict({"run_id": "run-1", "player_id": "player-1", "state": "NOT_A_STATE"})
+
+
+def test_run_result_from_dict_unexpected_field_raises_type_error():
+    with pytest.raises(TypeError):
+        RunResult.from_dict({"distance_m": 10, "not_a_real_field": 1})

@@ -29,15 +29,30 @@ DEFAULT_BACKOFF_BASE_S = 1.0
 
 @dataclass
 class SignedPayload:
-    run_id: str
+    run_id: str  # ถูกรวมอยู่ใน signature ด้วย — server อ่านค่านี้ไป route ได้อย่างปลอดภัย
     timestamp: float
     nonce: str
     body: str  # RunRecord.to_dict() เข้ารหัสเป็น JSON แล้ว (sort_keys=True เพื่อผลลัพธ์คงที่)
     signature: str  # HMAC-SHA256 hex digest
 
 
-def _compute_signature(secret: bytes, timestamp: float, nonce: str, body: str) -> str:
-    message = f"{timestamp}:{nonce}:{body}".encode()
+def _compute_signature(secret: bytes, run_id: str, timestamp: float, nonce: str, body: str) -> str:
+    """เซ็น canonical JSON envelope แทน string concatenation ด้วยเหตุผลสองข้อ:
+
+    1. Delimiter confusion: รูปแบบเดิม f"{ts}:{nonce}:{body}" ใช้ ":" เป็นตัวคั่น
+       ทั้งที่ body เป็น JSON ที่มี ":" อยู่แล้ว — สอง tuple ที่ต่างกันจึง concatenate
+       เป็น string เดียวกันได้ (signature เดิมยัง valid กับ field ที่สลับขอบเขต)
+    2. run_id ระดับบนของ payload ต้องถูกเซ็นด้วย — ไม่งั้น payload ที่เซ็นถูกต้อง
+       ถูกสวมรอยเป็นคนละ run ได้โดยไม่ทำลาย signature
+
+    sort_keys + separators คงที่ทำให้ message canonical จริง ไม่ขึ้นกับ whitespace
+    หรือลำดับ key ของฝั่งที่ serialize
+    """
+    message = json.dumps(
+        {"body": body, "nonce": nonce, "run_id": run_id, "timestamp": timestamp},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
     return hmac.new(secret, message, hashlib.sha256).hexdigest()
 
 
@@ -54,7 +69,7 @@ def sign_run_record(
     ts = timestamp if timestamp is not None else time.time()
     n = nonce if nonce is not None else secrets.token_hex(16)
     body = json.dumps(record.to_dict(), sort_keys=True)
-    signature = _compute_signature(secret, ts, n, body)
+    signature = _compute_signature(secret, record.run_id, ts, n, body)
     return SignedPayload(
         run_id=record.run_id, timestamp=ts, nonce=n, body=body, signature=signature
     )
@@ -100,7 +115,9 @@ def verify_signed_payload(
     """
     current = now if now is not None else time.time()
 
-    expected = _compute_signature(secret, payload.timestamp, payload.nonce, payload.body)
+    expected = _compute_signature(
+        secret, payload.run_id, payload.timestamp, payload.nonce, payload.body
+    )
     if not hmac.compare_digest(expected, payload.signature):
         raise VerificationError("signature mismatch")
 
@@ -150,11 +167,20 @@ class SyncClient:
         self._backoff_base_s = backoff_base_s
         self._queue: deque[_QueuedRun] = deque()
         self._sent_run_ids: set[str] = set()  # idempotency: กัน enqueue ซ้ำของ run ที่ sync แล้ว
+        # Invariant: _pending_run_ids == {item.payload.run_id for item in _queue} เสมอ —
+        # เพิ่มตอน enqueue, คงอยู่ระหว่าง retry, ลบเมื่อส่งสำเร็จหรือถูก drop เกิน
+        # max_retries (drop แล้ว enqueue ใหม่ได้ ถ้า caller อยากลองรอบใหม่)
+        self._pending_run_ids: set[str] = set()
 
     def enqueue(self, record: RunRecord) -> None:
-        if record.run_id in self._sent_run_ids:
+        """Idempotent ทั้งสองทาง: run ที่ sync สำเร็จแล้ว และ run ที่ยังค้างอยู่ในคิว
+        (เดิมเช็คแค่ _sent_run_ids — เรียก enqueue ซ้ำก่อน flush แรกสำเร็จจะได้ entry
+        ซ้ำสองชุดคนละ nonce ส่งไป server เป็น duplicate จริง)
+        """
+        if record.run_id in self._sent_run_ids or record.run_id in self._pending_run_ids:
             return
         self._queue.append(_QueuedRun(payload=sign_run_record(record, self._secret)))
+        self._pending_run_ids.add(record.run_id)
 
     def flush(self) -> list[str]:
         """พยายามส่งทุกอย่างในคิวหนึ่งรอบ คืน run_id ที่ส่งสำเร็จ
@@ -169,12 +195,15 @@ class SyncClient:
             item = self._queue.popleft()
             if self._transport.send(item.payload):
                 self._sent_run_ids.add(item.payload.run_id)
+                self._pending_run_ids.discard(item.payload.run_id)
                 sent.append(item.payload.run_id)
                 continue
 
             item.attempts += 1
             if item.attempts <= self._max_retries:
-                remaining.append(item)
+                remaining.append(item)  # ยัง retry ต่อ — คงอยู่ใน _pending_run_ids
+            else:
+                self._pending_run_ids.discard(item.payload.run_id)  # drop — enqueue ใหม่ได้
 
         self._queue = remaining
         return sent
