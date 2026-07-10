@@ -90,7 +90,15 @@ pre-commit install --install-hooks -t pre-commit -t pre-push
 python main.py
 ```
 
-`requirements-dev.txt` ติดตั้ง Kivy/ffpyplayer (`requirements.txt`) บวกเครื่องมือ dev ทั้งหมด: pytest, ruff, mypy, pre-commit
+`requirements-dev.txt` ติดตั้ง Kivy/ffpyplayer (`requirements.txt`) + Flask/SQLAlchemy/Flask-SocketIO (`server/requirements.txt`) บวกเครื่องมือ dev ทั้งหมด: pytest, ruff, mypy, pre-commit
+
+รันเฉพาะ backend (ไม่ต้องมี Kivy window) สำหรับ dev/ทดสอบ dashboard:
+
+```bash
+python -m server   # เปิดที่ http://localhost:5000 — ดูหน้า dashboard ที่ /dashboard/<room_code>
+```
+
+บน macOS ถ้าเจอ "Address already in use" ที่ port 5000 นั่นคือ AirPlay Receiver ของระบบ (ไม่เกี่ยวกับโค้ดเรา) — ปิดที่ System Settings > General > AirDrop & Handoff หรือรันด้วย `socketio.run(app, port=5050)` แทน
 
 ## 🗂 Architecture Map
 
@@ -98,14 +106,19 @@ python main.py
 main.py            # entry point — ScreenManager + Builder.load_file("style.kv")
 style.kv            # Kivy UI/layout definitions (kv language) ของทุกหน้าจอ
 
-core/               # ระบบกลาง ไม่ผูกกับหน้าจอใดหน้าจอหนึ่ง — มี type hints ครบ
+core/               # ระบบกลาง ห้าม import kivy (ยกเว้น audio.py) — server/ import ตรงได้
+                    # โดยไม่ต้องติดตั้ง Kivy, มี type hints ครบ, ดู tests/test_no_kivy_in_core.py
   config.py           ค่าคงที่: ขนาดหน้าจอ, grid, ความเร็ว
-  state.py            StateManager (Singleton) — สถานะเกมภาพรวม (MENU/PLAYING/...)
-  database.py         DatabaseManager — SQLite: player, session, score, owned skins
-  audio.py            AudioManager — BGM/SFX ผ่าน Kivy SoundLoader
+  state.py            StateManager (screen state) + RunState machine (lifecycle ของการเล่น 1 รอบ)
+  schema.py           RunRecord/RunResult — contract กลาง ดู docs/adr/001-runrecord-contract.md
+  events.py           GameEvent ที่เป็นไปได้ทั้งหมด (Collect, Respawn, Policy, Mission, Boss, Quiz, ...)
+  scoring/             evaluator.py (orchestration), rules.py (rule-based scoring), hake.py (Hake Gain)
+  sync.py             HMAC-signed sync client: sign/verify, offline queue, retry/backoff
+  database.py         DatabaseManager — SQLite (local game data): player, session, score, owned skins
+  audio.py            AudioManager — BGM/SFX ผ่าน Kivy SoundLoader (ข้อยกเว้นเดียวที่ import kivy)
   logger.py           logger กลางของแอป
 
-game/               # gameplay logic
+game/               # gameplay logic (import kivy ได้)
   grid.py             GridManager — สร้างเส้นทาง zigzag/fork แบบ procedural, isometric mapping
   penguin.py          ตัวละครผู้เล่น
   blocks.py           Obstacle (กล่องน้ำแข็งแบบ stack, ถูกชนแล้วแตกทีละชั้น)
@@ -120,6 +133,14 @@ screens/            # แต่ละไฟล์ = 1 หน้าจอ (Screen
 
 ui/                 # widget ที่ใช้ซ้ำข้ามหลายหน้าจอ
   components.py       HoverButton, AnimatedSkin ฯลฯ
+
+server/             # Flask backend — import ได้เฉพาะ core/ (ดู server/requirements.txt แยกจากเกม)
+  __init__.py          create_app() factory (Flask + SQLAlchemy + Flask-SocketIO)
+  models.py            SessionModel/PlayerModel/RunModel (SQLite dev, PostgreSQL deploy)
+  services.py          session lifecycle, verify+score+upsert run, leaderboard query
+  api.py               REST: create/join/end session, ingest run, leaderboard
+  dashboard.py         Teacher Dashboard (Jinja) + Export CSV + SocketIO room events
+  templates/            dashboard.html
 
 tests/              # pytest — ดู "Testing" ด้านล่าง
 assets/             # sprites, fonts, sounds
