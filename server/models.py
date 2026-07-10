@@ -16,6 +16,9 @@ class SessionModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     room_code: Mapped[str] = mapped_column(unique=True, index=True)
+    # secret ประจำ session สำหรับสิทธิ์ครู (end/export/dashboard) — room_code เดาง่าย
+    # (9000 ค่า) จึงใช้เป็น identifier เท่านั้น ห้ามใช้แทนสิทธิ์
+    teacher_token: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
     ended_at: Mapped[datetime | None] = mapped_column(default=None)
 

@@ -43,11 +43,21 @@
 
   <p>
     <button id="end-session">End Session</button>
-    <a href="/dashboard/{{ room_code }}/export.csv"><button type="button">Export CSV</button></a>
+    <button id="export-csv" type="button">Export CSV</button>
   </p>
 
   <script>
     const roomCode = "{{ room_code }}";
+    const teacherToken = "{{ teacher_token }}";
+
+    // token เข้ามาทาง ?token= ครั้งเดียวตอนเปิดหน้า — ลบออกจาก URL ทันที ไม่ให้ค้าง
+    // ใน browser history/ลิงก์ที่ copy ไปแชร์ ทุก request หลังจากนี้ใช้ header แทน
+    const cleanUrl = new URL(window.location.href);
+    if (cleanUrl.searchParams.has("token")) {
+      cleanUrl.searchParams.delete("token");
+      history.replaceState(null, "", cleanUrl);
+    }
+
     const socket = io();
 
     socket.on("connect", () => {
@@ -71,7 +81,24 @@
     });
 
     document.getElementById("end-session").addEventListener("click", async () => {
-      await fetch(`/api/sessions/${roomCode}/end`, { method: "POST" });
+      await fetch(`/api/sessions/${roomCode}/end`, {
+        method: "POST",
+        headers: { "X-Teacher-Token": teacherToken },
+      });
+    });
+
+    // Export ผ่าน fetch + blob แทนลิงก์ตรง เพื่อส่ง token ทาง header ได้ (ไม่ติด URL)
+    document.getElementById("export-csv").addEventListener("click", async () => {
+      const response = await fetch(`/dashboard/${roomCode}/export.csv`, {
+        headers: { "X-Teacher-Token": teacherToken },
+      });
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${roomCode}-report.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
     });
   </script>
 </body>

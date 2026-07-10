@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from flask.testing import FlaskClient
 from flask_socketio import SocketIOTestClient
@@ -5,7 +7,7 @@ from flask_socketio import SocketIOTestClient
 from core.events import CheckpointReachedEvent, MissionCompleteEvent, RespawnEvent
 from core.schema import RunRecord
 from core.state import RunState
-from core.sync import sign_run_record
+from core.sync import _compute_signature, sign_run_record
 from server import DEV_SYNC_SECRET, create_app
 from server.extensions import db, socketio
 
@@ -46,6 +48,15 @@ def socket_client(app, client) -> SocketIOTestClient:
     sio.disconnect()
 
 
+def _create_session(client: FlaskClient) -> tuple[str, str]:
+    data = client.post("/api/sessions").json
+    return data["room_code"], data["teacher_token"]
+
+
+def _teacher(token: str) -> dict[str, str]:
+    return {"X-Teacher-Token": token}
+
+
 def _make_signed_run_body(player_id: str, run_id: str = "run-1") -> dict:
     record = RunRecord(run_id=run_id, player_id=player_id)
     record.record(CheckpointReachedEvent(timestamp=0.1, distance_m=100, checkpoint_index=1))
@@ -76,14 +87,15 @@ def _make_signed_run_body(player_id: str, run_id: str = "run-1") -> dict:
     }
 
 
-def test_create_session_returns_a_room_code(client: FlaskClient):
+def test_create_session_returns_a_room_code_and_teacher_token(client: FlaskClient):
     response = client.post("/api/sessions")
     assert response.status_code == 201
     assert response.json["room_code"].startswith("PENGUIN-")
+    assert len(response.json["teacher_token"]) >= 32
 
 
 def test_join_session_returns_a_player_id(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code, _ = _create_session(client)
 
     response = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"})
 
@@ -97,7 +109,7 @@ def test_join_unknown_session_returns_404(client: FlaskClient):
 
 
 def test_ingest_run_scores_it_and_appears_on_the_leaderboard(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code, _ = _create_session(client)
     player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
@@ -115,7 +127,7 @@ def test_ingest_run_scores_it_and_appears_on_the_leaderboard(client: FlaskClient
 
 
 def test_ingest_run_rejects_a_tampered_payload(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code, _ = _create_session(client)
     player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
@@ -127,8 +139,31 @@ def test_ingest_run_rejects_a_tampered_payload(client: FlaskClient):
     assert response.status_code == 401
 
 
+def test_ingest_run_rejects_a_malformed_body_with_400(client: FlaskClient):
+    # signature ถูกต้องแต่ body ไม่ใช่ RunRecord ที่ parse ได้ — ต้องเป็น 400 ไม่ใช่ 500
+    room_code, _ = _create_session(client)
+
+    payload = sign_run_record(RunRecord(run_id="run-1", player_id="p1"), DEV_SYNC_SECRET)
+    broken = json.loads(payload.body)
+    del broken["player_id"]
+    body = json.dumps(broken, sort_keys=True)
+    signature = _compute_signature(DEV_SYNC_SECRET, "run-1", payload.timestamp, payload.nonce, body)
+
+    response = client.post(
+        f"/api/sessions/{room_code}/runs",
+        json={
+            "run_id": "run-1",
+            "timestamp": payload.timestamp,
+            "nonce": payload.nonce,
+            "body": body,
+            "signature": signature,
+        },
+    )
+    assert response.status_code == 400
+
+
 def test_ingest_run_with_the_same_run_id_upserts_instead_of_duplicating(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code, _ = _create_session(client)
     player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
@@ -140,29 +175,73 @@ def test_ingest_run_with_the_same_run_id_upserts_instead_of_duplicating(client: 
     assert len(leaderboard) == 1
 
 
-def test_end_session_marks_it_ended(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    response = client.post(f"/api/sessions/{room_code}/end")
+def test_ingest_does_not_resolve_a_player_name_across_sessions(client: FlaskClient):
+    # player join ห้อง A แล้ว payload อ้าง player_id เดียวกันแต่ยิงเข้าห้อง B —
+    # ต้องไม่ resolve ชื่อข้ามห้อง (fallback เป็น player_id ดิบแทน)
+    room_a, _ = _create_session(client)
+    room_b, _ = _create_session(client)
+    player_id = client.post(f"/api/sessions/{room_a}/join", json={"name": "Alice"}).json[
+        "player_id"
+    ]
+
+    client.post(f"/api/sessions/{room_b}/runs", json=_make_signed_run_body(player_id))
+
+    leaderboard = client.get(f"/api/sessions/{room_b}/leaderboard").json
+    assert leaderboard[0]["player_name"] == player_id  # ไม่ใช่ "Alice"
+
+
+# ── Teacher token auth ────────────────────────────────────
+
+
+def test_end_session_requires_the_teacher_token(client: FlaskClient):
+    room_code, token = _create_session(client)
+
+    assert client.post(f"/api/sessions/{room_code}/end").status_code == 403
+    assert (
+        client.post(f"/api/sessions/{room_code}/end", headers=_teacher("wrong-token")).status_code
+        == 403
+    )
+
+    response = client.post(f"/api/sessions/{room_code}/end", headers=_teacher(token))
     assert response.status_code == 200
     assert response.json["ended"] is True
 
 
-def test_dashboard_view_renders_for_a_known_session(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    response = client.get(f"/dashboard/{room_code}")
+def test_join_and_ingest_are_rejected_after_the_session_ends(client: FlaskClient):
+    room_code, token = _create_session(client)
+    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+        "player_id"
+    ]
+    client.post(f"/api/sessions/{room_code}/end", headers=_teacher(token))
+
+    join = client.post(f"/api/sessions/{room_code}/join", json={"name": "Bob"})
+    assert join.status_code == 400
+
+    ingest = client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+    assert ingest.status_code == 400
+
+
+def test_dashboard_view_requires_the_teacher_token(client: FlaskClient):
+    room_code, token = _create_session(client)
+
+    assert client.get(f"/dashboard/{room_code}").status_code == 403
+    assert client.get(f"/dashboard/{room_code}?token=wrong").status_code == 403
+
+    response = client.get(f"/dashboard/{room_code}?token={token}")
     assert response.status_code == 200
     assert room_code.encode() in response.data
 
 
-def test_dashboard_export_csv_contains_the_leaderboard_row(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+def test_dashboard_export_requires_the_teacher_token_header(client: FlaskClient):
+    room_code, token = _create_session(client)
     player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
     client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
 
-    response = client.get(f"/dashboard/{room_code}/export.csv")
+    assert client.get(f"/dashboard/{room_code}/export.csv").status_code == 403
 
+    response = client.get(f"/dashboard/{room_code}/export.csv", headers=_teacher(token))
     assert response.status_code == 200
     assert response.mimetype == "text/csv"
     assert "Alice" in response.get_data(as_text=True)
@@ -171,7 +250,7 @@ def test_dashboard_export_csv_contains_the_leaderboard_row(client: FlaskClient):
 def test_socketio_emits_leaderboard_update_on_run_ingestion(
     client: FlaskClient, socket_client: SocketIOTestClient
 ):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code, _ = _create_session(client)
     player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
@@ -185,3 +264,21 @@ def test_socketio_emits_leaderboard_update_on_run_ingestion(
     updates = [e for e in received if e["name"] == "leaderboard_update"]
     assert len(updates) == 1
     assert updates[0]["args"][0][0]["player_name"] == "Alice"
+
+
+def test_join_dashboard_for_an_unknown_room_does_not_receive_updates(
+    client: FlaskClient, socket_client: SocketIOTestClient
+):
+    room_code, _ = _create_session(client)
+    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+        "player_id"
+    ]
+
+    # join ห้องผี — server ต้องไม่ join_room ให้ จึงไม่ได้รับ update ของห้องจริงด้วย
+    socket_client.emit("join_dashboard", {"room_code": "PENGUIN-0000"})
+    socket_client.get_received()
+
+    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+
+    received = socket_client.get_received()
+    assert [e for e in received if e["name"] == "leaderboard_update"] == []
