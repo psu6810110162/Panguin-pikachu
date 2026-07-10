@@ -130,20 +130,30 @@ def ingest_signed_run(
 
 def leaderboard(session: SessionModel) -> list[RunModel]:
     """จัดอันดับด้วย environmental_score (คะแนนรวมถ่วงน้ำหนัก — ดู core/scoring/rules.py)
-    เป็นหลัก, distance_m เป็นตัวรอง ตาม docs/OVERVIEW.md
+    เป็นหลัก, distance_m เป็นตัวรอง — และ player_id เป็นตัวตัดสินสุดท้ายเมื่อคะแนน/ระยะเท่ากัน
+    เป๊ะ ๆ (กันอันดับสลับไปมาทุกครั้งที่มี update ทั้งที่ผลไม่ได้เปลี่ยนจริง) ตาม docs/OVERVIEW.md
     """
     return (
         db.session.query(RunModel)
         .filter_by(session_id=session.id)
-        .order_by(RunModel.environmental_score.desc(), RunModel.distance_m.desc())
+        .order_by(
+            RunModel.environmental_score.desc(),
+            RunModel.distance_m.desc(),
+            RunModel.player_id,
+        )
         .all()
     )
 
 
 def leaderboard_payload(session: SessionModel) -> list[dict[str, Any]]:
-    """แปลง leaderboard() เป็น dict ธรรมดา — ใช้ทั้งใน SocketIO emit และ JSON response"""
+    """แปลง leaderboard() เป็น dict ธรรมดา — ใช้ทั้งใน SocketIO emit และ JSON response
+
+    มี player_id ติดไปด้วยเพื่อให้ dashboard ฝั่ง client ใช้เป็น key สำหรับ diff/update
+    DOM ทีละแถวได้ (ไม่ต้อง render ตารางใหม่ทั้งหมดทุกครั้งที่มี event เข้ามา)
+    """
     return [
         {
+            "player_id": run.player_id,
             "player_name": run.player_name,
             "distance_m": run.distance_m,
             "respawn_count": run.respawn_count,
