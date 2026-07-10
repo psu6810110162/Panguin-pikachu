@@ -14,6 +14,12 @@ RUN pip install --no-cache-dir -r server/requirements.txt
 # that decides what's excluded, not a list of COPY lines that can go stale.
 COPY . .
 
+# Run as a non-root user — standard defense-in-depth: a compromised Flask process
+# shouldn't own the container's filesystem. Created after COPY so the layer cache for
+# deps/source stays intact.
+RUN useradd --create-home appuser && chown -R appuser /app
+USER appuser
+
 EXPOSE 5000
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \

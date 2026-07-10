@@ -11,4 +11,6 @@ if [ ! -d venv ]; then
     exit 1
 fi
 
-exec venv/bin/python3 -m server
+# FLASK_DEBUG default เปิดเฉพาะ script dev นี้ — server เอง default ปิด (ปลอดภัยไว้ก่อน)
+# และจะ refuse default SYNC_SECRET เมื่อ debug ปิด (ดู server/config.py)
+exec env FLASK_DEBUG="${FLASK_DEBUG:-1}" venv/bin/python3 -m server

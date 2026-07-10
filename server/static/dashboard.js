@@ -1,12 +1,23 @@
 "use strict";
 
-const FINISH_DISTANCE_M = 1000;
+// เส้นชัยมาจาก server (core.state.BOSS_MIN_DISTANCE_M) ผ่าน data attribute —
+// ไม่ hardcode ซ้ำใน JS เพื่อให้ backend เป็น single source of truth
+const FINISH_DISTANCE_M = Number(document.body.dataset.finishDistanceM) || 1000;
 const SCORE_GOOD_THRESHOLD = 70;
 const SCORE_WARNING_THRESHOLD = 40;
 const COPY_FEEDBACK_MS = 2000;
 
 const roomCode = document.body.dataset.roomCode;
+const teacherToken = document.body.dataset.teacherToken;
 const rowsByPlayerId = new Map();
+
+// token เข้ามาทาง ?token= ครั้งเดียวตอนเปิดหน้า — ลบออกจาก URL ทันที ไม่ให้ค้างใน
+// browser history/ลิงก์ที่ copy ไปแชร์ request หลังจากนี้ใช้ X-Teacher-Token header แทน
+const cleanUrl = new URL(window.location.href);
+if (cleanUrl.searchParams.has("token")) {
+  cleanUrl.searchParams.delete("token");
+  history.replaceState(null, "", cleanUrl);
+}
 
 const els = {
   tableBody: document.querySelector("#leaderboard-body"),
@@ -214,6 +225,11 @@ if (initialLeaderboardEl) {
   ui.updateHeader();
 }
 
+// reload หลัง session จบแล้วต้องยังเห็น banner — ไม่พึ่ง socket event อย่างเดียว
+if (document.body.dataset.sessionActive === "false") {
+  els.sessionEndedBanner.classList.add("visible");
+}
+
 // ── socket wiring ────────────────────────────────────────
 
 const socket = io();
@@ -240,18 +256,10 @@ function onSessionEnded() {
   els.sessionEndedBanner.classList.add("visible");
 }
 
-const socketHandlers = { onConnect, onDisconnect, onReconnectAttempt, onLeaderboardUpdate };
-
-socket.off("connect");
-socket.off("disconnect");
-socket.off("reconnect_attempt");
-socket.off("leaderboard_update");
-socket.off("session_ended");
-
-socket.on("connect", socketHandlers.onConnect);
-socket.on("disconnect", socketHandlers.onDisconnect);
-socket.on("reconnect_attempt", socketHandlers.onReconnectAttempt);
-socket.on("leaderboard_update", socketHandlers.onLeaderboardUpdate);
+socket.on("connect", onConnect);
+socket.on("disconnect", onDisconnect);
+socket.on("reconnect_attempt", onReconnectAttempt);
+socket.on("leaderboard_update", onLeaderboardUpdate);
 socket.on("session_ended", onSessionEnded);
 
 // ── toolbar ──────────────────────────────────────────────
@@ -273,7 +281,10 @@ els.endSessionButton?.addEventListener("click", async () => {
   if (!window.confirm("End this session for everyone?")) return;
   els.endSessionButton.disabled = true;
   try {
-    await fetch(`/api/v1/sessions/${roomCode}/end`, { method: "POST" });
+    await fetch(`/api/v1/sessions/${roomCode}/end`, {
+      method: "POST",
+      headers: { "X-Teacher-Token": teacherToken },
+    });
   } finally {
     els.endSessionButton.disabled = false;
   }
@@ -283,7 +294,9 @@ els.exportButton?.addEventListener("click", async () => {
   els.exportButton.disabled = true;
   els.exportFeedback.textContent = "";
   try {
-    const response = await fetch(`/dashboard/${roomCode}/export.csv`);
+    const response = await fetch(`/dashboard/${roomCode}/export.csv`, {
+      headers: { "X-Teacher-Token": teacherToken },
+    });
     if (!response.ok) throw new Error("export failed");
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
