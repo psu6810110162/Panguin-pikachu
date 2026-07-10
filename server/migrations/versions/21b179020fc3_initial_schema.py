@@ -22,6 +22,9 @@ def upgrade():
         "sessions",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("room_code", sa.String(), nullable=False),
+        # แก้ไฟล์ auto-generate ตรงนี้ได้เพราะ schema นี้ยังไม่เคย apply ที่ไหนจริง —
+        # teacher_token เพิ่มเข้า model ภายใน stack เดียวกัน (PR #27) ก่อน merge
+        sa.Column("teacher_token", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("ended_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),

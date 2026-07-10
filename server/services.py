@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 
 from core.events import GameEvent
-from core.schema import RunRecord
+from core.schema import RunRecord, RunResult
 from core.scoring import rules
 from core.scoring.evaluator import evaluate
 from core.state import RunState
@@ -48,8 +48,12 @@ def generate_room_code() -> str:
 
 
 def create_session() -> SessionModel:
+    # teacher_token คือสิทธิ์ครูประจำ session (end/export/dashboard) — คืนให้ครั้งเดียว
+    # ตอนสร้างเท่านั้น 32 bytes (~256 bits) เกินพอจนไม่ต้องถกเรื่อง entropy อีก
     for _ in range(_MAX_ROOM_CODE_ATTEMPTS):
-        session = SessionModel(room_code=generate_room_code())
+        session = SessionModel(
+            room_code=generate_room_code(), teacher_token=secrets.token_urlsafe(32)
+        )
         db.session.add(session)
         try:
             db.session.commit()
@@ -66,6 +70,8 @@ def get_session_by_code(room_code: str) -> SessionModel | None:
 
 
 def join_session(session: SessionModel, name: str) -> PlayerModel:
+    if not session.is_active:
+        raise ValidationError(f"session {session.room_code} has ended")
     player = PlayerModel(session_id=session.id, player_id=uuid.uuid4().hex, name=name)
     db.session.add(player)
     db.session.commit()
@@ -105,10 +111,25 @@ def ingest_signed_run(
     """
     verify_signed_payload(signed_payload, secret, nonce_store)
 
-    record = RunRecord.from_dict(json.loads(signed_payload.body))
+    if not session.is_active:
+        raise ValidationError(f"session {session.room_code} has ended")
+
+    # from_dict เป็น plain dataclass ที่ raise TypeError/KeyError/ValueError ดิบกับข้อมูล
+    # เสีย (พฤติกรรมที่ตรึงไว้ใน tests/test_schema.py) — แปลงเป็น ValidationError ที่นี่
+    # เพื่อให้ client ที่ส่ง body เพี้ยนได้ 400 ไม่ใช่ 500
+    try:
+        record = RunRecord.from_dict(json.loads(signed_payload.body))
+    except (TypeError, KeyError, ValueError) as error:
+        raise ValidationError(f"malformed run record body: {error!r}") from error
     validate_events(record.events)
 
-    player = db.session.query(PlayerModel).filter_by(player_id=record.player_id).first()
+    # scope ด้วย session ด้วยเสมอ — player_id เป็น uuid unique ข้ามทุก session ก็จริง
+    # แต่ payload ที่อ้าง player ของ session อื่นต้องไม่ resolve ชื่อข้ามห้องได้
+    player = (
+        db.session.query(PlayerModel)
+        .filter_by(player_id=record.player_id, session_id=session.id)
+        .first()
+    )
     player_name = player.name if player else record.player_id
 
     pretest_pct = rules.quiz_score(record.events, phase="pretest") or 0.0
@@ -125,6 +146,26 @@ def ingest_signed_run(
         run = RunModel(session_id=session.id, run_id=record.run_id, player_id=record.player_id)
         db.session.add(run)
 
+    _apply_result(run, record, result, player_name)
+
+    # query-แล้วค่อย-insert ข้างบนไม่ atomic ภายใต้ async_mode="threading" — สอง request
+    # ของ run_id เดียวกัน (เช่น client retry จาก offline queue) อาจเห็น run is None พร้อม
+    # กันแล้ว insert ชน unique constraint ฝั่งที่แพ้ rollback แล้ว update ทับแถวของฝั่งที่
+    # ชนะแทน ปลอดภัยเพราะ duplicate ingest ต้อง converge: ทั้งสองฝั่งเขียนค่าที่คำนวณจาก
+    # payload เดียวกันลง run เดียวกัน (upsert idempotent)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        run = (
+            db.session.query(RunModel).filter_by(run_id=record.run_id, session_id=session.id).one()
+        )
+        _apply_result(run, record, result, player_name)
+        db.session.commit()
+    return run
+
+
+def _apply_result(run: RunModel, record: RunRecord, result: RunResult, player_name: str) -> None:
     run.player_name = player_name
     run.status = _STATE_TO_DASHBOARD_STATUS[record.state]
     run.distance_m = result.distance_m
@@ -136,9 +177,6 @@ def ingest_signed_run(
     run.heat_controlled_pct = result.heat_controlled_pct
     run.events_json = json.dumps(record.to_dict())
     run.synced_at = datetime.now(UTC)
-
-    db.session.commit()
-    return run
 
 
 def leaderboard(session: SessionModel) -> list[RunModel]:
