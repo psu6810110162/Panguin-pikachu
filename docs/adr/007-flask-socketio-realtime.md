@@ -1,5 +1,7 @@
 # ADR-007: Flask-SocketIO สำหรับ real-time dashboard (threading mode, ไม่ใช้ eventlet/gevent)
 
+**Status:** Accepted
+
 ## Context
 
 `docs/ENGINEERING_PLAN.md` ระบุ Flask-SocketIO ไว้ตั้งแต่ต้นสำหรับ push อัปเดตคะแนน/สถานะผู้เล่นขึ้น Teacher Dashboard แบบ real-time ระหว่างพัฒนา D9 มีทางเลือกที่ง่ายกว่าคือ REST polling ธรรมดา (dashboard JS เรียก `GET /leaderboard` ทุก 2-3 วินาที) ซึ่งไม่ต้องเพิ่ม dependency และ test ง่ายกว่า แต่เบี่ยงไปจากแผนที่ตกลงกันไว้แล้ว

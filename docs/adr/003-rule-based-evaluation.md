@@ -1,5 +1,7 @@
 # ADR-003: Rule-based evaluation แทน DAG (DAG = future work)
 
+**Status:** Accepted
+
 ## Context
 
 PDF ต้นฉบับ (flowchart NSC2026) ระบุ "DAG Evaluation Phase" — แปลงการตัดสินใจของผู้เล่นเป็น Directed Acyclic Graph แล้ว map เข้า learning objectives ก่อนคำนวณ rubric score แนวทางนี้ทรงพลังแต่ implementation ใช้เวลามาก และในบริบทเดโม 3 วัน กรรมการจะไม่เห็นความแตกต่างระหว่าง DAG evaluation กับกติกาที่อธิบายได้ตรงไปตรงมา — DAG "ดูซับซ้อน" แต่ผลลัพธ์ที่โชว์ได้จริงเหมือนกัน

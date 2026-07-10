@@ -1,5 +1,7 @@
 # ADR-001: RunRecord เป็น contract กลาง + schema_version + event log
 
+**Status:** Accepted
+
 ## Context
 
 เกม (Kivy, ฝั่งเพื่อน) กับ backend (Flask, ฝั่งคุณ) ต้องแลกเปลี่ยนข้อมูลรอบเล่นเดียวกัน (การตัดสินใจ, ระยะทาง, meters, คะแนน quiz) โดยพัฒนาแยกกันคนละ CLI ไม่รอกัน ถ้าไม่มี contract ตายตัวตั้งแต่ต้น สอง codebase จะแตกโครงสร้างข้อมูลกันแน่นอน

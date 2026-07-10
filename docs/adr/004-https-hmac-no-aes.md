@@ -1,5 +1,7 @@
 # ADR-004: HTTPS + HMAC โดยไม่ใช้ AES-256
 
+**Status:** Accepted
+
 ## Context
 
 PDF ต้นฉบับระบุ pipeline: สร้าง HMAC-SHA256 signature → เข้ารหัส AES-256 → ส่งผ่าน REST API → server ตรวจ signature → เก็บ DB คำถามที่ reviewer จะถามคือ: ถ้าส่งผ่าน HTTPS อยู่แล้ว (ซึ่งเข้ารหัส transport layer ทั้งเส้นทาง) การเข้ารหัส AES-256 ซ้ำอีกชั้นที่ payload มีประโยชน์อะไรเพิ่ม — ถ้าตอบแค่ "PDF บอกให้ทำ" ไม่ใช่คำตอบทางวิศวกรรมที่หนักแน่นพอ
