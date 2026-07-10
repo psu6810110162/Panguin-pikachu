@@ -61,3 +61,12 @@ jobs:
           KIVY_NO_ARGS: "1"
           KIVY_WINDOW: mock
         run: pytest -v
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker compose build (build only — catches a broken Dockerfile early)
+        run: docker compose build
