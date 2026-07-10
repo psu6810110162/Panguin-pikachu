@@ -273,7 +273,7 @@ els.endSessionButton?.addEventListener("click", async () => {
   if (!window.confirm("End this session for everyone?")) return;
   els.endSessionButton.disabled = true;
   try {
-    await fetch(`/api/sessions/${roomCode}/end`, { method: "POST" });
+    await fetch(`/api/v1/sessions/${roomCode}/end`, { method: "POST" });
   } finally {
     els.endSessionButton.disabled = false;
   }

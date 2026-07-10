@@ -78,7 +78,7 @@ def _make_signed_run_body(player_id: str, run_id: str = "run-1") -> dict:
 
 
 def test_create_session_returns_a_room_code(client: FlaskClient):
-    response = client.post("/api/sessions")
+    response = client.post("/api/v1/sessions")
     assert response.status_code == 201
     assert response.json["room_code"].startswith("PENGUIN-")
 
@@ -86,7 +86,7 @@ def test_create_session_returns_a_room_code(client: FlaskClient):
 def test_create_session_retries_past_a_room_code_collision(client: FlaskClient, monkeypatch):
     from server import services
 
-    taken = client.post("/api/sessions").json["room_code"]
+    taken = client.post("/api/v1/sessions").json["room_code"]
     codes = iter([taken, "PENGUIN-9999"])
     monkeypatch.setattr(services, "generate_room_code", lambda: next(codes))
 
@@ -96,31 +96,31 @@ def test_create_session_retries_past_a_room_code_collision(client: FlaskClient, 
 
 
 def test_join_session_returns_a_player_id(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code = client.post("/api/v1/sessions").json["room_code"]
 
-    response = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"})
+    response = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"})
 
     assert response.status_code == 201
     assert response.json["player_id"]
 
 
 def test_join_unknown_session_returns_404(client: FlaskClient):
-    response = client.post("/api/sessions/PENGUIN-0000/join", json={"name": "Alice"})
+    response = client.post("/api/v1/sessions/PENGUIN-0000/join", json={"name": "Alice"})
     assert response.status_code == 404
 
 
 def test_ingest_run_scores_it_and_appears_on_the_leaderboard(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
 
     body = _make_signed_run_body(player_id)
-    response = client.post(f"/api/sessions/{room_code}/runs", json=body)
+    response = client.post(f"/api/v1/sessions/{room_code}/runs", json=body)
     assert response.status_code == 200
     assert response.json["status"] == "FINISHED"
 
-    leaderboard = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    leaderboard = client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
     assert len(leaderboard) == 1
     assert leaderboard[0]["player_name"] == "Alice"
     assert leaderboard[0]["distance_m"] == 1000
@@ -128,34 +128,34 @@ def test_ingest_run_scores_it_and_appears_on_the_leaderboard(client: FlaskClient
 
 
 def test_ingest_run_rejects_a_tampered_payload(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
 
     body = _make_signed_run_body(player_id)
     body["body"] = body["body"].replace("FINISHED", "SYNCED")
 
-    response = client.post(f"/api/sessions/{room_code}/runs", json=body)
+    response = client.post(f"/api/v1/sessions/{room_code}/runs", json=body)
     assert response.status_code == 401
 
 
 def test_ingest_run_with_the_same_run_id_upserts_instead_of_duplicating(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
 
-    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
-    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
 
-    leaderboard = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    leaderboard = client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
     assert len(leaderboard) == 1
 
 
 def test_end_session_marks_it_ended(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    response = client.post(f"/api/sessions/{room_code}/end")
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    response = client.post(f"/api/v1/sessions/{room_code}/end")
     assert response.status_code == 200
     assert response.json["ended"] is True
 
@@ -167,42 +167,44 @@ def test_dashboard_index_offers_a_create_session_affordance(client: FlaskClient)
 
 
 def test_dashboard_view_renders_for_a_known_session(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code = client.post("/api/v1/sessions").json["room_code"]
     response = client.get(f"/dashboard/{room_code}")
     assert response.status_code == 200
     assert room_code.encode() in response.data
 
 
 def test_leaderboard_payload_includes_player_id(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
-    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
 
-    leaderboard = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    leaderboard = client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
     assert leaderboard[0]["player_id"] == player_id
 
 
 def test_leaderboard_tie_break_order_is_stable_across_calls(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    alice_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    alice_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
-    bob_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Bob"}).json["player_id"]
+    bob_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Bob"}).json[
+        "player_id"
+    ]
 
     # identical events/state for both -> identical environmental_score and distance_m,
     # so only the player_id tie-break decides the order
     client.post(
-        f"/api/sessions/{room_code}/runs",
+        f"/api/v1/sessions/{room_code}/runs",
         json=_make_signed_run_body(alice_id, run_id="run-alice"),
     )
     client.post(
-        f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(bob_id, run_id="run-bob")
+        f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(bob_id, run_id="run-bob")
     )
 
-    first = client.get(f"/api/sessions/{room_code}/leaderboard").json
-    second = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    first = client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
+    second = client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
     expected_order = sorted([alice_id, bob_id])
 
     assert [row["player_id"] for row in first] == expected_order
@@ -210,14 +212,14 @@ def test_leaderboard_tie_break_order_is_stable_across_calls(client: FlaskClient)
 
 
 def test_player_name_with_markup_is_never_interpreted_as_html(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
+    room_code = client.post("/api/v1/sessions").json["room_code"]
     malicious_name = "<script>alert(1)</script>"
-    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": malicious_name}).json[
-        "player_id"
-    ]
-    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+    player_id = client.post(
+        f"/api/v1/sessions/{room_code}/join", json={"name": malicious_name}
+    ).json["player_id"]
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
 
-    leaderboard = client.get(f"/api/sessions/{room_code}/leaderboard").json
+    leaderboard = client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
     assert leaderboard[0]["player_name"] == malicious_name
 
     dashboard_html = client.get(f"/dashboard/{room_code}").data.decode()
@@ -228,11 +230,11 @@ def test_player_name_with_markup_is_never_interpreted_as_html(client: FlaskClien
 
 
 def test_dashboard_export_csv_contains_the_leaderboard_row(client: FlaskClient):
-    room_code = client.post("/api/sessions").json["room_code"]
-    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
-    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
 
     response = client.get(f"/dashboard/{room_code}/export.csv")
 
@@ -244,15 +246,15 @@ def test_dashboard_export_csv_contains_the_leaderboard_row(client: FlaskClient):
 def test_socketio_emits_leaderboard_update_on_run_ingestion(
     client: FlaskClient, socket_client: SocketIOTestClient
 ):
-    room_code = client.post("/api/sessions").json["room_code"]
-    player_id = client.post(f"/api/sessions/{room_code}/join", json={"name": "Alice"}).json[
+    room_code = client.post("/api/v1/sessions").json["room_code"]
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
         "player_id"
     ]
 
     socket_client.emit("join_dashboard", {"room_code": room_code})
     socket_client.get_received()  # drain the join ack, if any
 
-    client.post(f"/api/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
 
     received = socket_client.get_received()
     updates = [e for e in received if e["name"] == "leaderboard_update"]

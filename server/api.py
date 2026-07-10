@@ -14,7 +14,7 @@ from server import services
 from server.extensions import socketio
 from server.models import PlayerModel, SessionModel
 
-api = Blueprint("api", __name__, url_prefix="/api")
+api = Blueprint("api", __name__, url_prefix="/api/v1")
 
 # Blueprint แยกไม่มี url_prefix เพราะ health check ควรอยู่ที่ /healthz เฉยๆ (ตำแหน่งมาตรฐาน
 # ที่ Docker HEALTHCHECK / Railway / load balancer คาดหวัง) ไม่ใช่ /api/healthz
