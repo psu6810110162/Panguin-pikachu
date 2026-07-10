@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend-server",
+      "runtimeExecutable": "venv/bin/python3",
+      "runtimeArgs": ["-m", "server"],
+      "port": 5050,
+      "autoPort": true,
+      "env": {
+        "PORT": "5050"
+      }
+    }
+  ]
+}
