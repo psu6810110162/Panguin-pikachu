@@ -20,7 +20,6 @@
   --space-6: 2.5rem;
   --space-7: 4rem;
 
-  --text-xs: 0.8rem;
   --text-sm: 0.9rem;
   --text-base: 1rem;
   --text-lg: 1.2rem;
@@ -154,9 +153,9 @@ thead th {
   position: sticky;
   top: 0;
   text-align: left;
-  /* var(--text-sm) not --text-xs: this table is read from the back of a classroom off
-     a projector — 0.8rem uppercase + letter-spacing was shrinking below comfortably
-     legible at a glance (see UX/UI audit notes) */
+  /* var(--text-sm), deliberately not smaller: this table is read from the back of a
+     classroom off a projector — the previous 0.8rem uppercase + letter-spacing was
+     shrinking below comfortably legible at a glance (see UX/UI audit notes) */
   font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.06em;
