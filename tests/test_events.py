@@ -36,3 +36,26 @@ def test_event_round_trips_through_dict():
 def test_event_from_dict_rejects_unknown_event_type():
     with pytest.raises(ValueError, match="not_a_real_event"):
         event_from_dict({"event_type": "not_a_real_event"})
+
+
+def test_event_from_dict_missing_required_field_raises_type_error():
+    # บันทึกพฤติกรรมปัจจุบัน: dataclass raise TypeError ดิบเมื่อ field ขาด —
+    # ฝั่ง server ต้อง catch แล้วแปลงเป็น 400 เอง (ดู tests/test_schema.py)
+    with pytest.raises(TypeError):
+        event_from_dict({"event_type": "collect", "timestamp": 1.0})
+
+
+def test_event_from_dict_unexpected_extra_field_raises_type_error():
+    with pytest.raises(TypeError):
+        event_from_dict(
+            {
+                "event_type": "collect",
+                "timestamp": 1.0,
+                "distance_m": 50,
+                "item_type": "gem",
+                "col": 0,
+                "row": 0,
+                "value": 1,
+                "not_a_real_field": True,
+            }
+        )
