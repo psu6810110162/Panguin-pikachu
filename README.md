@@ -25,6 +25,16 @@
 
 ---
 
+## 🕹 วิธีเล่น (How to Play)
+
+> เอกสารนี้อธิบาย **เกมที่มีอยู่จริงตอนนี้** ส่วนดีไซน์เป้าหมายเต็มรูปแบบ (checkpoint, policy, boss, quiz — ดู [docs/OVERVIEW.md](docs/OVERVIEW.md)) ยังอยู่ระหว่างพัฒนา (D2–D6) เพื่อไม่ให้เอกสารเพี้ยนไปจากของจริงเมื่อ build
+
+- **ควบคุม:** ปุ่มลูกศร ← → บนคีย์บอร์ด หรือปุ่มลูกศรบนหน้าจอ — เลี้ยวซ้าย/ขวาเท่านั้น เพนกวินวิ่งไปข้างหน้าอัตโนมัติ
+- **เก็บเพชร (Gem):** เดินผ่านจะเก็บอัตโนมัติ สะสมไว้ซื้อสกินในร้านค้า
+- **ชนกล่องน้ำแข็ง (Obstacle):** ชนแล้วกล่องจะแตกทีละชั้น (ไม่ตายทันที) ชนซ้ำจนกล่องแตกหมดถึงจะผ่านไปได้
+- **ตาย:** เดินหลุดออกนอกเส้นทาง, ยืนนิ่งเกิน 2 วินาที (พื้นจะถล่ม), หรือโดนพื้นที่กำลังถล่ม — จบเกมทันที (ยังไม่มีระบบ Respawn ในเวอร์ชันปัจจุบัน)
+- **เป้าหมาย:** วิ่งให้ไกลที่สุดและเก็บเพชรให้เยอะที่สุดก่อนตาย แข่งกับสถิติเดิมของตัวเองใน History
+
 ## 🛠 คำอธิบายการทำงานของ Code (Technical Logic)
 
 ทีมงานเราแบ่งโครงสร้างโค้ดออกเป็นส่วนๆ (Modular Architecture) เพื่อให้ง่ายต่อการพัฒนาและตรวจสอบ:
@@ -80,25 +90,73 @@
 
 ---
 
-## 🚀 Dev Setup (5 นาที)
+## 🚀 How to Use
+
+**System diagram:**
+
+```
+Game (Kivy) ──HTTPS/REST──▶ Flask ──SQLAlchemy──▶ SQLite (dev) / PostgreSQL (deploy)
+                              │
+                     Teacher Dashboard (Socket.IO)
+```
+
+### Requirements
+
+- Python 3.12
+- Docker + Docker Compose (ถ้าจะรัน backend ผ่าน container)
+- `make` (ไม่จำเป็น — เป็นแค่ shortcut, ดูหมายเหตุ Windows ด้านล่าง)
+
+### ตั้งค่าครั้งแรก (5 นาที)
 
 ```bash
 python3.12 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements-dev.txt
 pre-commit install --install-hooks -t pre-commit -t pre-push
-python main.py
 ```
 
-`requirements-dev.txt` ติดตั้ง Kivy/ffpyplayer (`requirements.txt`) + Flask/SQLAlchemy/Flask-SocketIO (`server/requirements.txt`) บวกเครื่องมือ dev ทั้งหมด: pytest, ruff, mypy, pre-commit
+`requirements-dev.txt` ติดตั้ง Kivy/ffpyplayer (`requirements.txt`) + Flask/SQLAlchemy/Flask-SocketIO/psycopg (`server/requirements.txt`) บวกเครื่องมือ dev ทั้งหมด: pytest, ruff, mypy, pre-commit
 
-รันเฉพาะ backend (ไม่ต้องมี Kivy window) สำหรับ dev/ทดสอบ dashboard:
+### รันเกม
 
 ```bash
-python -m server   # เปิดที่ http://localhost:5000 — ดูหน้า dashboard ที่ /dashboard/<room_code>
+python main.py            # หรือ: ./scripts/run_game.sh  /  make run-game
 ```
 
-บน macOS ถ้าเจอ "Address already in use" ที่ port 5000 นั่นคือ AirPlay Receiver ของระบบ (ไม่เกี่ยวกับโค้ดเรา) — ปิดที่ System Settings > General > AirDrop & Handoff หรือรันด้วย `socketio.run(app, port=5050)` แทน
+### รัน backend (ไม่ต้องมี Kivy window)
+
+```bash
+python -m server           # หรือ: ./scripts/run_server.sh  /  make run-server
+# เปิดที่ http://localhost:5000 — ดูหน้า dashboard ที่ /dashboard/<room_code>
+```
+
+บน macOS ถ้าเจอ "Address already in use" ที่ port 5000 นั่นคือ AirPlay Receiver ของระบบ (ไม่เกี่ยวกับโค้ดเรา) — ปิดที่ System Settings > General > AirDrop & Handoff หรือตั้ง `PORT=5051 python -m server` แทน
+
+### รัน backend ผ่าน Docker
+
+```bash
+cp .env.example .env
+docker compose up                        # SQLite ใน container — ไม่ต้องตั้งค่าอะไรเพิ่ม
+# หรือ
+docker compose --profile postgres up     # ทดลอง path PostgreSQL จริงตาม docs/adr/005-sqlite-dev-postgres-deploy.md
+                                          # (ต้อง uncomment DATABASE_URL บรรทัด postgresql+psycopg ใน .env ก่อน)
+```
+
+`docker compose down` เพื่อหยุด, `docker compose --profile postgres down -v` เพื่อหยุดพร้อมลบ Postgres volume ทิ้ง — ดู [ADR-008](docs/adr/008-docker-compose-backend.md)
+
+### Windows (เพื่อนร่วมทีมใช้ Windows, อีกคนใช้ Mac)
+
+`make` ไม่มีมาให้บน Windows โดย default — ใช้ **Git Bash** (ติดมากับ Git for Windows อยู่แล้ว) รัน `.sh` scripts และ `make` ได้ตามปกติ หรือข้าม Make ไปเลยแล้วรันคำสั่ง `python`/`docker compose` ตรง ๆ ด้านบน — ทำงานเหมือนกันทุก OS ไม่มี `.bat` แยกให้ดูแลเพิ่ม
+
+### Make shortcuts (ทางลัด — ดู `Makefile`)
+
+| Command | ทำอะไร |
+|---|---|
+| `make run-game` / `make run-server` | รันเกม / รัน backend |
+| `make docker-up` / `make docker-up-postgres` | รัน backend ผ่าน Docker (SQLite / Postgres) |
+| `make test` / `make lint` / `make format` | pytest / ruff+mypy / ruff --fix |
+| `make check` | lint + test รวด — เหมือนที่ pre-push hook รัน |
+| `make clean` | ลบ `__pycache__`/`.pytest_cache`/`.ruff_cache`/`.mypy_cache` เท่านั้น (ไม่แตะ `instance/` หรือ DB) |
 
 ## 🗂 Architecture Map
 
@@ -136,14 +194,21 @@ ui/                 # widget ที่ใช้ซ้ำข้ามหลาย
 
 server/             # Flask backend — import ได้เฉพาะ core/ (ดู server/requirements.txt แยกจากเกม)
   __init__.py          create_app() factory (Flask + SQLAlchemy + Flask-SocketIO)
+  __main__.py           bootstrap: `python -m server` — อ่าน config จาก config.py แล้วรัน
+  config.py            อ่าน env var (DATABASE_URL/SYNC_SECRET/PORT) จุดเดียว
   models.py            SessionModel/PlayerModel/RunModel (SQLite dev, PostgreSQL deploy)
   services.py          session lifecycle, verify+score+upsert run, leaderboard query
-  api.py               REST: create/join/end session, ingest run, leaderboard
+  api.py               REST: create/join/end session, ingest run, leaderboard, healthz
   dashboard.py         Teacher Dashboard (Jinja) + Export CSV + SocketIO room events
-  templates/            dashboard.html
+  static/               dashboard.css, dashboard.js
+  templates/            index.html (create session), dashboard.html
+  Dockerfile            image สำหรับ backend เท่านั้น (เกม Kivy containerize ไม่ได้ประโยชน์)
+  requirements.txt      Flask/SQLAlchemy/Flask-SocketIO/psycopg — แยกจากเกม
 
 tests/              # pytest — ดู "Testing" ด้านล่าง
+scripts/            # run_game.sh, run_server.sh — เรียกตรงหรือผ่าน Makefile ก็ได้
 assets/             # sprites, fonts, sounds
+docker-compose.yml, .env.example, Makefile   # ดูหัวข้อ "How to Use"
 ```
 
 ## ✅ Testing & Quality Gates
@@ -174,3 +239,4 @@ pre-commit run --hook-stage pre-push --all-files
 3. ก่อนเปิด PR: รัน `pre-commit run --all-files` และ `pre-commit run --hook-stage pre-push --all-files` ให้ผ่านทั้งคู่
 4. ทุก PR ต้องมี CI เขียว + อีกคน review (CODEOWNERS auto-request ทั้งสองคน)
 5. คำถาม/policy/quiz ข้อมูลเก็บเป็น JSON แยกจาก logic — แก้เนื้อหาไม่ต้องแตะโค้ด
+6. เปลี่ยน/เพิ่ม architecture decision (dependency ใหม่, data model, security model) → เขียน ADR ใหม่ก่อน อย่าแก้ ADR เก่าย้อนหลัง — ดู [docs/adr/TEMPLATE.md](docs/adr/TEMPLATE.md) และ "Changing หรือเพิ่ม ADR" ใน [docs/ENGINEERING_PLAN.md](docs/ENGINEERING_PLAN.md)
