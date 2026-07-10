@@ -16,6 +16,11 @@ from server.extensions import socketio
 dashboard = Blueprint("dashboard", __name__, url_prefix="/dashboard")
 
 
+@dashboard.get("/")
+def index() -> str:
+    return render_template("index.html")
+
+
 @dashboard.get("/<room_code>")
 def view(room_code: str) -> str | tuple[str, int]:
     session = services.get_session_by_code(room_code)

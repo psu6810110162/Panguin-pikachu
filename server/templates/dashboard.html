@@ -1,78 +1,60 @@
 <!doctype html>
-<html lang="th">
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Penguin Dash — Teacher Dashboard ({{ room_code }})</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; }
-    table { border-collapse: collapse; width: 100%; max-width: 800px; }
-    th, td { border: 1px solid #ccc; padding: 0.5rem 0.75rem; text-align: left; }
-    th { background: #f0f0f0; }
-    .status-ACTIVE { color: #1a7f37; }
-    .status-RESPAWNING { color: #b8860b; }
-    .status-FINISHED { color: #555; }
-    button { padding: 0.5rem 1rem; margin-right: 0.5rem; }
-  </style>
 </head>
-<body>
-  <h1>Room: {{ room_code }}</h1>
+<body data-room-code="{{ room_code }}">
+  <main>
+    <header class="dashboard-header">
+      <div class="room-code-block">
+        <div>
+          <div class="room-code-label">Room code</div>
+          <div class="room-code">{{ room_code }}</div>
+        </div>
+        <button id="copy-room-code" class="copy-button" type="button">📋 Copy</button>
+      </div>
+      <div class="status-cluster">
+        <span id="connection-banner" class="connection-banner" data-state="disconnected">🔴 Disconnected</span>
+        <span id="updated-at" class="updated-at">Updated —</span>
+      </div>
+    </header>
 
-  <table id="leaderboard">
-    <thead>
-      <tr>
-        <th>Player</th>
-        <th>Distance (m)</th>
-        <th>Respawns</th>
-        <th>Environmental Score</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in leaderboard %}
-      <tr>
-        <td>{{ row.player_name }}</td>
-        <td>{{ row.distance_m }}</td>
-        <td>{{ row.respawn_count }}</td>
-        <td>{{ row.environmental_score }}</td>
-        <td class="status-{{ row.status }}">{{ row.status }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+    <div id="session-ended-banner" class="session-ended-banner">Session ended — leaderboard is now final.</div>
 
-  <p>
-    <button id="end-session">End Session</button>
-    <a href="/dashboard/{{ room_code }}/export.csv"><button type="button">Export CSV</button></a>
-  </p>
+    <div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
 
-  <script>
-    const roomCode = "{{ room_code }}";
-    const socket = io();
+    <table id="leaderboard-table" hidden>
+      <thead>
+        <tr>
+          <th scope="col">Rank</th>
+          <th scope="col">Player</th>
+          <th scope="col">Distance</th>
+          <th scope="col">Respawns</th>
+          <th scope="col">Environmental Score</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
 
-    socket.on("connect", () => {
-      socket.emit("join_dashboard", { room_code: roomCode });
-    });
+    <div id="empty-state" class="empty-state">
+      <span class="icon">🧊</span>
+      <p>Waiting for players to join — share this room code with students:</p>
+      <div class="room-code">{{ room_code }}</div>
+    </div>
 
-    socket.on("leaderboard_update", (rows) => {
-      const tbody = document.querySelector("#leaderboard tbody");
-      tbody.innerHTML = "";
-      for (const row of rows) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${row.player_name}</td>
-          <td>${row.distance_m}</td>
-          <td>${row.respawn_count}</td>
-          <td>${row.environmental_score}</td>
-          <td class="status-${row.status}">${row.status}</td>
-        `;
-        tbody.appendChild(tr);
-      }
-    });
+    <div class="toolbar">
+      <button id="end-session" class="danger" type="button">End Session</button>
+      <button id="export-csv" class="primary" type="button">⬇ Export CSV</button>
+      <span id="export-feedback" class="toolbar-feedback"></span>
+    </div>
+  </main>
 
-    document.getElementById("end-session").addEventListener("click", async () => {
-      await fetch(`/api/sessions/${roomCode}/end`, { method: "POST" });
-    });
-  </script>
+  <script type="application/json" id="initial-leaderboard">{{ leaderboard | tojson }}</script>
+  <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 </body>
 </html>

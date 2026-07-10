@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Penguin Dash — Teacher Console</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+<body>
+  <main style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; text-align: center; gap: 1rem;">
+    <h1 style="font-size: 1.8rem;">🐧 Penguin Dash</h1>
+    <p style="color: var(--text-muted);">Start a new session for your class.</p>
+    <button id="create-session" class="primary" type="button">Create Session</button>
+    <p id="create-error" class="toolbar-feedback" style="color: var(--danger);"></p>
+  </main>
+
+  <script>
+    const button = document.getElementById("create-session");
+    const errorEl = document.getElementById("create-error");
+
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Creating…";
+      errorEl.textContent = "";
+      try {
+        const response = await fetch("/api/sessions", { method: "POST" });
+        if (!response.ok) throw new Error("failed to create session");
+        const data = await response.json();
+        window.location.href = `/dashboard/${data.room_code}`;
+      } catch {
+        errorEl.textContent = "Failed to create session — please try again.";
+        button.disabled = false;
+        button.textContent = "Create Session";
+      }
+    });
+  </script>
+</body>
+</html>
