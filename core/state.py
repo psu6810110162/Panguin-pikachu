@@ -57,6 +57,11 @@ class InvalidTransitionError(Exception):
 
 
 # สถานะปัจจุบัน -> ชุดสถานะถัดไปที่อนุญาตให้เปลี่ยนได้
+#
+# ข้อสังเกตเชิงดีไซน์ (ยืนยันกับทีมเกมแล้วถ้าจะเปลี่ยน): BOSS ไม่มีทางกลับไป
+# RESPAWNING/RUNNING — สมมติฐานคือ boss phase ไม่มีการ respawn (โดนบอสตีเสีย
+# คะแนนผ่าน BossPhaseEvent(outcome="damaged") แต่ไม่ตาย/ไม่ย้อน state) ถ้ากติกา
+# เกมเปลี่ยนให้แพ้บอสได้ ต้องเพิ่ม transition ที่นี่พร้อม test ประกบ
 _ALLOWED_TRANSITIONS: dict[RunState, set[RunState]] = {
     RunState.LOBBY: {RunState.RUNNING},
     RunState.RUNNING: {RunState.RESPAWNING, RunState.BOSS},
