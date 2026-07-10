@@ -50,6 +50,21 @@ def test_rejects_boss_transition_before_reaching_the_finish_line():
         validate_transition(RunState.RUNNING, RunState.BOSS, distance_m=500)
 
 
+def test_boss_guard_boundary_one_meter_short_is_rejected():
+    with pytest.raises(InvalidTransitionError, match="distance_m"):
+        validate_transition(RunState.RUNNING, RunState.BOSS, distance_m=999)
+
+
+def test_boss_guard_boundary_exactly_at_the_finish_line_passes():
+    validate_transition(RunState.RUNNING, RunState.BOSS, distance_m=1000)
+
+
+def test_boss_cannot_respawn_by_design():
+    # สมมติฐานที่บันทึกไว้ใน _ALLOWED_TRANSITIONS: boss phase ไม่มีการ respawn
+    with pytest.raises(InvalidTransitionError):
+        validate_transition(RunState.BOSS, RunState.RESPAWNING)
+
+
 def test_synced_is_a_terminal_state():
     with pytest.raises(InvalidTransitionError):
         validate_transition(RunState.SYNCED, RunState.RUNNING)

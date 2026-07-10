@@ -26,7 +26,10 @@
         const response = await fetch("/api/sessions", { method: "POST" });
         if (!response.ok) throw new Error("failed to create session");
         const data = await response.json();
-        window.location.href = `/dashboard/${data.room_code}`;
+        // teacher_token คืนมาครั้งเดียวตอนสร้าง — ส่งต่อทาง ?token= เพื่อเปิดหน้า
+        // dashboard (navigation แนบ header ไม่ได้) ฝั่ง dashboard.js จะ strip ออก
+        // จาก URL ทันทีหลังโหลด
+        window.location.href = `/dashboard/${data.room_code}?token=${encodeURIComponent(data.teacher_token)}`;
       } catch {
         errorEl.textContent = "Failed to create session — please try again.";
         button.disabled = false;
