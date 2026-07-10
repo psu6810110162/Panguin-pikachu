@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>Penguin Dash — Teacher Dashboard ({{ room_code }})</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    table { border-collapse: collapse; width: 100%; max-width: 800px; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: #f0f0f0; }
+    .status-ACTIVE { color: #1a7f37; }
+    .status-RESPAWNING { color: #b8860b; }
+    .status-FINISHED { color: #555; }
+    button { padding: 0.5rem 1rem; margin-right: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Room: {{ room_code }}</h1>
+
+  <table id="leaderboard">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Distance (m)</th>
+        <th>Respawns</th>
+        <th>Environmental Score</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in leaderboard %}
+      <tr>
+        <td>{{ row.player_name }}</td>
+        <td>{{ row.distance_m }}</td>
+        <td>{{ row.respawn_count }}</td>
+        <td>{{ row.environmental_score }}</td>
+        <td class="status-{{ row.status }}">{{ row.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p>
+    <button id="end-session">End Session</button>
+    <a href="/dashboard/{{ room_code }}/export.csv"><button type="button">Export CSV</button></a>
+  </p>
+
+  <script>
+    const roomCode = "{{ room_code }}";
+    const socket = io();
+
+    socket.on("connect", () => {
+      socket.emit("join_dashboard", { room_code: roomCode });
+    });
+
+    socket.on("leaderboard_update", (rows) => {
+      const tbody = document.querySelector("#leaderboard tbody");
+      tbody.innerHTML = "";
+      for (const row of rows) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row.player_name}</td>
+          <td>${row.distance_m}</td>
+          <td>${row.respawn_count}</td>
+          <td>${row.environmental_score}</td>
+          <td class="status-${row.status}">${row.status}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    });
+
+    document.getElementById("end-session").addEventListener("click", async () => {
+      await fetch(`/api/sessions/${roomCode}/end`, { method: "POST" });
+    });
+  </script>
+</body>
+</html>
