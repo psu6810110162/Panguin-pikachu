@@ -135,7 +135,7 @@
             color: 1, 1, 1, 1
             on_release: root.exit_game()
 
-            
+
 <GamePlayScreen>:
     canvas.before:
         Rectangle:
@@ -152,12 +152,12 @@
         Rectangle:
             pos: self.pos
             size: self.size
-            
+
     BoxLayout:
         orientation: 'vertical'
         padding: [50, 100, 50, 100]
         spacing: 30
-        
+
         # Glass Panel
         RelativeLayout:
             size_hint: (1, 1)
@@ -178,7 +178,7 @@
                 orientation: 'vertical'
                 padding: [20, 40, 20, 40]
                 spacing: 20
-                
+
                 Label:
                     text: 'GAME OVER'
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -188,7 +188,7 @@
                     outline_color: 0, 0, 0, 1
                     outline_width: 2
                     size_hint_y: 0.25
-                    
+
                 Label:
                     id: score_label
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -196,7 +196,7 @@
                     font_size: '32sp'
                     color: 1, 1, 1, 0.9
                     size_hint_y: 0.15
-                    
+
                 TextInput:
                     id: name_input
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -215,7 +215,7 @@
                             rgba: 1, 1, 1, 0.2
                         Line:
                             rounded_rectangle: (self.x, self.y, self.width, self.height, 5)
-                    
+
                 HoverButton:
                     text: 'RETRY'
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -226,13 +226,13 @@
                     background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
                     border: (10, 10, 10, 10)
                     on_release: root.retry_game()
-                    
+
                 BoxLayout:
                     orientation: 'horizontal'
                     size_hint: (0.9, 0.15)
                     pos_hint: {'center_x': 0.5}
                     spacing: 15
-                    
+
                     HoverButton:
                         text: 'HISTORY'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -241,7 +241,7 @@
                         background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
                         border: (10, 10, 10, 10)
                         on_release: root.view_history()
-                        
+
                     HoverButton:
                         text: 'HOME'
                         font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -255,14 +255,14 @@
         orientation: 'vertical'
         padding: 50
         spacing: 20
-        
+
         Label:
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             text: 'LEADERBOARD & HISTORY'
             font_size: '36sp'
             bold: True
             size_hint_y: 0.2
-            
+
         ScrollView:
             size_hint_y: 0.6
             BoxLayout:
@@ -270,7 +270,7 @@
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-                
+
                 # Placeholder for History Rows
                 Label:
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -278,14 +278,14 @@
                     font_size: '20sp'
                     size_hint_y: None
                     height: 50
-                    
+
                 Label:
                     font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
                     text: '2. 24/02/2569: 80 m (3 Gems)'
                     font_size: '20sp'
                     size_hint_y: None
                     height: 50
-                    
+
         HoverButton:
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
             text: 'BACK'
@@ -307,7 +307,7 @@
         orientation: 'vertical'
         padding: 50
         spacing: 20
-        
+
         BoxLayout:
             size_hint_y: 0.2
             Label:
@@ -321,7 +321,7 @@
                 font_size: '24sp'
                 color: 0.2, 0.8, 1, 1
                 size_hint_x: 0.3
-                
+
         ScrollView:
             size_hint_y: 0.6
             GridLayout:
@@ -329,7 +329,7 @@
                 spacing: 20
                 size_hint_y: None
                 height: self.minimum_height
-                
+
                 # ─── Skin 1: Ninja Frog ───
                 BoxLayout:
                     orientation: 'vertical'
@@ -461,7 +461,7 @@
                         background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
                         border: (10, 10, 10, 10)
                         on_release: root.buy_item('Virtual Guy')
-                        
+
         HoverButton:
             text: 'BACK'
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
