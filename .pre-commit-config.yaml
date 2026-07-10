@@ -25,7 +25,7 @@ repos:
         pass_filenames: false
         stages: [pre-push]
       - id: mypy
-        name: mypy core/ (pre-push)
+        name: mypy core/+server/ (pre-push)
         entry: mypy
         language: system
         pass_filenames: false
