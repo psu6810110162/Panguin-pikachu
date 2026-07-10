@@ -19,6 +19,11 @@ def create_app(
     app.config["NONCE_STORE"] = InMemoryNonceStore()
 
     db.init_app(app)
+    # cors_allowed_origins="*" เป็น trade-off ที่ตั้งใจ: ตอน bind 127.0.0.1 ค่านี้แทบไม่มี
+    # ผล แต่ตอนนี้ server bind 0.0.0.0 (LAN ห้องเรียน/Docker) แปลว่า "ทุก origin จากทุก
+    # เครื่องในเน็ตเดียวกัน" จริง ๆ — ยอมรับได้เพราะ socket ปล่อยแค่ public scoreboard
+    # (ดู server/dashboard.py) และไม่มี cookie-based auth ให้ CSRF ได้ ถ้า deploy จริง
+    # ควรระบุ origin ของหน้า dashboard แทน "*"
     socketio.init_app(app, async_mode="threading", cors_allowed_origins="*")
 
     from server.api import api, health

@@ -6,9 +6,11 @@ host="0.0.0.0" (bind ทุก interface ไม่ใช่แค่ 127.0.0.1) 
 mapping (host -> container) เข้าถึงได้ — ถ้า bind แค่ 127.0.0.1 ภายใน container จะเข้าจาก
 ข้างนอก container ไม่ได้เลยแม้ port จะ map ถูกต้องแล้วก็ตาม
 
-allow_unsafe_werkzeug=True เพราะนี่คือ dev/demo server เท่านั้น (ตาม
-docs/ENGINEERING_PLAN.md: localhost + ngrok/LAN สำหรับ demo — ไม่ deploy จริงจนกว่า
-เสถียรแล้ว) ห้ามใช้ค่านี้ถ้า deploy ขึ้น production จริง
+debug/allow_unsafe_werkzeug ผูกกับ FLASK_DEBUG (default ปิด) — development only:
+Werkzeug debugger เปิด RCE ผ่าน browser ได้ถ้ามี exception ห้าม copy pattern นี้ไป
+production เด็ดขาด production ต้องใช้ WSGI server จริง (เช่น gunicorn + eventlet)
+และ load_config() จะ refuse ที่จะ start ถ้า FLASK_DEBUG ปิดแต่ SYNC_SECRET ยังเป็น
+ค่า default (กันลืมเปลี่ยนก่อนเปิดผ่าน ngrok/deploy)
 """
 
 from server import create_app
@@ -22,6 +24,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=config.port,
-        debug=True,
-        allow_unsafe_werkzeug=True,
+        debug=config.debug,
+        allow_unsafe_werkzeug=config.debug,  # dev only — ดู docstring ด้านบน
     )

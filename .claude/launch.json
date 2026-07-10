@@ -8,7 +8,8 @@
       "port": 5050,
       "autoPort": true,
       "env": {
-        "PORT": "5050"
+        "PORT": "5050",
+        "FLASK_DEBUG": "1"
       }
     }
   ]
