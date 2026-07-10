@@ -16,6 +16,19 @@ from server.models import PlayerModel, SessionModel
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
+# Blueprint แยกไม่มี url_prefix เพราะ health check ควรอยู่ที่ /healthz เฉยๆ (ตำแหน่งมาตรฐาน
+# ที่ Docker HEALTHCHECK / Railway / load balancer คาดหวัง) ไม่ใช่ /api/healthz
+health = Blueprint("health", __name__)
+
+
+@health.get("/healthz")
+def healthz() -> tuple[FlaskResponse, int]:
+    """Health check เปล่า ๆ ไม่แตะ DB/logic ใด ๆ — endpoint เดียวที่ Docker HEALTHCHECK,
+    Compose depends_on.condition, และ future Railway health probe ควรชี้มาที่นี่ แทนที่จะ
+    ยิงใส่ route จริงอย่าง /dashboard/ ที่มี application logic ปนอยู่
+    """
+    return jsonify({"status": "ok"}), 200
+
 
 def _get_session_or_404(room_code: str) -> SessionModel:
     session = services.get_session_by_code(room_code)

@@ -5,15 +5,13 @@
 from flask import Flask
 
 from core.sync import InMemoryNonceStore
+from server.config import DEFAULT_DATABASE_URI, DEFAULT_SYNC_SECRET
 from server.extensions import db, socketio
-
-# TODO(D9 deploy): เปลี่ยนเป็นอ่านจาก env var ก่อน deploy จริง — ค่านี้ใช้ได้แค่ dev/demo
-DEV_SYNC_SECRET = b"dev-secret-change-me"
 
 
 def create_app(
-    db_uri: str = "sqlite:///penguin_dash_server.db",
-    sync_secret: bytes = DEV_SYNC_SECRET,
+    db_uri: str = DEFAULT_DATABASE_URI,
+    sync_secret: bytes = DEFAULT_SYNC_SECRET,
 ) -> Flask:
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
@@ -23,10 +21,11 @@ def create_app(
     db.init_app(app)
     socketio.init_app(app, async_mode="threading", cors_allowed_origins="*")
 
-    from server.api import api
+    from server.api import api, health
     from server.dashboard import dashboard
 
     app.register_blueprint(api)
+    app.register_blueprint(health)
     app.register_blueprint(dashboard)
 
     with app.app_context():

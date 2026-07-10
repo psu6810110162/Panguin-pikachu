@@ -6,7 +6,8 @@ from core.events import CheckpointReachedEvent, MissionCompleteEvent, RespawnEve
 from core.schema import RunRecord
 from core.state import RunState
 from core.sync import sign_run_record
-from server import DEV_SYNC_SECRET, create_app
+from server import create_app
+from server.config import DEFAULT_SYNC_SECRET as DEV_SYNC_SECRET
 from server.extensions import db, socketio
 
 
