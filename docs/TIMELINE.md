@@ -9,11 +9,11 @@ Checklist ติ๊กได้ระหว่างทำ ดูเหตุผ
 **Must:** Schema+Events+State Machine / CI+pytest+ruff / Meters+Checkpoint+Respawn
 
 ### 🟩 คุณ
-- [ ] เช้า — F0: merge #22 → main, ลบ branch ค้าง, branch protection, PR contract (pyproject+gitignore+configs) *(เสร็จแล้วใน PR #23)*
-- [ ] เช้า — D7a: `core/schema.py` + `core/events.py` + `core/state.py` — schema v1.0 + events + state machine + **freeze**
-- [ ] เช้า — เขียน `docs/OVERVIEW.md`, `docs/ENGINEERING_PLAN.md`, `docs/TIMELINE.md`, `docs/adr/*.md`
-- [ ] บ่าย — F1: requirements, pre-commit, ruff ทั้ง repo *(เสร็จแล้วใน PR #23)* — type hints เอาแค่ `core/` ก่อน
-- [ ] ค่ำ — F2: ci.yml (lint+test, env `KIVY_NO_ARGS=1 KIVY_WINDOW=mock SDL_VIDEODRIVER=dummy` + SDL2 deps) *(เสร็จแล้วใน PR #23)*
+- [x] เช้า — F0: merge #22 → main, ลบ branch ค้าง, branch protection, PR contract (pyproject+gitignore+configs) *(เสร็จแล้วใน PR #23)*
+- [x] เช้า — D7a: `core/schema.py` + `core/events.py` + `core/state.py` — schema v1.0 + events + state machine + **freeze** *(PR #24 — ตามด้วย boundary/malformed tests จากรอบ review)*
+- [x] เช้า — เขียน `docs/OVERVIEW.md`, `docs/ENGINEERING_PLAN.md`, `docs/TIMELINE.md`, `docs/adr/*.md` *(PR #23)*
+- [x] บ่าย — F1: requirements, pre-commit, ruff ทั้ง repo *(เสร็จแล้วใน PR #23)* — type hints เอาแค่ `core/` ก่อน
+- [x] ค่ำ — F2: ci.yml (lint+test, env `KIVY_NO_ARGS=1 KIVY_WINDOW=mock SDL_VIDEODRIVER=dummy` + SDL2 deps) *(เสร็จแล้วใน PR #23)*
 
 ### 🟦 เพื่อน
 - [ ] เช้า — D1: `game/meters.py` (Heat + dual meters) + HUD ใน style.kv
@@ -29,9 +29,9 @@ Checklist ติ๊กได้ระหว่างทำ ดูเหตุผ
 **Must:** Mission / Boss / Quiz / Evaluation / Sync client
 
 ### 🟩 คุณ
-- [ ] เช้า — F3: conftest + unit tests (grid, pool, config, smoke) *(เสร็จแล้วใน PR #23)*
-- [ ] บ่าย — D7b: `core/scoring/` (evaluator, rules, hake) + tests + กติกา core ห้าม import kivy
-- [ ] ค่ำ — D8: `core/sync.py` — HMAC(timestamp+nonce+payload) + offline queue + retry/backoff/idempotency + tests
+- [x] เช้า — F3: conftest + unit tests (grid, pool, config, smoke) *(เสร็จแล้วใน PR #23)*
+- [x] บ่าย — D7b: `core/scoring/` (evaluator, rules, hake) + tests + กติกา core ห้าม import kivy *(PR #25 — quiz averaging bug ถูกแก้ตามหลังใน PR #31)*
+- [x] ค่ำ — D8: `core/sync.py` — HMAC + offline queue + retry/backoff/idempotency + tests *(PR #26 — scheme อัปเกรดเป็น canonical JSON envelope รวม run_id จากรอบ review)*
 
 ### 🟦 เพื่อน
 - [ ] เช้า — D2 (จบ): policy popup (JSON) + consequence → event ลง RunRecord
@@ -47,9 +47,9 @@ Checklist ติ๊กได้ระหว่างทำ ดูเหตุผ
 **Must:** API / Dashboard basic / Export CSV / Final Report
 
 ### 🟩 คุณ
-- [ ] เช้า — D9 (ครึ่งแรก): Flask `api/` + `models/` (SQLite) — รับ RunRecord, verify HMAC+nonce, server-authoritative score ผ่าน `core/scoring`
-- [ ] บ่าย — D9 (จบ): SocketIO (ทุก 2-5 วิ) + Dashboard ขั้นต่ำ: ตารางผู้เล่น + End Session + Export CSV (localhost + ngrok/LAN — ไม่ deploy Railway ก่อน demo)
-- [ ] ค่ำ — Integration ร่วมกัน: หลายเครื่อง → Join Room → เล่น → dashboard → End Session → Export / F4: README verification สุดท้าย
+- [x] เช้า — D9 (ครึ่งแรก): Flask `api/` + `models/` (SQLite) — รับ RunRecord, verify HMAC+nonce, server-authoritative score ผ่าน `core/scoring` *(PR #27)*
+- [x] บ่าย — D9 (จบ): SocketIO + Dashboard: ตารางผู้เล่น + End Session + Export CSV *(PR #27 ขั้นต่ำ → PR #28 redesign เต็ม: projector-legible, real-time diff ต่อแถว, XSS-safe)*
+- [x] ค่ำ — Integration: end-to-end จริงบนเครื่องเดียวผ่านแล้ว (create session → sync ผ่าน HttpTransport → dashboard real-time → End → Export) / F4: README verification *(PR #34)* — **ค้าง: ทดสอบหลายเครื่องผ่าน LAN จริงก่อน demo**
 
 ### 🟦 เพื่อน
 - [ ] เช้า — D4: Boss 2 เฟส (Dodge/Heal → Debunk ผูก quiz) → Mission Complete
@@ -57,6 +57,22 @@ Checklist ติ๊กได้ระหว่างทำ ดูเหตุผ
 - [ ] ค่ำ — Integration + ต่อ Final Report เข้าผล scoring + UI polish เท่าที่ทัน
 
 **✅ Demo จบวัน:** Player → Server → Teacher → Report ครบ slice
+
+---
+
+## งานเพิ่มเติมนอกแผน 3 วัน — Hardening, Review, DevX (10–11 ก.ค. 2026)
+
+งานฝั่ง 🟩 ที่เกิดขึ้นหลังแผนหลักเสร็จ — ทั้งหมด merge เข้า `main` แล้ว:
+
+- [x] **DevX + Docker** *(PR #29)* — Dockerfile (backend เท่านั้น, non-root) + docker-compose (SQLite default / profile postgres), Makefile + run scripts, ADR-008, README How to Play/How to Use
+- [x] **Review follow-ups รอบแรก** *(PR #31)* — แก้ quiz score averaging, HttpTransport retry 4xx, room code collision, `/api/v1` versioning, rate limiting (Flask-Limiter), Alembic migrations (Flask-Migrate)
+- [x] **Dashboard a11y + design tokens** *(PR #32)* — `:focus-visible` states, spacing/type-scale tokens, projector legibility
+- [x] **รีวิวไขว้ทั้ง 8 PR + แก้ตามรีวิวทั้ง stack** — ประเด็นหลักที่ปิดไป:
+  - Security: HMAC เปลี่ยนเป็น canonical JSON envelope รวม `run_id` (ปิด delimiter confusion + relabel attack), teacher token auth ต่อ session (end/export/dashboard), `FLASK_DEBUG` guard ปฏิเสธ default secret นอกโหมด debug
+  - Correctness: 429 ต้อง retry ไม่ใช่ทิ้ง (กัน data loss เงียบ), `create_all` ข้าม DB ที่ managed ด้วย migrations, ingest race → converge แบบ idempotent, player lookup scope ตาม session, เช็ค session ended ก่อน join/ingest
+  - Tests: boundary/malformed/auth/multi-phase quiz/HttpTransport — suite โตจาก ~77 เป็น 112 tests
+- [x] **กู้ stack ที่ merge พลาด** *(PR #33)* — ทีม merge 8 PR รวดเดียวโดยไม่รอ retarget ทำให้มีแค่ #24 ถึง main; กู้ด้วย PR เดียวจาก branch ที่มีโค้ดครบ + ลบ branch ค้างทั้งหมดหลังตรวจ ancestry
+- [x] **README refresh ให้ตรงโค้ด** *(PR #34)* — ตาราง env vars / API endpoints (จาก route จริง) / Security Model, แก้คำสั่งที่ตกยุค — ทุกคำสั่งใน README รันทดสอบจริงก่อนเขียน
 
 ---
 
