@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Penguin Dash — Teacher Dashboard ({{ room_code }})</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body data-room-code="{{ room_code }}"
+      data-teacher-token="{{ teacher_token }}"
+      data-finish-distance-m="{{ finish_distance_m }}"
+      data-session-active="{{ 'true' if session_active else 'false' }}">
+  <main>
+    <header class="dashboard-header">
+      <div class="room-code-block">
+        <div>
+          <div class="room-code-label">Room code</div>
+          <div class="room-code">{{ room_code }}</div>
+        </div>
+        <button id="copy-room-code" class="copy-button" type="button">📋 Copy</button>
+      </div>
+      <div class="status-cluster">
+        <span id="connection-banner" class="connection-banner" data-state="disconnected">🔴 Disconnected</span>
+        <span id="updated-at" class="updated-at">Updated —</span>
+      </div>
+    </header>
+
+    <div id="session-ended-banner" class="session-ended-banner">Session ended — leaderboard is now final.</div>
+
+    <div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
+
+    <table id="leaderboard-table" hidden>
+      <thead>
+        <tr>
+          <th scope="col">Rank</th>
+          <th scope="col">Player</th>
+          <th scope="col">Distance</th>
+          <th scope="col">Respawns</th>
+          <th scope="col">Environmental Score</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
+
+    <div id="empty-state" class="empty-state">
+      <span class="icon">🧊</span>
+      <p>Waiting for players to join — share this room code with students:</p>
+      <div class="room-code">{{ room_code }}</div>
+    </div>
+
+    <div class="toolbar">
+      <button id="end-session" class="danger" type="button">End Session</button>
+      <button id="export-csv" class="primary" type="button">⬇ Export CSV</button>
+      <span id="export-feedback" class="toolbar-feedback"></span>
+    </div>
+  </main>
+
+  <script type="application/json" id="initial-leaderboard">{{ leaderboard | tojson }}</script>
+  <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>

@@ -16,10 +16,10 @@ ALLOWED_KIVY_IMPORTS = {"audio.py"}
 
 def test_core_modules_do_not_import_kivy():
     offenders = []
-    for path in sorted(CORE_DIR.glob("*.py")):
+    for path in sorted(CORE_DIR.rglob("*.py")):
         if path.name in ALLOWED_KIVY_IMPORTS:
             continue
         if _KIVY_IMPORT_RE.search(path.read_text(encoding="utf-8")):
-            offenders.append(path.name)
+            offenders.append(str(path.relative_to(CORE_DIR)))
 
     assert not offenders, f"core/ modules must not import kivy: {offenders}"

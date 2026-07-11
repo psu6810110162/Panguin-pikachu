@@ -1,0 +1,41 @@
+# Kivy game — not needed by the server image
+game/
+screens/
+ui/
+assets/
+
+# Local dev / tooling
+venv/
+.venv/
+venv_plot/
+node_modules/
+tests/
+docs/
+.git/
+.github/
+.claude/
+scripts/
+Makefile
+
+# Python cruft
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Local artifacts
+instance/
+game.db
+Doc.md
+*.zip
+NSC2026_Report_TheGreatMelt.docx
+assets/report_figures/
+
+# Editor / OS / secrets
+.DS_Store
+.idea/
+.vscode/
+.env
+.env.*

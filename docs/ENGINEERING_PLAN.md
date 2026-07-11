@@ -49,16 +49,22 @@
 ```
 Panguin-pikachu/
 ├── main.py, style.kv
-├── core/                  # ห้าม import kivy — server ใช้ร่วมได้
+├── core/                  # ห้าม import kivy (ยกเว้น audio.py) — server ใช้ร่วมได้
 │   ├── schema.py  events.py  state.py  sync.py
 │   ├── scoring/ (evaluator.py, rules.py, hake.py)
 │   └── config.py  database.py  logger.py  audio.py
 ├── game/                  # gameplay logic (import kivy ได้)
 ├── screens/  ui/  assets/
 ├── server/                # Flask — import ได้เฉพาะ core/
-│   ├── api/  services/  models/  dashboard/
+│   ├── __init__.py  __main__.py  config.py  extensions.py
+│   ├── api.py  services.py  models.py  dashboard.py
+│   ├── static/ (dashboard.css, dashboard.js)  templates/
+│   ├── Dockerfile
+│   └── requirements.txt  # แยกจาก requirements.txt ของเกม — ไม่พ่วง Flask เข้า client build
+├── scripts/ (run_game.sh, run_server.sh)
 ├── tests/
-├── docs/ (OVERVIEW.md, ENGINEERING_PLAN.md, TIMELINE.md, adr/)
+├── docs/ (OVERVIEW.md, ENGINEERING_PLAN.md, TIMELINE.md, adr/ + TEMPLATE.md)
+├── docker-compose.yml, .env.example, Makefile
 └── pyproject.toml, .pre-commit-config.yaml, .github/
 ```
 
@@ -73,6 +79,14 @@ Panguin-pikachu/
 7. ข้อมูล quiz/policy เป็น JSON data files — แก้เนื้อหาไม่ต้องแตะโค้ด
 8. `core/` ห้าม import kivy เด็ดขาด — บังคับด้วย test/import-linter
 
+## Changing หรือเพิ่ม ADR (สมมติอีกคนอยากแก้/เพิ่มการตัดสินใจ)
+
+ใช้ [`docs/adr/TEMPLATE.md`](adr/TEMPLATE.md) เป็นจุดเริ่ม — numbering: `NNN-kebab-title.md` เลขถัดจาก ADR ล่าสุด (ปัจจุบันไปถึง [008](adr/008-docker-compose-backend.md))
+
+- **ADR เป็น immutable record** — ห้ามแก้ Decision ของ ADR เก่าย้อนหลัง ถ้าการตัดสินใจเปลี่ยน ให้เขียน ADR **ใหม่** ที่ supersede อันเดิม แล้ว cross-link ทั้งสองทาง (`**Status:** Superseded by ADR-00X` ใน ADR เก่า, อ้างอิงกลับใน ADR ใหม่)
+- **เขียน ADR เมื่อ:** เพิ่ม/ลบ dependency, เปลี่ยน data model/contract (RunRecord/events/state machine), เปลี่ยน security model, หรือ reverse การตัดสินใจเดิม — ตรงกับ pattern ของ ADR-001 ถึง 008 ที่มีอยู่แล้ว
+- **PR process เดียวกับโค้ด:** ผ่าน Rules ข้อ 5 ด้านบน (CI เขียว + review 1 คน) — PR ที่แก้แค่ docs ก็ยังต้องให้อีกคน sign-off เพราะ architecture decision กระทบงานทั้งสองฝั่ง
+
 ## Online Architecture & Deployment
 
 ```
@@ -81,13 +95,16 @@ Player 1..N (Kivy .exe) ──HTTPS + Socket.IO──▶ Flask API + Flask-Socke
                                               Teacher Dashboard (Jinja + Socket.IO)
 ```
 
-**Stack:** Game = Kivy (.exe build) / Backend = Flask + Flask-SocketIO / DB = SQLite (dev) → PostgreSQL (deploy, ผ่าน SQLAlchemy — ดู ADR-005) / Deploy = Railway (auto-deploy จาก GitHub, **หลัง demo เสถียรแล้วเท่านั้น**) / Dashboard = HTML/Jinja + Socket.IO
+**Stack:** Game = Kivy (.exe build) / Backend = Flask + Flask-SocketIO / DB = SQLite (dev) → PostgreSQL (deploy, ผ่าน SQLAlchemy — ดู ADR-005) / **Container = Docker Compose (`server/` เท่านั้น — SQLite default, `--profile postgres` เปิด Postgres จริง, ดู ADR-008)** / Deploy = Railway (auto-deploy จาก GitHub, build จาก `server/Dockerfile` เดียวกัน, **หลัง demo เสถียรแล้วเท่านั้น**) / Dashboard = HTML/Jinja + Socket.IO
 
 1. **Session flow:** อาจารย์กด Create Session บน dashboard → Room Code → นักเรียนเปิด `.exe` → กรอก Room Code + ชื่อ → server ตอบ `player_id`
 2. **Client เป็นแค่ client:** แสดงผล, รับ input, physics ฝั่งตัวเอง — ส่ง telemetry ทุก 2-5 วิ: `{player_id, name, distance, score, hp, module, respawn_count, status}`
 3. **Server-authoritative scoring:** server คำนวณ final score จาก event log ผ่าน `core/scoring/` ตัวเดียวกับ client (import core เท่านั้น) — กัน `.exe` ถูกแก้ไขโกงคะแนน ดู ADR-006
 4. **เน็ตหลุด:** offline queue ใน client + Socket.IO auto-reconnect
 5. **Scale:** 30-50 คนต่อห้อง, JSON เล็ก ๆ ทุก 2-5 วิ — Flask-SocketIO พอสำหรับเดโม (ไม่ทำ MMO)
+6. **API versioning:** REST endpoints อยู่ใต้ `/api/v1/` (ไม่ใช่ `/api/` เฉย ๆ) — ใส่ตั้งแต่ตอนนี้เพราะยังไม่มี client จริงเชื่อมอยู่ (D1-D6 ฝั่งเพื่อนยังไม่เริ่ม) เป็นจุดที่เปลี่ยนได้ถูกที่สุดแล้ว ไม่ต้อง breaking change ทีหลัง — `/healthz` ไม่ใส่ version เพราะเป็น infra probe ไม่ใช่ application contract
+7. **Rate limiting:** `/api/v1/` ทั้ง blueprint จำกัด 60 requests/นาที (Flask-Limiter, in-memory store) กัน client bug/loop ยิงรัว ๆ ใส่ server โดยไม่ตั้งใจ — ไม่ใช่ DDoS protection จริงจัง (สมมติฐาน trusted LAN ยังอยู่)
+8. **Schema migrations (Flask-Migrate/Alembic):** `server/migrations/` เก็บ migration script — **DB ใหม่เอี่ยม** (dev, test, deploy ครั้งแรก) ยังใช้ `db.create_all()` อัตโนมัติเหมือนเดิม (เร็ว ไม่ต้องคิดอะไร) แต่ **DB ที่มีข้อมูลจริงอยู่แล้ว** (เช่น deploy ทับของเดิมหลัง demo ครั้งแรก) ต้องรัน `flask db upgrade` (หรือ `make upgrade`) แทน ห้ามรัน `python -m server`/`db.create_all()` ทับ เพราะจะไม่มีทาง apply schema change ใหม่ — แก้ `server/models.py` แล้วต้อง `make migrate msg="..."` (หรือ `flask db migrate -m "..."`) ทุกครั้งหลัง deploy ครั้งแรกไปแล้ว
 
 ## เส้นตัด (ตัดจากบนลงล่างเมื่อเวลาบีบ)
 

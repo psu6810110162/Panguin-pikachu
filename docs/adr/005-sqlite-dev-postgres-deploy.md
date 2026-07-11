@@ -1,5 +1,7 @@
 # ADR-005: SQLite (SQLAlchemy) สำหรับ dev local, PostgreSQL สำหรับ deploy
 
+**Status:** Accepted
+
 ## Context
 
 Backend ต้องเก็บ session/player/run/report data ที่ dashboard อ่านมาแสดง leaderboard, สถานะ real-time, และ export CSV โจทย์คือเลือก database ที่ (1) ไม่เพิ่ม friction ให้ dev local ระหว่าง 3 วัน (2) รองรับ deploy จริงบน Railway สำหรับเดโมวันแข่ง

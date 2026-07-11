@@ -1,5 +1,9 @@
 Doc.md
 game.db
+instance/
+.env
+.env.*
+!.env.example
 
 # Python
 **/__pycache__/
