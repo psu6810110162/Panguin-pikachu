@@ -30,9 +30,11 @@ class YJunctionInteraction:
         # บันทึกประวัติการตัดสินใจส่งให้ GameSession (PR #58)
         if hasattr(self.game_session, "policy_choice"):
             self.game_session.policy_choice(
-                zone_id=junction.zone_id,
-                choice_text=selected_choice.text,
-                is_systemic=selected_choice.is_systemic,
-                heat_delta=selected_choice.heat_delta,
-                anger_delta=selected_choice.anger_delta,
+                checkpoint_index=junction.zone_id,
+                policy_id=choice_side,
+                meter_deltas={
+                    "heat": selected_choice.heat_delta,
+                    "capitalist_anger": selected_choice.anger_delta,
+                },
+                distance_m=junction.zone_id * 100,
             )

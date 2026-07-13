@@ -12,8 +12,9 @@ def test_inventory_max_slots():
     inv = Inventory()
     assert inv.add_item(ItemType.ALBEDO_DATA)
     assert inv.add_item(ItemType.METHANE_CORE)
+    assert not inv.add_item(ItemType.ALBEDO_DATA)  # ห้ามใส่ซ้ำ
     assert inv.add_item(ItemType.ECO_SEED)
-    assert not inv.add_item(ItemType.ALBEDO_DATA)  # ควรเต็ม (3 ช่อง)
+    assert not inv.add_item(ItemType.ALBEDO_DATA)  # ควรเต็มและซ้ำ
     assert len(inv.get_items()) == 3
 
 

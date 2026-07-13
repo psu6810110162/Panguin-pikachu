@@ -95,6 +95,9 @@ def validate_transition(current: RunState, new: RunState, **context: object) -> 
 # ══════════════════════════════════════════════════════════════
 
 
+from typing import Any, Callable
+
+
 def load_difficulty() -> dict[str, Any]:
     try:
         with open("balance/v1/difficulty.json", encoding="utf-8") as f:
@@ -122,7 +125,9 @@ class RunMetrics:
         heat_meter: float | None = None,
         capitalist_anger: float | None = None,
         hearts: int | None = None,
+        on_game_over: Callable[[], None] | None = None,
     ) -> None:
+        self.on_game_over = on_game_over
         diff = load_difficulty()
         meters_diff: dict[str, Any] = diff.get("meters", {}) if isinstance(diff, dict) else {}
         hearts_diff: dict[str, Any] = diff.get("hearts", {}) if isinstance(diff, dict) else {}
@@ -136,6 +141,7 @@ class RunMetrics:
             else float(meters_diff.get("start_capitalist_anger", 50.0))
         )
         self.hearts: int = hearts if hearts is not None else int(hearts_diff.get("start", 5))
+        self.max_hearts: int = int(hearts_diff.get("cap", 5))
 
         self.max_meter: float = float(meters_diff.get("max", 100.0))
         self.min_meter: float = float(meters_diff.get("min", 0.0))
@@ -174,5 +180,12 @@ class RunMetrics:
             self.is_invincible = True
 
     def trigger_game_over(self) -> None:
-        """เปลี่ยนสถานะภายในเป็น Game Over เพื่อให้ฝั่งหน้าจอนำไปเช็ค (ป้องกัน Side-effect ใน Test)"""
+        """เปลี่ยนสถานะภายในเป็น Game Over และเรียก Callback เพื่อให้ระบบนอก (เช่น RunState) รับทราบ"""
         self.is_game_over = True
+        if self.on_game_over:
+            self.on_game_over()
+
+    def increase_heart(self) -> None:
+        """เพิ่มหัวใจเมื่อเก็บไอเทมได้ (จำกัดไม่เกิน cap)"""
+        if not self.is_game_over:
+            self.hearts = min(self.max_hearts, self.hearts + 1)

@@ -61,3 +61,24 @@ def test_heart_game_over():
         metrics.decrease_heart()
     assert metrics.hearts == 0
     assert metrics.is_game_over
+
+
+def test_run_metrics_game_over_callback():
+    triggered = False
+
+    def cb():
+        nonlocal triggered
+        triggered = True
+
+    metrics = RunMetrics(heat_meter=50.0, capitalist_anger=50.0, on_game_over=cb)
+    metrics.update_meters(100.0, 0.0)
+    assert metrics.is_game_over
+    assert triggered
+
+
+def test_increase_heart():
+    metrics = RunMetrics(hearts=4)
+    metrics.increase_heart()
+    assert metrics.hearts == 5
+    metrics.increase_heart()
+    assert metrics.hearts == 5  # capped at 5

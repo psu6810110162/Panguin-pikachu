@@ -2,9 +2,9 @@ from enum import Enum
 
 
 class ItemType(Enum):
-    ALBEDO_DATA = "Albedo Data"
-    METHANE_CORE = "Methane Core"
-    ECO_SEED = "Eco-Seed"
+    ALBEDO_DATA = "albedo_data"
+    METHANE_CORE = "methane_core"
+    ECO_SEED = "eco_seed"
 
 
 class Inventory:
@@ -16,7 +16,9 @@ class Inventory:
         self.slots: list[ItemType] = []
 
     def add_item(self, item: ItemType) -> bool:
-        """เพิ่มไอเทมลง Inventory คืนค่า True ถ้าสำเร็จ"""
+        """เพิ่มไอเทมลง Inventory คืนค่า True ถ้าสำเร็จ (ห้ามเก็บไอเทมซ้ำ)"""
+        if item in self.slots:
+            return False
         if len(self.slots) < self.MAX_SLOTS:
             self.slots.append(item)
             return True

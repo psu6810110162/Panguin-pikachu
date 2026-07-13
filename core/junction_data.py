@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -19,13 +20,17 @@ class JunctionData:
     right_choice: Choice
 
 
-def load_junctions(filepath: str = "balance/v1/junctions.json") -> list[JunctionData]:
+def load_junctions(filepath: str | None = None) -> list[JunctionData]:
     """โหลดข้อมูลจาก JSON (Single Source of Truth - PR #58)"""
+    if filepath is None:
+        base_dir = Path(__file__).resolve().parent.parent
+        filepath = str(base_dir / "balance" / "v1" / "junctions.json")
+
     try:
         with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
-    except FileNotFoundError:
-        return []
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        raise RuntimeError(f"Failed to load junction data from {filepath}: {e}")
 
     junctions = []
     for j in data.get("junctions", []):
