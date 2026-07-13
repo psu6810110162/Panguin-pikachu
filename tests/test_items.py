@@ -8,7 +8,6 @@ def test_inventory_add():
     assert len(inv.get_items()) == 1
 
 
-
 def test_inventory_max_slots():
     inv = Inventory()
     assert inv.add_item(ItemType.ALBEDO_DATA)
@@ -16,7 +15,6 @@ def test_inventory_max_slots():
     assert inv.add_item(ItemType.ECO_SEED)
     assert not inv.add_item(ItemType.ALBEDO_DATA)  # ควรเต็ม (3 ช่อง)
     assert len(inv.get_items()) == 3
-
 
 
 def test_inventory_use():

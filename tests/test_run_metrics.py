@@ -10,6 +10,7 @@ def test_run_metrics_initialization():
     assert not metrics.needs_respawn
     assert not metrics.is_invincible
 
+
 def test_run_metrics_update_safe():
     metrics = RunMetrics(heat_meter=50.0, capitalist_anger=50.0)
     # 0 คือปลอดภัยที่สุด, ค่าไม่ลดต่ำกว่า 0
@@ -24,6 +25,7 @@ def test_run_metrics_update_safe():
     assert metrics.capitalist_anger == 60.5
     assert not metrics.is_game_over
 
+
 def test_run_metrics_game_over_at_100():
     metrics = RunMetrics(heat_meter=50.0, capitalist_anger=50.0)
     # ถ้าค่าแตะ 100 แล้วพัง
@@ -31,11 +33,13 @@ def test_run_metrics_game_over_at_100():
     assert metrics.heat_meter == 100.0
     assert metrics.is_game_over
 
+
 def test_run_metrics_game_over_anger_at_100():
     metrics = RunMetrics(heat_meter=50.0, capitalist_anger=50.0)
     metrics.update_meters(0.0, 150.0)
     assert metrics.capitalist_anger == 100.0  # clamped to 100
     assert metrics.is_game_over
+
 
 def test_decrease_heart_flags():
     metrics = RunMetrics(hearts=5)
@@ -49,6 +53,7 @@ def test_decrease_heart_flags():
     metrics.decrease_heart()
     assert metrics.hearts == 4
 
+
 def test_heart_game_over():
     metrics = RunMetrics(hearts=5)
     for _ in range(5):
@@ -56,4 +61,3 @@ def test_heart_game_over():
         metrics.decrease_heart()
     assert metrics.hearts == 0
     assert metrics.is_game_over
-
