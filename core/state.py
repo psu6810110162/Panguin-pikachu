@@ -103,7 +103,6 @@ class RunMetrics:
     """จัดการ State ของตัวแปรระหว่างการวิ่ง (Day 1: D1-A1 & D1-A4)
     รับผิดชอบเกี่ยวกับทรัพยากรผู้เล่นและการตัดสิน Game Over
     """
-
     def __init__(self, heat_meter: int = 0, capitalist_anger: int = 0, hearts: int = 5):
         self.heat_meter = heat_meter
         self.capitalist_anger = capitalist_anger
@@ -131,7 +130,6 @@ class RunMetrics:
         if self.hearts <= 0:
             self.hearts = 0
             self.trigger_game_over()
-
     def trigger_game_over(self) -> None:
         """เปลี่ยนสถานะเป็น Game Over"""
         self.is_game_over = True
