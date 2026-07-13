@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "description": "10 Y-Junction policy encounters. meter_deltas: + = worse, - = better. systemic=true คือตัวเลือกแก้ที่ต้นเหตุ (ให้ 0.1C + เส้นเขียวใน DAG). ที่มา: GAME_DESIGN.md section 6.",
+  "meter_keys": ["heat", "capitalist_anger"],
+  "junctions": [
+    {
+      "zone": 1,
+      "category": "cause",
+      "situation": "วิกฤตพลังงานเมืองหลวง — ต้องการขยายอุตสาหกรรมด่วน ไฟฟ้าไม่พอ",
+      "left":  {"label": "อนุมัติโรงไฟฟ้าถ่านหิน", "meter_deltas": {"heat": 25, "capitalist_anger": -20}, "systemic": false},
+      "right": {"label": "บังคับใช้โซลาร์ฟาร์ม", "meter_deltas": {"heat": -20, "capitalist_anger": 25}, "systemic": true}
+    },
+    {
+      "zone": 2,
+      "category": "cause",
+      "situation": "สัมปทานผืนป่า — บริษัทขอถางป่าดิบชื้นปลูกข้าวโพดส่งออก",
+      "left":  {"label": "ระงับสัมปทาน + ประกาศเขตป่าสงวน", "meter_deltas": {"heat": -20, "capitalist_anger": 25}, "systemic": true},
+      "right": {"label": "อนุมัติสัมปทานเพื่อกระตุ้นส่งออก", "meter_deltas": {"heat": 25, "capitalist_anger": -25}, "systemic": false}
+    },
+    {
+      "zone": 3,
+      "category": "cause",
+      "situation": "ปัญหารถติดและควันดำ — ค่ายรถยนต์ล็อบบี้ให้สร้างทางด่วนเพิ่ม",
+      "left":  {"label": "อุดหนุนราคารถ EV (รถเท่าเดิม)", "meter_deltas": {"heat": -5, "capitalist_anger": -20}, "systemic": false},
+      "right": {"label": "เก็บภาษีรถติด → รถเมล์ฟรี", "meter_deltas": {"heat": -25, "capitalist_anger": 25}, "systemic": true}
+    },
+    {
+      "zone": 4,
+      "category": "impact",
+      "situation": "ระดับน้ำทะเลรุกคืบ — น้ำทะเลจะท่วมนิคมอุตสาหกรรมชายฝั่ง",
+      "left":  {"label": "ทุ่มงบสร้างกำแพงกั้นน้ำยักษ์", "meter_deltas": {"heat": 20, "capitalist_anger": -25}, "systemic": false},
+      "right": {"label": "ย้ายนิคม + ฟื้นฟูป่าชายเลนกันคลื่น", "meter_deltas": {"heat": -25, "capitalist_anger": 30}, "systemic": true}
+    },
+    {
+      "zone": 5,
+      "category": "impact",
+      "situation": "ภัยแล้งและวิกฤตอาหาร — เอลนีโญรุนแรง ผลผลิตเกษตรตาย",
+      "left":  {"label": "แจกเงินอุดหนุนสารเคมีเร่งโต", "meter_deltas": {"heat": 25, "capitalist_anger": -20}, "systemic": false},
+      "right": {"label": "เปลี่ยนพืชทนแล้ง + เกษตรอินทรีย์", "meter_deltas": {"heat": -20, "capitalist_anger": 25}, "systemic": true}
+    },
+    {
+      "zone": 6,
+      "category": "impact",
+      "situation": "ระเบิดเวลา Permafrost — ดินเยือกแข็งเริ่มละลาย มีเทนกำลังปะทุ",
+      "left":  {"label": "ปล่อยผ่าน (ไม่มีมูลค่าเศรษฐกิจ)", "meter_deltas": {"heat": 40, "capitalist_anger": -10}, "systemic": false, "note": "ตัวเลือกอันตราย หลอดโลกอาจแตกทันที"},
+      "right": {"label": "บังคับเอกชนร่วมลงขันสร้างโดมดูดมีเทน", "meter_deltas": {"heat": -35, "capitalist_anger": 35}, "systemic": true}
+    },
+    {
+      "zone": 7,
+      "category": "solution",
+      "situation": "ภาษีคาร์บอน (Carbon Tax) — สภาเตรียมโหวต Polluter Pays; อุตสาหกรรมขู่ย้ายฐาน",
+      "left":  {"label": "อนุมัติภาษีคาร์บอนก้าวหน้า", "meter_deltas": {"heat": -35, "capitalist_anger": 35}, "systemic": true},
+      "right": {"label": "ชะลอกฎหมายรักษาการจ้างงาน", "meter_deltas": {"heat": 30, "capitalist_anger": -30}, "systemic": false}
+    },
+    {
+      "zone": 8,
+      "category": "solution",
+      "situation": "ขยะ Fast Fashion — ยอดขายมหาศาลแลกกับขยะและมลพิษน้ำ",
+      "left":  {"label": "ผลักดัน Circular Economy (รับซื้อรีไซเคิล)", "meter_deltas": {"heat": -25, "capitalist_anger": 25}, "systemic": true},
+      "right": {"label": "ส่งเสริมแคมเปญลดแลกแจกแถม", "meter_deltas": {"heat": 25, "capitalist_anger": -25}, "systemic": false}
+    },
+    {
+      "zone": 9,
+      "category": "solution",
+      "situation": "แหล่งกักเก็บคาร์บอน (Carbon Sink) — ต้องการปอดของโลกคืน",
+      "left":  {"label": "เปิดเสรีพื้นที่สีเขียวให้เอกชน (สวน→ห้าง)", "meter_deltas": {"heat": 30, "capitalist_anger": -30}, "systemic": false},
+      "right": {"label": "เก็บภาษีที่ดินรกร้าง → ป่ากลางเมือง (NbS)", "meter_deltas": {"heat": -30, "capitalist_anger": 30}, "systemic": true}
+    },
+    {
+      "zone": 10,
+      "category": "solution",
+      "situation": "โค้งสุดท้าย (The Tipping Point) — อุณหภูมิใกล้จุดที่ย้อนกลับไม่ได้",
+      "left":  {"label": "ระงับฟอสซิล 100% ทั่วประเทศ", "meter_deltas": {"heat": -50, "capitalist_anger": 50}, "systemic": true, "note": "ตัวเลือกวัดใจ เสี่ยงหลอดนายทุนพังก่อนบอส"},
+      "right": {"label": "ซื้อคาร์บอนเครดิตฟอกเขียว (Greenwashing)", "meter_deltas": {"heat": 50, "capitalist_anger": -50}, "systemic": false, "note": "เสี่ยง Game Over ถ้าหลอดโลกสูงอยู่แล้ว"}
+    }
+  ]
+}

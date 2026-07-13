@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "description": "โครงกราฟความสัมพันธ์เหตุ-ผล (DAG) สำหรับ Systemic Report Card — 13 edge (10 ทางแยก + 3 เวฟบอส). เขียว/แดง ตัดสินตอน runtime จากว่าผู้เล่นเลือก systemic/correct หรือไม่ (ดู junctions.json/boss.json). tooltip = เฉลยเมื่อเลือกผิด. หมายเหตุ: การจับคู่ concept เป็น first pass — ทีม (D2-B3) ปรับ pedagogy ได้โดยไม่แตะโค้ด.",
+  "nodes": [
+    {"id": "coal_power", "label": "โรงไฟฟ้าถ่านหิน"},
+    {"id": "co2", "label": "CO2 ในชั้นบรรยากาศ"},
+    {"id": "deforestation", "label": "การถางป่า"},
+    {"id": "carbon_sink", "label": "แหล่งดูดซับคาร์บอน"},
+    {"id": "private_cars", "label": "รถยนต์ส่วนตัว"},
+    {"id": "urban_emission", "label": "มลพิษในเมือง"},
+    {"id": "ice_melt", "label": "น้ำแข็งขั้วโลกละลาย"},
+    {"id": "sea_level", "label": "ระดับน้ำทะเลสูง"},
+    {"id": "drought", "label": "ภัยแล้ง"},
+    {"id": "food_crisis", "label": "วิกฤตอาหาร"},
+    {"id": "permafrost", "label": "Permafrost ละลาย"},
+    {"id": "methane", "label": "ก๊าซมีเทน"},
+    {"id": "carbon_tax", "label": "ภาษีคาร์บอน"},
+    {"id": "emission_cut", "label": "การลดการปล่อยมลพิษ"},
+    {"id": "fast_fashion", "label": "Fast Fashion"},
+    {"id": "waste_pollution", "label": "ขยะและมลพิษน้ำ"},
+    {"id": "green_space", "label": "พื้นที่สีเขียว"},
+    {"id": "fossil_fuel", "label": "พลังงานฟอสซิล"},
+    {"id": "tipping_point", "label": "Tipping Point"},
+    {"id": "albedo", "label": "ค่าการสะท้อนแสง (Albedo)"},
+    {"id": "global_warming", "label": "ภาวะโลกร้อน"},
+    {"id": "eco_seed", "label": "การฟื้นฟูธรรมชาติ (NbS)"}
+  ],
+  "edges": [
+    {"decision": 1,  "phase": "run",  "from": "coal_power",    "to": "co2",            "tooltip": "ถ่านหินปล่อย CO2 มหาศาล — พลังงานสะอาดลดต้นเหตุได้จริง"},
+    {"decision": 2,  "phase": "run",  "from": "deforestation", "to": "carbon_sink",    "tooltip": "ป่าคือแหล่งดูดซับคาร์บอน — ถางป่า = เสียตัวช่วยดูด CO2"},
+    {"decision": 3,  "phase": "run",  "from": "private_cars",  "to": "urban_emission", "tooltip": "ลดจำนวนรถได้ผลกว่าเปลี่ยนชนิดรถแต่คงจำนวนเดิม"},
+    {"decision": 4,  "phase": "run",  "from": "ice_melt",      "to": "sea_level",      "tooltip": "แก้ที่ต้นเหตุ (ธรรมชาติกันคลื่น) ยั่งยืนกว่ากำแพงคอนกรีตที่ปล่อย CO2"},
+    {"decision": 5,  "phase": "run",  "from": "drought",       "to": "food_crisis",    "tooltip": "สารเคมีเร่งโตปล่อยไนตรัสออกไซด์ — เกษตรยั่งยืนฟื้นดินระยะยาว"},
+    {"decision": 6,  "phase": "run",  "from": "permafrost",    "to": "methane",        "tooltip": "ปล่อย Permafrost ละลาย = มีเทนพุ่ง โลกร้อนก้าวกระโดด"},
+    {"decision": 7,  "phase": "run",  "from": "carbon_tax",    "to": "emission_cut",   "tooltip": "Polluter Pays บังคับลดมลพิษเป็นรูปธรรม"},
+    {"decision": 8,  "phase": "run",  "from": "fast_fashion",  "to": "waste_pollution","tooltip": "Circular Economy ตัดวงจรขยะที่ต้นทาง"},
+    {"decision": 9,  "phase": "run",  "from": "green_space",   "to": "carbon_sink",    "tooltip": "พื้นที่สีเขียวในเมือง = จุดกักเก็บคาร์บอน + ลดอุณหภูมิเมือง"},
+    {"decision": 10, "phase": "run",  "from": "fossil_fuel",   "to": "tipping_point",  "tooltip": "ฟอกเขียวไม่ลดมลพิษจริง เสี่ยงทะลุ Tipping Point"},
+    {"decision": 11, "phase": "boss", "from": "albedo",        "to": "global_warming", "tooltip": "น้ำแข็งละลาย → Albedo ลด → โลกร้อนทวีคูณ (หักล้าง Fake News)"},
+    {"decision": 12, "phase": "boss", "from": "methane",       "to": "global_warming", "tooltip": "มีเทนรุนแรงกว่า CO2 ~80 เท่า — ต้องสกัดมีเทนไม่ใช่ปลูกต้นไม้"},
+    {"decision": 13, "phase": "boss", "from": "eco_seed",      "to": "carbon_sink",    "tooltip": "ป่าฟื้นฟูดูดซับความร้อน (Carbon Sink) ดับวิกฤต"}
+  ]
+}

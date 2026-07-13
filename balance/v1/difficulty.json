@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "description": "ค่าเริ่มต้น + tuning ของ meters/hearts/scoring. ที่มา: state-machines.md, GAME_DESIGN.md section 7.",
+  "meters": {
+    "start_heat": 50.0,
+    "start_capitalist_anger": 50.0,
+    "min": 0.0,
+    "max": 100.0,
+    "game_over_at": 100.0,
+    "passive_decay_per_second": 0.0
+  },
+  "hearts": {
+    "start": 5,
+    "cap": 5,
+    "fall_penalty": 1,
+    "respawn_seconds": 3.0,
+    "invincible_seconds": 3.0
+  },
+  "eco_seed": {
+    "heat_reduction": -20.0,
+    "repairs_blocks": true
+  },
+  "scoring": {
+    "initial_crisis_temp_c": 2.0,
+    "systemic_point_c": 0.1,
+    "max_run_reduction_c": 1.0,
+    "boss_bonus_per_wave_c": 0.1,
+    "max_boss_reduction_c": 0.5,
+    "ranks": [
+      {"rank": "S", "label": "Eco-Systemic Master", "min_c": 1.3, "max_c": 1.5},
+      {"rank": "A", "label": "Green Negotiator", "min_c": 0.8, "max_c": 1.2}
+    ]
+  }
+}

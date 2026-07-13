@@ -1,6 +1,6 @@
 # ADR-002: Respawn + Checkpoint แทน permanent Game Over
 
-**Status:** Accepted
+**Status:** Superseded in part by [ADR-010](010-health-respawn-state-model.md) — GDD V.2 เพิ่มหัวใจ 5 ดวง + permanent Game Over (checkpoint/respawn/`respawn_count` เดิมยัง reuse ครบ)
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR-003: Rule-based evaluation แทน DAG (DAG = future work)
 
-**Status:** Accepted
+**Status:** Accepted — DAG (future work ที่ระบุไว้) ถูกเปิดใช้แล้วใน [ADR-011](011-learning-evaluation-pipeline.md) โดยอ่าน event log เดิมตามที่ ADR นี้คาดไว้ (rule-based ยังใช้เป็น Gameplay Score)
 
 ## Context
 

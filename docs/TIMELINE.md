@@ -1,4 +1,34 @@
-# Timeline — 3 วัน
+# Timeline
+
+สถานะปัจจุบัน (PR-based, GDD V.2) อยู่ด้านบน — แผน 3 วันดั้งเดิม (D1–D9, foundation) เก็บไว้ด้านล่างเป็น historical reference
+
+---
+
+## Timeline ปัจจุบัน — PR Roadmap (GDD V.2)
+
+Checklist นี้ติ๊กตามจริงระหว่างทำ — ลำดับ PR ตาม dependency graph ใน [ENGINEERING_PLAN.md § Dependency Graph & PR Strategy](ENGINEERING_PLAN.md#dependency-graph--pr-strategy-gdd-v2) ไม่ใช่ตามวันปฏิทิน (render รอ state, scoring รอ event schema นิ่ง) รายละเอียด Story/Task ต่อ PR ดู [SPRINT_2DAY.md](SPRINT_2DAY.md)
+
+| PR | Scope | Layer | สถานะ |
+|---|---|---|---|
+| PR1 | Docs + ADR-009..012 + PDF→md + `state-machines.md` | Docs | ✅ เสร็จ |
+| PR2 | `balance/v1/*.json` + `test_balance.py` + BALANCE.md generator | L0 Content | ✅ เสร็จ |
+| PR3 | `GameSession`/RunRecord ownership + event emission (single-writer) | L1 Infra | ⬜ ถัดไป |
+| PR4 | `core/meters.py` + hearts state machine + inventory + `capitalist` rule | L2 State | ⬜ |
+| PR5 | Zone spawning + Y-Junction interaction + item/Eco-Seed + boss 3-wave | L3 Logic | ⬜ |
+| PR6 | Meter/heart/inventory HUD + junction/boss lane UI | L4 Render | ⬜ |
+| PR7 | `scoring/stealth.py` + `scoring/dag.py` (projection) | L5 Scoring | ⬜ |
+| PR8 | Report Card screen (render DAG) + Sync wire + migration | L6 Report+Sync | ⬜ |
+
+**จุดพึ่งพา:** PR3 ต้องเสร็จก่อน PR4/PR7 เริ่ม (event schema นิ่ง); PR4 ต้องเสร็จก่อน PR5/PR6; PR8 รอทั้ง PR5+PR7 — ดู dependency graph เต็มใน ENGINEERING_PLAN.md
+
+**Suggested session mapping** (ถ้าทำแบบ sprint 2 วันตาม [SPRINT_2DAY.md](SPRINT_2DAY.md)):
+
+- **Day 1:** PR3 (เช้า, blocking ทุกอย่าง) → PR4 (บ่าย) → PR5 เริ่ม (ค่ำ, ขนานกับ PR7 ถ้ามีคนที่สอง) — ตรง Stories D1-A1..D1-B4
+- **Day 2:** PR5 จบ + PR6 → PR7 (ถ้ายังไม่เสร็จ Day 1) → PR8 — ตรง Stories D2-A1..D2-B4, จบด้วย full playthrough + balance pass
+
+---
+
+## Timeline ดั้งเดิม — 3 วัน (Foundation, ก่อน GDD V.2 — historical reference)
 
 Checklist ติ๊กได้ระหว่างทำ ดูเหตุผล/รายละเอียดของแต่ละ module ใน [ENGINEERING_PLAN.md](ENGINEERING_PLAN.md)
 
