@@ -133,7 +133,15 @@ def _zone_choice_status(events: list[GameEvent], zone: int) -> EdgeStatus | None
 
 
 def _boss_wave_status(events: list[GameEvent], wave: int) -> EdgeStatus | None:
-    """None ถ้ายังไม่มี BossPhaseEvent ของเวฟนี้เลย"""
+    """None ถ้ายังไม่มี BossPhaseEvent ของเวฟนี้เลยที่บอกผลถูก/ผิดได้
+
+    หมายเหตุ: BossPhaseEvent.outcome มีค่า "phase_complete" ที่ยังไม่มีโค้ดไหน emit จริง
+    (ตรวจแล้วทั้ง repo — เป็นแค่ Literal option ที่ถูกประกาศไว้เฉยๆ) และความหมายที่แท้จริง
+    ยังไม่ถูกกำหนด — จงใจไม่ map เป็น "correct"/"incorrect" ที่นี่ เพราะ "phase_complete"
+    เพียงอย่างเดียวไม่ได้บอกว่าคำตอบถูกหรือผิด การเดาว่า = "correct" จะยัดคะแนน Cognitive
+    Score ให้โดยไม่มีหลักฐานจริง เมื่อ boss gameplay (D2-A2/D2-A3) นิยามความหมายที่แท้จริง
+    ของ outcome นี้แล้ว ค่อยกลับมาแก้ตรงนี้พร้อม test ประกบ
+    """
     for e in events:
         if isinstance(e, BossPhaseEvent) and e.phase == wave:
             if e.outcome == "damage_dealt":
