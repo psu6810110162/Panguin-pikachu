@@ -20,6 +20,7 @@ from kivy.uix.widget import Widget
 from core.audio import AudioManager
 from core.config import TARGET_FPS, TILE_H, TILE_IMG_H, TILE_TO_METER, TILE_W
 from core.logger import logger
+from core.session import GameSession
 from game.grid import GridManager
 from game.particles import ParticleSystem
 from game.penguin import Penguin
@@ -507,6 +508,9 @@ class GamePlayScreen(Screen):
         self._keyboard = None
         self.path_index = 0
         self.gems_collected = 0
+        # RunRecord ของรอบเล่นปัจจุบัน (single-writer) — สร้างใหม่ทุกครั้งที่เริ่มเล่น
+        # ดู core/session.py + docs/ENGINEERING_PLAN.md (RunRecord Ownership)
+        self.session = GameSession()
         self.grid.reset()
         start = self.grid.path[0]
         self.penguin.col = start[0]
@@ -638,6 +642,11 @@ class GamePlayScreen(Screen):
         self.hud_rect.pos = instance.pos
         self.hud_rect.size = instance.size
 
+    def _start_new_session(self):
+        """เริ่ม RunRecord รอบใหม่ (LOBBY → RUNNING) — เรียกทุกครั้งที่เริ่ม/รีสตาร์ทเกม"""
+        self.session = GameSession()
+        self.session.start()
+
     def on_enter(self):
         from core.state import StateManager
 
@@ -662,6 +671,7 @@ class GamePlayScreen(Screen):
         self.idle_timer = 0
         self.game_started = False
         self.renderer.cam_x = None
+        self._start_new_session()
 
     def on_leave(self):
         if self.game_event:
@@ -761,6 +771,13 @@ class GamePlayScreen(Screen):
             AudioManager().play_sfx("Hit")
             self.idle_timer = 0
             self.game_started = True
+            self.session.obstacle_hit(
+                col=new_col,
+                row=new_row,
+                damage=1,
+                destroyed=result["destroyed"],
+                distance_m=self.grid.get_distance_m(),
+            )
 
             # Particle effects at the obstacle's screen position
             px, py = self.renderer.grid_to_screen(new_col, new_row)
@@ -792,6 +809,13 @@ class GamePlayScreen(Screen):
                 f"[COLLECT] Gem ที่ ({new_col}, {new_row}) ชนิด {tile_type} | รวม: {self.gems_collected}"
             )
             self.grid.gems.pop((new_col, new_row), None)
+            self.session.collect(
+                item_type="gem",
+                col=new_col,
+                row=new_row,
+                value=val,
+                distance_m=self.grid.get_distance_m(),
+            )
 
         # ── Move penguin to new position ──
         self.penguin.col = new_col
@@ -816,6 +840,10 @@ class GamePlayScreen(Screen):
                 if self.grid.forward_tiles % 100 == 0:
                     meters = self.grid.forward_tiles * TILE_TO_METER
                     self.show_checkpoint_message(f"{meters}M REACHED!")
+                    self.session.checkpoint_reached(
+                        checkpoint_index=self.grid.forward_tiles // 100,
+                        distance_m=self.grid.get_distance_m(),
+                    )
 
             if self.path_index == len(self.grid.path) - 1:
                 logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
@@ -868,6 +896,7 @@ class GamePlayScreen(Screen):
         self.renderer.cam_x = None
         self.renderer.cam_y = None
         self.renderer.tile_textures.clear()
+        self._start_new_session()
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:
