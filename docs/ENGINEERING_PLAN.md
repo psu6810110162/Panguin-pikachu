@@ -2,21 +2,25 @@
 
 ทีม 2 คน: **เพื่อน (Antigravity CLI)** และ **คุณ (Claude Code)**. ฐานโค้ด: `main` หลัง merge [#22](https://github.com/psu6810110162/Panguin-pikachu/pull/22) (rewrite ทั้งหมดของเพื่อน) บวก [#23](https://github.com/psu6810110162/Panguin-pikachu/pull/23) (foundation: tooling/CI/tests/docs)
 
-ดู [OVERVIEW.md](OVERVIEW.md) สำหรับภาพรวมเกมและสารบัญหน้าจอ, [TIMELINE.md](TIMELINE.md) สำหรับตารางงานละเอียด
+ดู [OVERVIEW.md](OVERVIEW.md) สำหรับภาพรวมเกมและสารบัญหน้าจอ, [GAME_DESIGN.md](GAME_DESIGN.md) สำหรับ GDD V.2 เต็ม, [SPRINT_2DAY.md](SPRINT_2DAY.md)/[TIMELINE.md](TIMELINE.md) สำหรับตารางงาน, [state-machines.md](state-machines.md) สำหรับ state machine
 
-## Gap Analysis — มีแล้ว vs ต้องสร้างเพิ่ม
+## Gap Analysis — มีแล้ว vs ต้องสร้างเพิ่ม (อัปเดต GDD V.2)
 
-| ใน PDF (NSC2026 Penguin dash.pdf) | สถานะ |
-|---|---|
-| วิ่งเก็บของ + หลบสิ่งกีดขวาง + score/animation | ✅ มีแล้ว |
-| SQLite เก็บ high score/gems, shop, audio | ✅ มีแล้ว |
-| Meters real-time, checkpoint+policy, 3 modules, boss 2 เฟส | ❌ ต้องสร้าง (D1–D4) |
-| Pre/Post-test + Hake Gain | ❌ ต้องสร้างใหม่ (D5) |
-| DAG evaluation + rubric scoring | ↳ ปรับเป็น Rule-based scoring (D7b, ดู ADR-003) |
-| Final Report screen | ❌ ต้องสร้าง (D6) |
-| HMAC + REST sync | ❌ ต้องสร้าง (D8) |
-| Backend + WebSockets + Teacher Dashboard | ❌ ต้องสร้างทั้งหมด (D9) |
-| CI, tests, lint, type check, pre-commit | ✅ เสร็จใน #23 |
+**Insight:** GDD V.2 เป็น **content problem ไม่ใช่ architecture problem** — schema/event contract ที่ freeze รองรับเกือบครบ (`PolicyChoiceEvent`=Y-Junction, `meter_deltas` name-keyed → Capitalist ไม่แก้ schema, `CollectEvent.item_type="scientific_item"`, `BossPhaseEvent`, `RunState.BOSS`@1000m) งานหลัก = **wiring + data-driven content**
+
+| Feature (GDD V.2) | Existing hook | Reuse | ต้องทำใหม่ | Risk |
+|---|---|---|---|---|
+| Y-Junction decision | `PolicyChoiceEvent`, grid fork/merge | ~95% | data + jump-block UI | ต่ำ |
+| Dual meter Heat+Capitalist | `heat_controlled_pct`, `meter_deltas` | ~65% | `core/meters.py` + HUD bar + rule | กลาง |
+| Hearts / HP (5) | ไม่มี (Penguin ไม่มี HP) | 0% | state machine ([ADR-010](adr/010-health-respawn-state-model.md)) | กลาง |
+| Scientific items | `CollectEvent.item_type` slot | ~90% | inventory + Eco-Seed | ต่ำ |
+| Zone spawning (10) | grid distance-scaled + checkpoint | ~50% | zone metadata + seeded RNG | ต่ำ |
+| Boss 3-wave | `RunState.BOSS`, `BossPhaseEvent` | ~80% | content data + lane UI | ต่ำ |
+| Stealth score + DAG | event log + `evaluator` | ~90% | `scoring/stealth.py`+`dag.py` ([ADR-011](adr/011-learning-evaluation-pipeline.md)) | ต่ำ |
+| **Event emission** | `RunRecord.record()` มี แต่เกมไม่เรียก | 0% | **ช่องว่างหลัก — ทำก่อน** | **สูง** |
+| Pre/Post-test + Hake Gain | `hake.py`, `QuizAnswerEvent` | ✅ มีแล้ว (merge, คงไว้) | — | — |
+| HMAC sync + Backend + Dashboard | `core/sync.py`, `server/` | ✅ มีแล้ว | wire เข้า loop + fields ใหม่ | กลาง |
+| CI, tests, lint, type check | — | ✅ เสร็จใน #23 | + `test_balance.py` | — |
 
 ## Module Ownership
 
@@ -81,7 +85,7 @@ Panguin-pikachu/
 
 ## Changing หรือเพิ่ม ADR (สมมติอีกคนอยากแก้/เพิ่มการตัดสินใจ)
 
-ใช้ [`docs/adr/TEMPLATE.md`](adr/TEMPLATE.md) เป็นจุดเริ่ม — numbering: `NNN-kebab-title.md` เลขถัดจาก ADR ล่าสุด (ปัจจุบันไปถึง [008](adr/008-docker-compose-backend.md))
+ใช้ [`docs/adr/TEMPLATE.md`](adr/TEMPLATE.md) เป็นจุดเริ่ม — numbering: `NNN-kebab-title.md` เลขถัดจาก ADR ล่าสุด (ปัจจุบันไปถึง [012](adr/012-runresult-contract.md) — 009 Dual-Meter, 010 Health/Respawn, 011 Learning Eval Pipeline, 012 RunResult Contract จาก GDD V.2)
 
 - **ADR เป็น immutable record** — ห้ามแก้ Decision ของ ADR เก่าย้อนหลัง ถ้าการตัดสินใจเปลี่ยน ให้เขียน ADR **ใหม่** ที่ supersede อันเดิม แล้ว cross-link ทั้งสองทาง (`**Status:** Superseded by ADR-00X` ใน ADR เก่า, อ้างอิงกลับใน ADR ใหม่)
 - **เขียน ADR เมื่อ:** เพิ่ม/ลบ dependency, เปลี่ยน data model/contract (RunRecord/events/state machine), เปลี่ยน security model, หรือ reverse การตัดสินใจเดิม — ตรงกับ pattern ของ ADR-001 ถึง 008 ที่มีอยู่แล้ว

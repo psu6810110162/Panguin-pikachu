@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "description": "Carbon Baron boss — 3 waves. ตอบถูก = armor -1; ตอบผิด = hearts -1. ที่มา: GAME_DESIGN.md section 4.3.",
+  "boss_id": "carbon_baron",
+  "armor": 3,
+  "items": ["albedo_data", "methane_core", "eco_seed"],
+  "waves": [
+    {
+      "wave": 1,
+      "theme": "fake_news",
+      "wall_text": "น้ำแข็งละลายก็แค่เรื่องธรรมชาติ โลกไม่ได้ร้อนขึ้นสักหน่อย!",
+      "correct_item": "albedo_data",
+      "wrong_item": "methane_core",
+      "on_correct": {"boss_armor": -1},
+      "on_wrong": {"hearts": -1},
+      "science": "ค่าการสะท้อนแสงขั้วโลก (Albedo) ลดลงเมื่อน้ำแข็งละลาย → โลกร้อนแบบทวีคูณ"
+    },
+    {
+      "wave": 2,
+      "theme": "compounding_crisis",
+      "wall_text": "Permafrost ละลาย! ก๊าซมีเทนรั่วไหลรุนแรงกว่า CO2 หลายเท่า!",
+      "correct_item": "methane_core",
+      "wrong_item": "eco_seed",
+      "on_correct": {"boss_armor": -1},
+      "on_wrong": {"hearts": -1},
+      "science": "มีเทน (CH4) กักความร้อนรุนแรงกว่า CO2 ~80 เท่าใน 20 ปี — ปลูกต้นไม้ไม่ช่วยเพราะปัญหาคือมีเทนไม่ใช่ CO2"
+    },
+    {
+      "wave": 3,
+      "theme": "system_compromise",
+      "wall_text": "ความร้อนทะลุขีดจำกัด! ระบบนิเวศกำลังจะพังทลาย!",
+      "correct_item": "eco_seed",
+      "wrong_item": "albedo_data",
+      "on_correct": {"boss_armor": -1},
+      "on_wrong": {"hearts": -1},
+      "science": "ปาเมล็ดพันธุ์ → ป่าโฮโลแกรมดูดซับความร้อน (Carbon Sink / NbS) ดับไฟบอส"
+    }
+  ]
+}
