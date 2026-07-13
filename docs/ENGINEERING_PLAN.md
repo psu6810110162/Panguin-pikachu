@@ -48,6 +48,54 @@
 | **D8 Sync Client** | `core/sync.py` HMAC-SHA256(timestamp+nonce+payload) บน HTTPS, offline queue, retry/backoff/idempotency | ดู ADR-004 |
 | **D9 Backend + Teacher Dashboard** | `server/{api,services,models,dashboard}/` Flask+SocketIO, session model, dashboard MVP (ตาราง+End Session+Export CSV), server-authoritative scoring | ดู ADR-005, ADR-006 |
 
+## Dependency Graph & PR Strategy (GDD V.2)
+
+จัด roadmap ตาม **dependency** ไม่ใช่ตามวัน — render ไม่ควรเกิดก่อน state, scoring ต้องรอ event schema นิ่ง:
+
+```
+L0 Content/Balance (balance/v1/*.json)  ─┐  data-driven, ไม่มี dep กับโค้ด — ✅ เสร็จ (PR2)
+                                          │
+L1 Infrastructure                        ▼
+   GameSession/RunRecord ownership ใน GamePlayScreen  ← ช่องว่างหลัก ต้องมาก่อนทุกอย่าง
+        │
+        ▼
+L2 Gameplay State (pure, core/ ห้าม kivy)
+   Dual-Meter model  │  Hearts state machine  │  Inventory model
+        │
+        ▼
+L3 Gameplay Logic (game/)
+   Zone spawning → Y-Junction interaction → Item pickup/Eco-Seed → Boss 3-wave
+        │
+        ▼
+L4 Rendering (ui/ + screens/, kivy)
+   Meter HUD bars · Hearts HUD · Inventory HUD · Junction/Boss lane UI
+        │
+        ▼
+L5 Scoring/Analytics (core/scoring/, pure)
+   Gameplay Score → Educational Score → DAG projection
+        │
+        ▼
+L6 Report + Sync
+   Report Card screen (renders DAG projection) → SyncClient → server re-score
+```
+
+**Module ownership boundary:** `core/` = L0 config + L2 state + L5 scoring (pure, ห้าม kivy) · `game/` = L3 logic · `ui/`+`screens/` = L4/L6 render · `server/` = L6 re-score/persist
+
+**PR slicing** (1 PR = 1 เลเยอร์ review ง่าย — สถานะปัจจุบันดู [TIMELINE.md](TIMELINE.md)):
+
+| PR | Scope | Depends on | Cut? |
+|---|---|---|---|
+| PR1 | Docs + ADR-009..012 + PDF→md + `docs/state-machines.md` | — | ห้ามตัด |
+| PR2 | L0 `balance/v1/*.json` + validation test + BALANCE.md generator | PR1 | ห้ามตัด |
+| PR3 | L1 `GameSession`/RunRecord ownership + event emission (single-writer) | PR2 | ห้ามตัด |
+| PR4 | L2 `core/meters.py` + hearts state + inventory + `capitalist` rule | PR3 | ห้ามตัด |
+| PR5 | L3 zone spawning + Y-Junction + item/Eco-Seed + boss 3-wave | PR4 | boss=p0, item polish=p1 |
+| PR6 | L4 meter/heart/inventory HUD + junction/boss lane UI | PR4 | Visual Scaffolding=p1/p2 |
+| PR7 | L5 `scoring/stealth.py` + `scoring/dag.py` (projection) | PR3 (event นิ่ง) | — |
+| PR8 | L6 Report Card screen (render DAG) + Sync wire + migration | PR5,PR7 | sync=p1 (local-only fallback) |
+
+PR2/PR7 เริ่มขนานกับสายเกมได้หลัง PR3 (event schema นิ่ง) — ตรงกับ Dev A (เกม) / Dev B (content+systems) ใน [SPRINT_2DAY.md](SPRINT_2DAY.md)
+
 ## โครงสร้าง Directory เป้าหมาย
 
 ```
