@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit config for Penguin Dash — requires the CodeRabbit GitHub App
+# installed on this repo (https://github.com/marketplace/coderabbitai) before
+# this file has any effect. See docs/ENGINEERING_PLAN.md for the rules this
+# config encodes (ADR discipline, core/ no-kivy boundary, balance/ as single
+# source of truth).
+
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_filters:
+    - "!venv/**"
+    - "!**/__pycache__/**"
+    - "!.ruff_cache/**"
+    - "!.mypy_cache/**"
+    - "!.pytest_cache/**"
+    - "!instance/**"
+    - "!*.db"
+    - "!docs/images/**"
+    - "!server/migrations/versions/**"
+    - "!assets/**"
+
+  path_instructions:
+    - path: "core/**"
+      instructions: >
+        core/ must never import kivy — enforced by tests/test_no_kivy_in_core.py,
+        the one exception is core/audio.py. Flag any new kivy import here.
+        core/schema.py (RunRecord) and core/events.py (GameEvent) are a frozen
+        contract per docs/adr/001-runrecord-contract.md — a change to their
+        shape needs a new ADR (docs/adr/, numbered after the highest existing
+        file), not a silent edit. RunRecord.result must only be mutated by
+        core/scoring/evaluator.py; everywhere else should treat it as read-only.
+
+    - path: "core/scoring/**"
+      instructions: >
+        Scoring functions must be pure and deterministic — the same event log
+        should always produce the same result (docs/adr/012-runresult-contract.md).
+        Tuning constants (weights, thresholds, rank bands, per-choice point
+        values) must be read from balance/v1/*.json, never hardcoded in Python.
+
+    - path: "balance/**"
+      instructions: >
+        balance/v1/*.json is the single source of truth for game content (see
+        docs/ENGINEERING_PLAN.md § Balance single source of truth). Check that
+        edits still satisfy tests/test_balance.py's invariants: 10 unique
+        junction zones, exactly 3 boss waves, exactly 13 DAG edges with no
+        dangling node references, and meter_deltas keys limited to {heat,
+        capitalist_anger}. docs/BALANCE.md is generated from these files via
+        scripts/gen_balance_md.py — it should never be hand-edited directly.
+
+    - path: "docs/adr/**"
+      instructions: >
+        ADRs are immutable records (docs/adr/TEMPLATE.md). Never edit the
+        Decision section of an existing ADR — a changed decision needs a new
+        ADR that supersedes it, with cross-links added both ways (old ADR's
+        Status line points to the new one, new ADR references the old one).
+
+    - path: "server/**"
+      instructions: >
+        server/ may import core/ but never game/ or screens/ — it must stay
+        importable without Kivy installed (see server/requirements.txt, kept
+        separate from the game's requirements.txt). New or changed columns on
+        server/models.py need an Alembic migration (`make migrate`) and should
+        be nullable for backward compatibility with already-synced runs
+        (docs/adr/012-runresult-contract.md). Client-submitted scores must be
+        re-derived server-side, never trusted as-is (docs/adr/006).
+
+    - path: "screens/**"
+      instructions: >
+        screens/ and ui/ are intentionally exempt from strict mypy
+        (disallow_untyped_defs) since Kivy ships no type stubs — don't flag
+        missing type hints here the way you would in core/game/server.
+        Instantiating a Screen or Widget needs a real windowed Kivy context
+        this project's headless test environment doesn't have (e.g.
+        HoverButton binds to Window in __init__) — import-only smoke coverage
+        (tests/test_smoke.py) is the established bar for screens/, not full
+        instantiation tests.
+
+    - path: "tests/**"
+      instructions: >
+        Tests run with KIVY_NO_ARGS=1 KIVY_WINDOW=mock (no real window, no
+        SDL video driver). Don't suggest adding a test that instantiates a
+        Screen/Widget directly or opens a live window.
+
+  tools:
+    ruff:
+      enabled: true
+    gitleaks:
+      enabled: true
+    markdownlint:
+      enabled: true
+
+chat:
+  auto_reply: true
