@@ -12,7 +12,7 @@ class Inventory:
 
     MAX_SLOTS = 3
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.slots: list[ItemType] = []
 
     def add_item(self, item: ItemType) -> bool:

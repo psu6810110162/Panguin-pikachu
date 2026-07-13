@@ -8,7 +8,7 @@ class SpawningSystem:
     ZONE_SIZE = 100
     NUM_ZONES = 10
 
-    def __init__(self, seed: int = None):
+    def __init__(self, seed: int | None = None) -> None:
         if seed is not None:
             random.seed(seed)
         self.junction_spawns: dict[int, float] = self._generate_spawns()

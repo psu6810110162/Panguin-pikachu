@@ -13,7 +13,7 @@ class DecisionRecord:
 class DecisionLog:
     """ระบบบันทึกการตัดสินใจ Y-Junction (D1-B3) สำหรับวาด DAG"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.records: list[DecisionRecord] = []
 
     def log_decision(
