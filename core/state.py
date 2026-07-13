@@ -93,3 +93,52 @@ def validate_transition(current: RunState, new: RunState, **context: object) -> 
             raise InvalidTransitionError(
                 f"RUNNING -> BOSS requires distance_m >= {BOSS_MIN_DISTANCE_M}, got {distance_m!r}"
             )
+
+
+# ══════════════════════════════════════════════════════════════
+#  Dual-Meter & Hearts System (Day 1 - Dev A)
+# ══════════════════════════════════════════════════════════════
+
+class RunMetrics:
+    """จัดการ State ของตัวแปรระหว่างการวิ่ง (Day 1: D1-A1 & D1-A4)
+    รับผิดชอบเกี่ยวกับทรัพยากรผู้เล่นและการตัดสิน Game Over
+    """
+
+    def __init__(self, heat_meter: int = 0, capitalist_anger: int = 0, hearts: int = 5):
+        self.heat_meter = heat_meter
+        self.capitalist_anger = capitalist_anger
+        self.hearts = hearts
+        self.is_game_over = False
+
+    def update_meters(self, heat_delta: int, anger_delta: int) -> None:
+        """
+        D1-A1: รับค่า Delta เพื่ออัปเดตหลอดวัด (Dual-Meter)
+        """
+        if self.is_game_over:
+            return
+            
+        self.heat_meter += heat_delta
+        self.capitalist_anger += anger_delta
+        
+        # Trigger game-over ถ้าหลอดใดหลอดหนึ่งแตะ 100 หรือแตะ 0
+        if (self.heat_meter >= 100 or self.heat_meter <= 0) or \
+           (self.capitalist_anger >= 100 or self.capitalist_anger <= 0):
+            self.trigger_game_over()
+
+    def decrease_heart(self) -> None:
+        """
+        D1-A4: ลดหัวใจเมื่อตกเหว
+        """
+        if self.is_game_over:
+            return
+            
+        self.hearts -= 1
+        if self.hearts <= 0:
+            self.hearts = 0
+            self.trigger_game_over()
+
+    def trigger_game_over(self) -> None:
+        """เปลี่ยนสถานะเป็น Game Over"""
+        self.is_game_over = True
+        StateManager().change_state(GameState.GAMEOVER)
+
