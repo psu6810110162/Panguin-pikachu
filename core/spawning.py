@@ -11,9 +11,9 @@ class SpawningSystem:
     def __init__(self, seed: int | None = None) -> None:
         if seed is not None:
             random.seed(seed)
-        self.junction_spawns: dict[int, float] = self._generate_spawns()
+        self.junction_spawns: dict = self._generate_spawns()
 
-    def _generate_spawns(self) -> dict[int, float]:
+    def _generate_spawns(self) -> dict:
         """สุ่มตำแหน่ง 1 จุด ต่อ 1 โซน (คืนค่า Dictionary {zone_id: spawn_distance_m})"""
         spawns = {}
         for zone in range(1, self.NUM_ZONES + 1):
