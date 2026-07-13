@@ -5,8 +5,8 @@ from dataclasses import dataclass
 @dataclass
 class Choice:
     text: str
-    heat_delta: int
-    anger_delta: int
+    heat_delta: float
+    anger_delta: float
     is_systemic: bool
 
 
