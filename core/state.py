@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from enum import Enum, auto
 from typing import Any
 
@@ -93,9 +94,6 @@ def validate_transition(current: RunState, new: RunState, **context: object) -> 
 # ══════════════════════════════════════════════════════════════
 #  Dual-Meter & Hearts System (Day 1 - Dev A)
 # ══════════════════════════════════════════════════════════════
-
-
-from typing import Any, Callable
 
 
 def load_difficulty() -> dict[str, Any]:

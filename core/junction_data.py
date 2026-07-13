@@ -30,7 +30,7 @@ def load_junctions(filepath: str | None = None) -> list[JunctionData]:
         with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        raise RuntimeError(f"Failed to load junction data from {filepath}: {e}")
+        raise RuntimeError(f"Failed to load junction data from {filepath}: {e}") from e
 
     junctions = []
     for j in data.get("junctions", []):
