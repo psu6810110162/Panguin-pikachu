@@ -18,6 +18,7 @@ from screens.gameplay import GamePlayScreen
 from screens.history import HistoryScreen
 from screens.menu import MenuScreen
 from screens.pause import PauseScreen
+from screens.report import ReportScreen
 from screens.shop import ShopScreen
 from ui.components import AnimatedSkin, HoverButton  # noqa: F401
 
@@ -38,6 +39,7 @@ class PenguinDashApp(App):
         sm.add_widget(MenuScreen(name="menu"))
         sm.add_widget(GamePlayScreen(name="gameplay"))
         sm.add_widget(GameOverScreen(name="gameover"))
+        sm.add_widget(ReportScreen(name="report"))
         sm.add_widget(HistoryScreen(name="history"))
         sm.add_widget(ShopScreen(name="shop"))
         sm.add_widget(PauseScreen(name="pause"))
