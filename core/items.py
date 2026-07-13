@@ -1,13 +1,16 @@
 from enum import Enum
 from typing import List
 
+
 class ItemType(Enum):
     ALBEDO_DATA = "Albedo Data"
     METHANE_CORE = "Methane Core"
     ECO_SEED = "Eco-Seed"
 
+
 class Inventory:
     """ระบบช่องเก็บของ 3 slot (D1-B2)"""
+
     MAX_SLOTS = 3
 
     def __init__(self):
