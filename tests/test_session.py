@@ -140,5 +140,32 @@ def test_recorded_events_survive_run_record_json_round_trip() -> None:
     )
 
     restored = RunRecord.from_dict(session.run_record.to_dict())
+    assert restored.run_id == "run-1"
+    assert restored.player_id == "p1"
     assert [e.event_type for e in restored.events] == ["collect", "policy_choice"]
     assert restored.state == RunState.RUNNING
+
+    collect_event, policy_event = restored.events
+    assert (collect_event.item_type, collect_event.col, collect_event.row, collect_event.value) == (
+        "scientific_item",
+        2,
+        2,
+        1,
+    )
+    assert (policy_event.checkpoint_index, policy_event.policy_id) == (3, "zone3-left")
+    assert policy_event.meter_deltas == {"heat": -5.0, "capitalist_anger": 25.0}
+
+
+def test_policy_choice_copies_meter_deltas_so_caller_mutation_cannot_alter_the_recorded_event() -> (
+    None
+):
+    session = GameSession()
+    deltas = {"heat": -5.0, "capitalist_anger": 25.0}
+    session.policy_choice(
+        checkpoint_index=1, policy_id="zone1-right", meter_deltas=deltas, distance_m=100
+    )
+
+    deltas["heat"] = 999.0  # mutate the caller's dict after recording
+
+    recorded = session.run_record.events[0]
+    assert recorded.meter_deltas == {"heat": -5.0, "capitalist_anger": 25.0}

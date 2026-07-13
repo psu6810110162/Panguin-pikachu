@@ -178,7 +178,9 @@ class GameSession:
                 distance_m=distance_m,
                 checkpoint_index=checkpoint_index,
                 policy_id=policy_id,
-                meter_deltas=meter_deltas,
+                # copy: caller's dict must not be able to mutate a recorded event
+                # after the fact (events are the source of truth — ADR-001)
+                meter_deltas=dict(meter_deltas),
             )
         )
 
