@@ -254,11 +254,14 @@ class ReportScreen(Screen):
                 font_size="14sp",
                 color=(1, 0.85, 0.85, 1),
                 size_hint_y=None,
-                height=28,
                 halign="left",
-                valign="middle",
+                valign="top",
             )
-            label.bind(size=lambda inst, val: setattr(inst, "text_size", val))
+            # wrap against the box's width only (height=None so Kivy computes
+            # wrapped texture height), then grow the widget to fit — a fixed
+            # height clips or overlaps long tooltips instead of wrapping cleanly
+            label.bind(width=lambda inst, w: setattr(inst, "text_size", (w, None)))
+            label.bind(texture_size=lambda inst, ts: setattr(inst, "height", ts[1] + 8))
             self.tooltip_box.add_widget(label)
 
     def _start_reveal_animation(self) -> None:
