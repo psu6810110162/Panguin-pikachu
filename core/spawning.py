@@ -9,8 +9,7 @@ class SpawningSystem:
     NUM_ZONES = 10
 
     def __init__(self, seed: int | None = None) -> None:
-        if seed is not None:
-            random.seed(seed)
+        self.rng = random.Random(seed) if seed is not None else random.Random()
         self.junction_spawns: dict = self._generate_spawns()
 
     def _generate_spawns(self) -> dict:
@@ -22,7 +21,7 @@ class SpawningSystem:
             max_dist = zone * self.ZONE_SIZE
 
             # เผื่อระยะขอบเพื่อให้ไม่เกิดติดกันเกินไป (เช่น ขอบละ 10m)
-            spawn_dist = random.uniform(min_dist + 10, max_dist - 10)
+            spawn_dist = self.rng.uniform(min_dist + 10, max_dist - 10)
             spawns[zone] = round(spawn_dist, 2)
 
         return spawns
