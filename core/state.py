@@ -117,12 +117,12 @@ class RunMetrics:
         """
         if self.is_game_over:
             return
-        self.heat_meter += heat_delta
-        self.capitalist_anger += anger_delta
-        # Trigger game-over ถ้าหลอดใดหลอดหนึ่งแตะ 100 หรือแตะ 0
-        if (self.heat_meter >= 100 or self.heat_meter <= 0) or (
-            self.capitalist_anger >= 100 or self.capitalist_anger <= 0
-        ):
+
+        self.heat_meter = max(0, min(100, self.heat_meter + heat_delta))
+        self.capitalist_anger = max(0, min(100, self.capitalist_anger + anger_delta))
+
+        # Trigger game-over ถ้าหลอดใดหลอดหนึ่งแตะ 100 (เลข 0 คือปลอดภัยที่สุด)
+        if self.heat_meter >= 100 or self.capitalist_anger >= 100:
             self.trigger_game_over()
 
     def decrease_heart(self) -> None:
@@ -131,12 +131,12 @@ class RunMetrics:
         """
         if self.is_game_over:
             return
+
         self.hearts -= 1
         if self.hearts <= 0:
             self.hearts = 0
             self.trigger_game_over()
 
     def trigger_game_over(self) -> None:
-        """เปลี่ยนสถานะเป็น Game Over"""
+        """เปลี่ยนสถานะภายในเป็น Game Over เพื่อให้ฝั่งหน้าจอนำไปเช็ค (ป้องกัน Side-effect ใน Test)"""
         self.is_game_over = True
-        StateManager().change_state(GameState.GAMEOVER)
