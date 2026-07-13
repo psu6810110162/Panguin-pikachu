@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import List
 
 
 class ItemType(Enum):
@@ -14,7 +13,7 @@ class Inventory:
     MAX_SLOTS = 3
 
     def __init__(self):
-        self.slots: List[ItemType] = []
+        self.slots: list[ItemType] = []
 
     def add_item(self, item: ItemType) -> bool:
         """เพิ่มไอเทมลง Inventory คืนค่า True ถ้าสำเร็จ"""
@@ -33,5 +32,5 @@ class Inventory:
     def has_item(self, item: ItemType) -> bool:
         return item in self.slots
 
-    def get_items(self) -> List[ItemType]:
+    def get_items(self) -> list[ItemType]:
         return self.slots

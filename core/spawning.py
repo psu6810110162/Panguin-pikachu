@@ -1,5 +1,4 @@
 import random
-from typing import List, Dict
 
 
 class SpawningSystem:
@@ -12,9 +11,9 @@ class SpawningSystem:
     def __init__(self, seed: int = None):
         if seed is not None:
             random.seed(seed)
-        self.junction_spawns: Dict[int, float] = self._generate_spawns()
+        self.junction_spawns: dict[int, float] = self._generate_spawns()
 
-    def _generate_spawns(self) -> Dict[int, float]:
+    def _generate_spawns(self) -> dict[int, float]:
         """สุ่มตำแหน่ง 1 จุด ต่อ 1 โซน (คืนค่า Dictionary {zone_id: spawn_distance_m})"""
         spawns = {}
         for zone in range(1, self.NUM_ZONES + 1):
@@ -31,5 +30,5 @@ class SpawningSystem:
     def get_spawn_distance(self, zone_id: int) -> float:
         return self.junction_spawns.get(zone_id, 0.0)
 
-    def get_all_spawns(self) -> Dict[int, float]:
+    def get_all_spawns(self) -> dict[int, float]:
         return self.junction_spawns

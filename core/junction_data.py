@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import List, Dict
 
 
 @dataclass
@@ -20,7 +19,7 @@ class JunctionData:
 
 
 # ข้อมูล 10 ทางแยก (Y-Junction Policy Encounters) ตาม GDD
-JUNCTIONS: List[JunctionData] = [
+JUNCTIONS: list[JunctionData] = [
     # ภาคที่ 1: หมวดสาเหตุ (Causes) — โซน 100m–300m
     JunctionData(
         zone_id=1,

@@ -1,6 +1,6 @@
-from core.state import RunMetrics
-from core.junction_data import JunctionData
 from core.decision_log import DecisionLog
+from core.junction_data import JunctionData
+from core.state import RunMetrics
 
 
 class YJunctionInteraction:
