@@ -33,6 +33,6 @@ def downgrade():
     with op.batch_alter_table("runs", schema=None) as batch_op:
         batch_op.drop_constraint("uq_runs_session_id_run_id", type_="unique")
         batch_op.drop_index(batch_op.f("ix_runs_run_id"))
-        batch_op.create_index(batch_op.f("ix_runs_run_id"), ["run_id"], unique=1)
+        batch_op.create_index(batch_op.f("ix_runs_run_id"), ["run_id"], unique=True)
 
     # ### end Alembic commands ###
