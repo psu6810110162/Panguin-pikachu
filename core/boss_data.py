@@ -37,7 +37,7 @@ class BossData:
 @lru_cache(maxsize=1)
 def load_boss_data() -> BossData:
     raw = json.loads((BALANCE_DIR / "boss.json").read_text(encoding="utf-8"))
-    
+
     waves: dict[int, BossWave] = {}
     for entry in raw["waves"]:
         wave = BossWave(
