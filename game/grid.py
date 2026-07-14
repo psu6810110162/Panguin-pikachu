@@ -61,7 +61,6 @@ class GridManager:
         self._seg_count = 0
         self._last_cleaned_idx = 0
         self._total_generated = 0
-        self._boss_wave = 0
         self.checkpoints_generated = 0
         self.resolved_fork = None
         # Day 1: D1-A2 Zone-Based Spawning
@@ -93,7 +92,6 @@ class GridManager:
         self._last_dir = self.DIR_A
         self._seg_count = 0
         self._last_cleaned_idx = 0
-        self._boss_wave = 0
         self.resolved_fork = None
         self._build_start_platform()
         self.spawning_system = SpawningSystem()
@@ -187,7 +185,7 @@ class GridManager:
         if gem and gem.active:
             return gem
         return None
-        
+
     def get_boss_item_at(self, col, row):
         return self.boss_items.get((col, row))
 
@@ -286,6 +284,8 @@ class GridManager:
         แล้วต่อด้วย corner เพื่อเปลี่ยนทิศ
         """
         if self._total_generated >= 1000:
+            if not hasattr(self, "_boss_wave"):
+                self._boss_wave = 0
             if self._boss_wave < 3:
                 self._build_boss_wave(self._boss_wave)
                 self._boss_wave += 1
@@ -446,7 +446,7 @@ class GridManager:
         start_col, start_row = self._last_pos
         cur_dir = self._last_dir
         perp = self.DIR_B if cur_dir == self.DIR_A else self.DIR_A
-        
+
         boss_data = load_boss_data()
         wave = boss_data.waves.get(wave_index + 1)
 
@@ -474,13 +474,13 @@ class GridManager:
             self._add_tile(right_col, right_row, is_fork=True)
             self.fork_tiles.add((left_col, left_row))
             self.fork_tiles.add((right_col, right_row))
-            
+
             if i == 1 and wave:
                 is_left_correct = random.choice([True, False])
                 left_item = wave.correct_item if is_left_correct else wave.wrong_item
                 right_item = wave.wrong_item if is_left_correct else wave.correct_item
-                self.boss_items[(left_col, left_row)] = (wave_index + 1, left_item)
-                self.boss_items[(right_col, right_row)] = (wave_index + 1, right_item)
+                self.boss_items[(left_col, left_row)] = left_item
+                self.boss_items[(right_col, right_row)] = right_item
 
         # Merge back
         for _ in range(2):
