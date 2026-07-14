@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, cast
 
-from core.junction_data import Junction
+from core.junction_data import Junction, Side
 from core.state import RunMetrics
 
 
@@ -21,6 +21,7 @@ class YJunctionInteraction:
             selected_choice = junction.right
         else:
             raise ValueError("choice_side must be 'left' or 'right'")
+        side = cast(Side, choice_side)  # validated ข้างบนแล้ว
 
         # อัปเดตค่า Dual-Meter
         self.run_metrics.update_meters(
@@ -29,16 +30,13 @@ class YJunctionInteraction:
         )
 
         # บันทึกประวัติการตัดสินใจส่งให้ GameSession (PR #58)
-        # Note: (Day 2) is_systemic ไม่ได้ส่งผ่าน PolicyChoiceEvent เนื่องจากไม่ได้ระบุใน ADR-001
-        # ระบบวาด DAG (day-2) จะต้อง derive ค่า systemic จาก junctions.json
-        # โดยใช้ checkpoint_index (zone_id) คู่กับ policy_id ("left" หรือ "right")
+        # policy_id ต้องเป็น canonical form "zone{N}-{side}" (Junction.policy_id) — ฝั่ง
+        # consumer (core/scoring/stealth.py, dag.py) parse ด้วย parse_policy_id/
+        # option_for_policy_id ซึ่ง raise ValueError ถ้าได้ "left"/"right" ดิบ ๆ
         if hasattr(self.game_session, "policy_choice"):
             self.game_session.policy_choice(
                 checkpoint_index=junction.zone,
-                policy_id=choice_side,
-                meter_deltas={
-                    "heat": selected_choice.meter_deltas.get("heat", 0.0),
-                    "capitalist_anger": selected_choice.meter_deltas.get("capitalist_anger", 0.0),
-                },
+                policy_id=junction.policy_id(side),
+                meter_deltas=dict(selected_choice.meter_deltas),
                 distance_m=junction.zone * 100,
             )
