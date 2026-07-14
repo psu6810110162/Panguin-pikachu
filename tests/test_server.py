@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 
 import pytest
@@ -331,6 +333,45 @@ def test_dashboard_export_requires_the_teacher_token_header(client: FlaskClient)
     assert "Alice" in response.get_data(as_text=True)
 
 
+_CSV_HEADER = [
+    "player_name",
+    "distance_m",
+    "respawn_count",
+    "environmental_score",
+    "status",
+    "net_impact_score",
+    "rank",
+]
+
+
+def test_dashboard_export_csv_header_is_exact_and_append_only(client: FlaskClient):
+    """CSV คือ public artifact ที่ครูใช้จริง — schema ต้อง exact (ชื่อ+ลำดับ) ไม่ใช่แค่
+    'มีคอลัมน์นี้อยู่' กันคนย้าย/แทรกคอลัมน์เดิมแล้ว script ของครูพัง (append-only)
+    """
+    room_code, token = _create_session(client)
+    client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"})
+
+    response = client.get(f"/dashboard/{room_code}/export.csv", headers=_teacher(token))
+    rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))
+    assert rows[0] == _CSV_HEADER
+
+
+def test_dashboard_export_csv_leaves_stealth_columns_empty_when_flag_disabled(
+    client: FlaskClient,
+):
+    room_code, token = _create_session(client)
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
+        "player_id"
+    ]
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+
+    response = client.get(f"/dashboard/{room_code}/export.csv", headers=_teacher(token))
+    rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))
+    data_row = dict(zip(_CSV_HEADER, rows[1], strict=True))
+    assert data_row["net_impact_score"] == ""
+    assert data_row["rank"] == ""
+
+
 def test_socketio_emits_leaderboard_update_on_run_ingestion(
     client: FlaskClient, socket_client: SocketIOTestClient
 ):
@@ -424,3 +465,32 @@ def test_ingest_run_persists_stealth_fields_when_flag_is_enabled():
         # component เป็น 0.0 พอดี แต่ต้อง "มีค่า" (persisted) ไม่ใช่ None (ไม่ persist)
         assert leaderboard[0]["net_impact_score"] == 0.0
         assert leaderboard[0]["rank"] is None  # 0.0°C ต่ำกว่า rank ต่ำสุด (A: 0.8-1.2°C)
+
+
+def test_dashboard_export_csv_includes_stealth_columns_when_flag_enabled():
+    """เปิด STEALTH_ASSESSMENT_ENABLED แล้ว net_impact_score/rank ต้องโผล่ใน CSV จริง —
+    ไม่ใช่แค่ leaderboard (บั๊กเดิม: dashboard.py ตกคะแนน Stealth ทั้งที่ leaderboard มีให้แล้ว)
+    """
+    stealth_app = create_app(
+        db_uri="sqlite:///:memory:",
+        rate_limit="10000 per minute",
+        stealth_assessment_enabled=True,
+    )
+    create_all_tables(stealth_app)
+    with stealth_app.app_context():
+        stealth_client = stealth_app.test_client()
+        room_code, token = _create_session(stealth_client)
+        player_id = stealth_client.post(
+            f"/api/v1/sessions/{room_code}/join", json={"name": "Bob"}
+        ).json["player_id"]
+        stealth_client.post(
+            f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id)
+        )
+
+        response = stealth_client.get(f"/dashboard/{room_code}/export.csv", headers=_teacher(token))
+        rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))
+        data_row = dict(zip(_CSV_HEADER, rows[1], strict=True))
+        # ไม่มี PolicyChoiceEvent/BossPhaseEvent ใน _make_signed_run_body -> 0.0 พอดี
+        # แต่ต้อง "มีค่า" (ไม่ใช่ว่าง) — ยึด pattern เดียวกับเทสต์ข้างบน
+        assert data_row["net_impact_score"] == "0.0"
+        assert data_row["rank"] == ""
