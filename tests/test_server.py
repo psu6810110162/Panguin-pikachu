@@ -384,3 +384,43 @@ def test_rate_limit_returns_429_once_exceeded():
 
     assert [r.status_code for r in responses] == [201, 201, 429]
     assert responses[-1].json["error"]
+
+
+def test_ingest_run_leaves_stealth_fields_null_when_flag_is_disabled(client: FlaskClient):
+    """STEALTH_ASSESSMENT_ENABLED ปิดโดย default (ดู server/config.py) — evaluator ยัง
+    derive net_impact_score/rank เสมอ (ADR-012) แต่ leaderboard ไม่โชว์จนกว่าจะเปิดธง"""
+    room_code, _ = _create_session(client)
+    player_id = client.post(f"/api/v1/sessions/{room_code}/join", json={"name": "Alice"}).json[
+        "player_id"
+    ]
+    client.post(f"/api/v1/sessions/{room_code}/runs", json=_make_signed_run_body(player_id))
+
+    leaderboard = client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
+    assert leaderboard[0]["net_impact_score"] is None
+    assert leaderboard[0]["rank"] is None
+
+
+def test_ingest_run_persists_stealth_fields_when_flag_is_enabled():
+    """เปิด STEALTH_ASSESSMENT_ENABLED แล้ว net_impact_score/rank ต้องขึ้น leaderboard จริง"""
+    stealth_app = create_app(
+        db_uri="sqlite:///:memory:",
+        rate_limit="10000 per minute",
+        stealth_assessment_enabled=True,
+    )
+    create_all_tables(stealth_app)
+    with stealth_app.app_context():
+        stealth_client = stealth_app.test_client()
+        room_code = stealth_client.post("/api/v1/sessions").json["room_code"]
+        player_id = stealth_client.post(
+            f"/api/v1/sessions/{room_code}/join", json={"name": "Bob"}
+        ).json["player_id"]
+
+        body = _make_signed_run_body(player_id)
+        response = stealth_client.post(f"/api/v1/sessions/{room_code}/runs", json=body)
+        assert response.status_code == 200
+
+        leaderboard = stealth_client.get(f"/api/v1/sessions/{room_code}/leaderboard").json
+        # ไม่มี PolicyChoiceEvent/BossPhaseEvent ใน _make_signed_run_body -> ทั้งสอง
+        # component เป็น 0.0 พอดี แต่ต้อง "มีค่า" (persisted) ไม่ใช่ None (ไม่ persist)
+        assert leaderboard[0]["net_impact_score"] == 0.0
+        assert leaderboard[0]["rank"] is None  # 0.0°C ต่ำกว่า rank ต่ำสุด (A: 0.8-1.2°C)
