@@ -21,6 +21,7 @@ from core.audio import AudioManager
 from core.config import TARGET_FPS, TILE_H, TILE_IMG_H, TILE_TO_METER, TILE_W
 from core.logger import logger
 from core.session import GameSession
+from core.state import RunMetrics, RunState
 from game.grid import GridManager
 from game.particles import ParticleSystem
 from game.penguin import Penguin
@@ -511,6 +512,10 @@ class GamePlayScreen(Screen):
         # RunRecord ของรอบเล่นปัจจุบัน (single-writer) — สร้างใหม่ทุกครั้งที่เริ่มเล่น
         # ดู core/session.py + docs/ENGINEERING_PLAN.md (RunRecord Ownership)
         self.session = GameSession()
+        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
+        self.last_checkpoint_col = self.grid.path[0][0]
+        self.last_checkpoint_row = self.grid.path[0][1]
+        self.is_respawning = False
         self.grid.reset()
         start = self.grid.path[0]
         self.penguin.col = start[0]
@@ -573,6 +578,23 @@ class GamePlayScreen(Screen):
 
         self.hud_bg.add_widget(self.score_label)
         self.hud_bg.add_widget(gem_box)
+        
+        self.hearts_label = Label(
+            text=f"Hearts: {self.metrics.hearts}",
+            font_size="20sp", bold=True, font_name="assets/Component_UI/Font/Kenney Future.ttf"
+        )
+        self.heat_label = Label(
+            text=f"Heat: {self.metrics.heat_meter:.0f}",
+            font_size="20sp", bold=True, font_name="assets/Component_UI/Font/Kenney Future.ttf", color=(1, 0.5, 0.5, 1)
+        )
+        self.anger_label = Label(
+            text=f"Anger: {self.metrics.capitalist_anger:.0f}",
+            font_size="20sp", bold=True, font_name="assets/Component_UI/Font/Kenney Future.ttf", color=(0.8, 0.2, 0.2, 1)
+        )
+        self.hud_bg.add_widget(self.hearts_label)
+        self.hud_bg.add_widget(self.heat_label)
+        self.hud_bg.add_widget(self.anger_label)
+
         self.add_widget(self.hud_bg)
 
         OFFSET = 0.2
@@ -641,6 +663,29 @@ class GamePlayScreen(Screen):
     def _update_hud_rect(self, instance, value):
         self.hud_rect.pos = instance.pos
         self.hud_rect.size = instance.size
+
+    def _trigger_gameover_from_metrics(self):
+        self.penguin.is_dead = True
+        Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+
+    def _respawn_penguin(self, dt=None):
+        self.penguin.is_dead = False
+        self.is_respawning = False
+        self.penguin.col = self.last_checkpoint_col
+        self.penguin.row = self.last_checkpoint_row
+        self.metrics.is_invincible = False
+        self.renderer.trigger_shake(0)
+
+    def _handle_fall(self):
+        if self.is_respawning or self.penguin.is_dead:
+            return
+        self.penguin.is_dead = True
+        self.metrics.decrease_heart()
+        self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
+        if self.metrics.needs_respawn:
+            self.metrics.needs_respawn = False
+            self.is_respawning = True
+            Clock.schedule_once(self._respawn_penguin, 3.0)
 
     def _start_new_session(self):
         """เริ่ม RunRecord รอบใหม่ (LOBBY → RUNNING) — เรียกทุกครั้งที่เริ่ม/รีสตาร์ทเกม"""
@@ -713,15 +758,14 @@ class GamePlayScreen(Screen):
 
         self.particle_system.update(dt)
 
-        if not self.penguin.is_dead and self.game_started:
+        if not self.penguin.is_dead and not self.is_respawning and self.game_started:
             self.grid.update_tiles(dt, (self.penguin.col, self.penguin.row))
 
             # Check if penguin's tile is falling
             current_tile = self.grid.path_set.get((self.penguin.col, self.penguin.row))
             if current_tile and current_tile.state == "falling":
-                self.penguin.is_dead = True
                 AudioManager().play_sfx("Down")
-                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+                self._handle_fall()
 
             self.idle_timer += dt
             is_shaking = current_tile and current_tile.state == "triggered"
@@ -731,9 +775,8 @@ class GamePlayScreen(Screen):
                 if current_tile and not current_tile.is_safe:
                     current_tile.state = "falling"
                     current_tile.fall_velocity = 0.0
-                self.penguin.is_dead = True
                 AudioManager().play_sfx("Down")
-                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+                self._handle_fall()
 
             self.renderer.draw(
                 self.grid, self.penguin, self.path_index, is_shaking_floor=is_shaking
@@ -837,13 +880,21 @@ class GamePlayScreen(Screen):
                 self.idle_timer = 0
                 self.renderer.shake_amount = 5
                 # Checkpoint notification
+                dist_m = self.grid.get_distance_m()
                 if self.grid.forward_tiles % 100 == 0:
-                    meters = self.grid.forward_tiles * TILE_TO_METER
-                    self.show_checkpoint_message(f"{meters}M REACHED!")
+                    self.show_checkpoint_message(f"{dist_m}M REACHED!")
+                    self.last_checkpoint_col = self.penguin.col
+                    self.last_checkpoint_row = self.penguin.row
                     self.session.checkpoint_reached(
                         checkpoint_index=self.grid.forward_tiles // 100,
-                        distance_m=self.grid.get_distance_m(),
+                        distance_m=dist_m,
                     )
+                if dist_m == 980:
+                    self.show_checkpoint_message("WARNING: CARBON BARON APPROACHING!")
+                elif dist_m == 1000:
+                    if self.session.run_record.state == RunState.RUNNING:
+                        self.session.advance_state(RunState.BOSS, distance_m=1000)
+                        self.show_checkpoint_message("BOSS PHASE STARTED!")
 
             if self.path_index == len(self.grid.path) - 1:
                 logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
