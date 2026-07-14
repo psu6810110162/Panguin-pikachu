@@ -656,6 +656,34 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.checkpoint_label)
 
+        # Boss UI
+        self.boss_wall_label = Label(
+            text="",
+            font_size="24sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            color=(1, 0.2, 0.2, 1),
+            size_hint=(None, None),
+            pos_hint={"center_x": 0.5, "top": 0.85},
+            outline_width=2,
+            outline_color=(0, 0, 0, 1),
+        )
+        self.add_widget(self.boss_wall_label)
+        
+        self.boss_choices_label = Label(
+            text="",
+            font_size="20sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            color=(0.9, 0.9, 0.2, 1),
+            size_hint=(None, None),
+            pos_hint={"center_x": 0.5, "top": 0.78},
+            outline_width=2,
+            outline_color=(0, 0, 0, 1),
+        )
+        self.add_widget(self.boss_choices_label)
+
+
     def show_checkpoint_message(self, message: str):
         """Display a temporary non-blocking message when a checkpoint is reached.
         The label fades in, stays for 1.5 seconds, then fades out.
@@ -726,6 +754,11 @@ class GamePlayScreen(Screen):
         self.game_started = False
         self.renderer.cam_x = None
         self._start_new_session()
+        self.boss_wave_index = 0
+        self.boss_hp = 0
+        self.boss_start_time = 0
+        self.boss_wall_label.text = ""
+        self.boss_choices_label.text = ""
 
     def on_leave(self):
         if self.game_event:
@@ -869,6 +902,68 @@ class GamePlayScreen(Screen):
                 distance_m=self.grid.get_distance_m(),
             )
 
+        # ── Boss item collection ──
+        boss_item = self.grid.get_boss_item_at(new_col, new_row)
+        if boss_item:
+            from core.boss_data import load_boss_data
+            boss_data = load_boss_data()
+            wave_data = boss_data.waves.get(self.boss_wave_index)
+            is_correct = (boss_item == wave_data.correct_item) if wave_data else False
+            
+            if is_correct:
+                AudioManager().play_sfx("Coin")
+                self.boss_hp -= 1
+                self.session.boss_phase(
+                    phase=self.boss_wave_index,
+                    outcome="damage_dealt",
+                    distance_m=self.grid.get_distance_m(),
+                )
+                self.show_checkpoint_message("CORRECT!")
+                if wave_data:
+                    self.metrics.update_meters(
+                        heat_delta=wave_data.on_correct.get("heat", 0),
+                        anger_delta=wave_data.on_correct.get("anger", 0)
+                    )
+            else:
+                AudioManager().play_sfx("Down")
+                self.metrics.decrease_heart()
+                self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
+                self.session.boss_phase(
+                    phase=self.boss_wave_index,
+                    outcome="damaged",
+                    distance_m=self.grid.get_distance_m(),
+                )
+                self.show_checkpoint_message("WRONG FACT!")
+                if wave_data:
+                    self.metrics.update_meters(
+                        heat_delta=wave_data.on_wrong.get("heat", 0),
+                        anger_delta=wave_data.on_wrong.get("anger", 0)
+                    )
+                
+            self.heat_label.text = f"Heat: {self.metrics.heat_meter:.0f}"
+            self.anger_label.text = f"Anger: {self.metrics.capitalist_anger:.0f}"
+
+            self.boss_wave_index += 1
+            self.grid.boss_items.pop((new_col, new_row), None)
+            
+            if self.boss_hp <= 0:
+                self.session.boss_victory(
+                    total_time_s=self.session.elapsed() - self.boss_start_time,
+                    distance_m=self.grid.get_distance_m(),
+                )
+                self.show_checkpoint_message("BOSS DEFEATED!")
+                self.boss_wall_label.text = ""
+                self.boss_choices_label.text = ""
+                self.session.finish()
+                Clock.schedule_once(lambda dt: self._go_report(), 2.0)
+            elif self.boss_wave_index > 3:
+                self.show_checkpoint_message("FAILED TO DEFEAT BOSS!")
+                self.boss_wall_label.text = ""
+                self.boss_choices_label.text = ""
+                self.metrics.trigger_game_over()
+            else:
+                self._update_boss_ui()
+
         # ── Move penguin to new position ──
         self.penguin.col = new_col
         self.penguin.row = new_row
@@ -909,8 +1004,13 @@ class GamePlayScreen(Screen):
                 if dist_m == 980:
                     self.show_checkpoint_message("WARNING: CARBON BARON APPROACHING!")
                 elif dist_m == 1000 and self.session.run_record.state == RunState.RUNNING:
-                    self.session.advance_state(RunState.BOSS, distance_m=1000)
+                    self.session.enter_boss(distance_m=1000)
                     self.show_checkpoint_message("BOSS PHASE STARTED!")
+                    self.boss_wave_index = 1
+                    from core.boss_data import load_boss_data
+                    self.boss_hp = load_boss_data().armor
+                    self.boss_start_time = self.session.elapsed()
+                    self._update_boss_ui()
 
             if self.path_index == len(self.grid.path) - 1:
                 logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
@@ -923,6 +1023,28 @@ class GamePlayScreen(Screen):
 
     def _go_gameover(self):
         self.manager.current = "gameover"
+        
+    def _go_report(self):
+        self.manager.current = "report"
+
+    def _update_boss_ui(self):
+        from core.boss_data import load_boss_data
+        wave = load_boss_data().waves.get(self.boss_wave_index)
+        if not wave:
+            self.boss_wall_label.text = ""
+            self.boss_choices_label.text = ""
+            return
+            
+        self.boss_wall_label.text = wave.wall_text
+        
+        items = sorted(list(self.grid.boss_items.items()), key=lambda x: x[0][0] + x[0][1])
+        if len(items) >= 2:
+            item1, item2 = items[0], items[1]
+            if item1[0][0] < item2[0][0]:
+                left_item, right_item = item1[1], item2[1]
+            else:
+                left_item, right_item = item2[1], item1[1]
+            self.boss_choices_label.text = f"LEFT: {left_item}  |  RIGHT: {right_item}"
 
     def pause_game(self):
         """Pause: unschedule game loop, show overlay, sync sound button."""
@@ -964,6 +1086,11 @@ class GamePlayScreen(Screen):
         self.renderer.cam_y = None
         self.renderer.tile_textures.clear()
         self._start_new_session()
+        self.boss_wave_index = 0
+        self.boss_hp = 0
+        self.boss_start_time = 0
+        self.boss_wall_label.text = ""
+        self.boss_choices_label.text = ""
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:

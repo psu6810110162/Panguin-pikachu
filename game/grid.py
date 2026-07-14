@@ -1,5 +1,6 @@
 import random
 
+from core.boss_data import load_boss_data
 from core.config import TILE_TO_METER
 from core.spawning import SpawningSystem
 from game.obstacle_factory import ObstacleFactory
@@ -51,6 +52,7 @@ class GridManager:
         self.turn_points = []  # จุดที่ต้องกดเปลี่ยนทิศ
         self.obstacles = {}  # (col, row) -> Obstacle
         self.gems = {}  # (col, row) -> Gem
+        self.boss_items = {}  # (col, row) -> str (item_id)
         self.fork_tiles = set()  # tile ที่เป็นส่วน fork (ใช้ render สีต่าง)
         self.merge_points = []  # จุดบรรจบของแต่ละ fork
 
@@ -83,6 +85,7 @@ class GridManager:
         self.turn_points.clear()
         self.obstacles.clear()
         self.gems.clear()
+        self.boss_items.clear()
         self.fork_tiles.clear()
         self.merge_points.clear()
         self._last_pos = (0, 0)
@@ -166,6 +169,7 @@ class GridManager:
             self.path_set.pop(pos, None)
             self.obstacles.pop(pos, None)
             self.gems.pop(pos, None)
+            self.boss_items.pop(pos, None)
 
     def is_on_path(self, col, row):
         return (col, row) in self.path_set
@@ -181,6 +185,9 @@ class GridManager:
         if gem and gem.active:
             return gem
         return None
+        
+    def get_boss_item_at(self, col, row):
+        return self.boss_items.get((col, row))
 
     def get_path_index(self, col, row):
         try:
@@ -215,6 +222,7 @@ class GridManager:
         # ลบ object ที่อาจจะอยู่บนนั้นด้วย
         self.obstacles.pop(pos, None)
         self.gems.pop(pos, None)
+        self.boss_items.pop(pos, None)
         # Note: ไม่ลบจาก self.path เพื่อไม่ให้ลำดับพิกัดเสีย (แต่ renderer จะไม่วาดเพราะไม่อยู่ใน path_set)
 
     def cleanup_behind(self, path_index):
@@ -230,6 +238,7 @@ class GridManager:
             pos = self.path[i]
             self.obstacles.pop(pos, None)
             self.gems.pop(pos, None)
+            self.boss_items.pop(pos, None)
 
         self._last_cleaned_idx = target_idx
 
@@ -437,6 +446,9 @@ class GridManager:
         start_col, start_row = self._last_pos
         cur_dir = self._last_dir
         perp = self.DIR_B if cur_dir == self.DIR_A else self.DIR_A
+        
+        boss_data = load_boss_data()
+        wave = boss_data.waves.get(wave_index + 1)
 
         # Straight before split
         self._build_straight(3)
@@ -453,7 +465,7 @@ class GridManager:
             self._add_tile(left_col, left_row, is_fork=True)
             self._add_tile(right_col, right_row, is_fork=True)
 
-        for _ in range(4):
+        for i in range(4):
             left_col += cur_dir[0]
             left_row += cur_dir[1]
             right_col += cur_dir[0]
@@ -462,6 +474,16 @@ class GridManager:
             self._add_tile(right_col, right_row, is_fork=True)
             self.fork_tiles.add((left_col, left_row))
             self.fork_tiles.add((right_col, right_row))
+            
+            if i == 1 and wave:
+                is_left_correct = random.choice([True, False])
+                left_item = wave.correct_item if is_left_correct else wave.wrong_item
+                right_item = wave.wrong_item if is_left_correct else wave.correct_item
+                self.boss_items[(left_col, left_row)] = left_item
+                self.boss_items[(right_col, right_row)] = right_item
+                self.current_boss_left_item = left_item
+                self.current_boss_right_item = right_item
+
 
         # Merge back
         for _ in range(2):
