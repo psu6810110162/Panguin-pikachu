@@ -250,6 +250,16 @@ class GridManager:
         สร้าง 1 segment: straight หรือ diamond fork (30%)
         แล้วต่อด้วย corner เพื่อเปลี่ยนทิศ
         """
+        if self._total_generated >= 1000:
+            if not hasattr(self, "_boss_wave"):
+                self._boss_wave = 0
+            if self._boss_wave < 3:
+                self._build_boss_wave(self._boss_wave)
+                self._boss_wave += 1
+            else:
+                self._build_straight(10, mark_fork=False)
+            return
+
         if self._total_generated >= (self.checkpoints_generated) * 100:
             self._build_checkpoint_platform()
         if random.random() < FORK_CHANCE and self._seg_count >= 2:
@@ -366,6 +376,51 @@ class GridManager:
         # บันทึก merge point
         self.merge_points.append((merge_col, merge_row))
         self._last_pos = (merge_col, merge_row)
+
+    # ───────────────────────────────────────────
+    #  Boss Wave (Symmetric Fork for 2 Lanes)
+    # ───────────────────────────────────────────
+    def _build_boss_wave(self, wave_index):
+        """
+        สร้างทางแยก 2 เลนซ้าย-ขวา 
+        """
+        start_col, start_row = self._last_pos
+        cur_dir = self._last_dir
+        perp = self.DIR_B if cur_dir == self.DIR_A else self.DIR_A
+
+        # Straight before split
+        self._build_straight(3)
+
+        # Splitting
+        left_col, left_row = self._last_pos
+        right_col, right_row = self._last_pos
+        
+        for _ in range(2):
+            left_col -= perp[0]; left_row -= perp[1]
+            right_col += perp[0]; right_row += perp[1]
+            self._add_tile(left_col, left_row, is_fork=True)
+            self._add_tile(right_col, right_row, is_fork=True)
+
+        for _ in range(4):
+            left_col += cur_dir[0]; left_row += cur_dir[1]
+            right_col += cur_dir[0]; right_row += cur_dir[1]
+            self._add_tile(left_col, left_row, is_fork=True)
+            self._add_tile(right_col, right_row, is_fork=True)
+            self.fork_tiles.add((left_col, left_row))
+            self.fork_tiles.add((right_col, right_row))
+
+        # Merge back
+        for _ in range(2):
+            left_col += perp[0]; left_row += perp[1]
+            right_col -= perp[0]; right_row -= perp[1]
+            self._add_tile(left_col, left_row, is_fork=True)
+            self._add_tile(right_col, right_row, is_fork=True)
+        
+        self.merge_points.append((left_col, left_row))
+        self.path.append((left_col, left_row))
+        self._add_tile(left_col, left_row, is_safe=True)
+        self._last_pos = (left_col, left_row)
+        self._total_generated += 11
 
     # ───────────────────────────────────────────
     #  Corner (เลี้ยว 90°)
