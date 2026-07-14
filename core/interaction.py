@@ -28,6 +28,9 @@ class YJunctionInteraction:
         )
 
         # บันทึกประวัติการตัดสินใจส่งให้ GameSession (PR #58)
+        # Note: (Day 2) is_systemic ไม่ได้ส่งผ่าน PolicyChoiceEvent เนื่องจากไม่ได้ระบุใน ADR-001
+        # ระบบวาด DAG (day-2) จะต้อง derive ค่า systemic จาก junctions.json
+        # โดยใช้ checkpoint_index (zone_id) คู่กับ policy_id ("left" หรือ "right")
         if hasattr(self.game_session, "policy_choice"):
             self.game_session.policy_choice(
                 checkpoint_index=junction.zone_id,
