@@ -18,7 +18,7 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 
 from core.audio import AudioManager
-from core.config import TARGET_FPS, TILE_H, TILE_IMG_H, TILE_TO_METER, TILE_W
+from core.config import TARGET_FPS, TILE_H, TILE_IMG_H, TILE_W
 from core.logger import logger
 from core.session import GameSession
 from core.state import RunMetrics, RunState
@@ -578,18 +578,25 @@ class GamePlayScreen(Screen):
 
         self.hud_bg.add_widget(self.score_label)
         self.hud_bg.add_widget(gem_box)
-        
         self.hearts_label = Label(
             text=f"Hearts: {self.metrics.hearts}",
-            font_size="20sp", bold=True, font_name="assets/Component_UI/Font/Kenney Future.ttf"
+            font_size="20sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
         )
         self.heat_label = Label(
             text=f"Heat: {self.metrics.heat_meter:.0f}",
-            font_size="20sp", bold=True, font_name="assets/Component_UI/Font/Kenney Future.ttf", color=(1, 0.5, 0.5, 1)
+            font_size="20sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            color=(1, 0.5, 0.5, 1),
         )
         self.anger_label = Label(
             text=f"Anger: {self.metrics.capitalist_anger:.0f}",
-            font_size="20sp", bold=True, font_name="assets/Component_UI/Font/Kenney Future.ttf", color=(0.8, 0.2, 0.2, 1)
+            font_size="20sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            color=(0.8, 0.2, 0.2, 1),
         )
         self.hud_bg.add_widget(self.hearts_label)
         self.hud_bg.add_widget(self.heat_label)
@@ -891,10 +898,9 @@ class GamePlayScreen(Screen):
                     )
                 if dist_m == 980:
                     self.show_checkpoint_message("WARNING: CARBON BARON APPROACHING!")
-                elif dist_m == 1000:
-                    if self.session.run_record.state == RunState.RUNNING:
-                        self.session.advance_state(RunState.BOSS, distance_m=1000)
-                        self.show_checkpoint_message("BOSS PHASE STARTED!")
+                elif dist_m == 1000 and self.session.run_record.state == RunState.RUNNING:
+                    self.session.advance_state(RunState.BOSS, distance_m=1000)
+                    self.show_checkpoint_message("BOSS PHASE STARTED!")
 
             if self.path_index == len(self.grid.path) - 1:
                 logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
