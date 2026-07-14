@@ -515,10 +515,10 @@ class GamePlayScreen(Screen):
         self.session = GameSession()
         self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
         self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
-        self.last_checkpoint_col = self.grid.path[0][0]
-        self.last_checkpoint_row = self.grid.path[0][1]
         self.is_respawning = False
         self.grid.reset()
+        self.last_checkpoint_col = self.grid.path[0][0]
+        self.last_checkpoint_row = self.grid.path[0][1]
         start = self.grid.path[0]
         self.penguin.col = start[0]
         self.penguin.row = start[1]
