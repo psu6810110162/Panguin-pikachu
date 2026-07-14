@@ -35,4 +35,5 @@ class Inventory:
         return item in self.slots
 
     def get_items(self) -> list[ItemType]:
-        return self.slots
+        """คืน copy — กัน caller mutate slots ตรง ๆ ข้าม dedup/MAX_SLOTS"""
+        return list(self.slots)
