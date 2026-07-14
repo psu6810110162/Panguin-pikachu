@@ -20,6 +20,7 @@ from kivy.uix.widget import Widget
 from core.audio import AudioManager
 from core.config import TARGET_FPS, TILE_H, TILE_IMG_H, TILE_W
 from core.interaction import YJunctionInteraction
+from core.boss_data import load_boss_data
 from core.junction_data import get_junction
 from core.logger import logger
 from core.session import GameSession
@@ -526,6 +527,9 @@ class GamePlayScreen(Screen):
         self.MAX_IDLE_TIME = 2.0
         self.game_started = False
         self.particle_system = ParticleSystem()
+        self.boss_wave_index = 0
+        self.boss_hp = 0
+        self.boss_start_time = 0
 
         self.renderer = KivyRenderer()
         self.add_widget(self.renderer)
@@ -740,6 +744,8 @@ class GamePlayScreen(Screen):
             self._keyboard.bind(on_key_up=self._on_keyboard_up)
 
         self.penguin.equip_skin(StateManager().selected_skin)
+        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
+        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
         self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
         AudioManager().play_bgm("Bgm.gameplay.mp3")
 
@@ -905,16 +911,16 @@ class GamePlayScreen(Screen):
         # ── Boss item collection ──
         boss_item = self.grid.get_boss_item_at(new_col, new_row)
         if boss_item:
-            from core.boss_data import load_boss_data
+            wave_num, item_id = boss_item
             boss_data = load_boss_data()
-            wave_data = boss_data.waves.get(self.boss_wave_index)
-            is_correct = (boss_item == wave_data.correct_item) if wave_data else False
+            wave_data = boss_data.waves.get(wave_num)
+            is_correct = (item_id == wave_data.correct_item) if wave_data else False
             
             if is_correct:
                 AudioManager().play_sfx("Coin")
                 self.boss_hp -= 1
                 self.session.boss_phase(
-                    phase=self.boss_wave_index,
+                    phase=wave_num,
                     outcome="damage_dealt",
                     distance_m=self.grid.get_distance_m(),
                 )
@@ -926,10 +932,10 @@ class GamePlayScreen(Screen):
                     )
             else:
                 AudioManager().play_sfx("Down")
-                self.metrics.decrease_heart()
+                self.metrics.hearts -= 1
                 self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
                 self.session.boss_phase(
-                    phase=self.boss_wave_index,
+                    phase=wave_num,
                     outcome="damaged",
                     distance_m=self.grid.get_distance_m(),
                 )
@@ -943,7 +949,7 @@ class GamePlayScreen(Screen):
             self.heat_label.text = f"Heat: {self.metrics.heat_meter:.0f}"
             self.anger_label.text = f"Anger: {self.metrics.capitalist_anger:.0f}"
 
-            self.boss_wave_index += 1
+            self.boss_wave_index = wave_num + 1
             self.grid.boss_items.pop((new_col, new_row), None)
             
             if self.boss_hp <= 0:
@@ -956,13 +962,15 @@ class GamePlayScreen(Screen):
                 self.boss_choices_label.text = ""
                 self.session.finish()
                 Clock.schedule_once(lambda dt: self._go_report(), 2.0)
-            elif self.boss_wave_index > 3:
+            elif self.metrics.hearts <= 0 or self.boss_wave_index > 3:
                 self.show_checkpoint_message("FAILED TO DEFEAT BOSS!")
                 self.boss_wall_label.text = ""
                 self.boss_choices_label.text = ""
                 self.metrics.trigger_game_over()
             else:
                 self._update_boss_ui()
+                
+            return
 
         # ── Move penguin to new position ──
         self.penguin.col = new_col
@@ -1007,7 +1015,6 @@ class GamePlayScreen(Screen):
                     self.session.enter_boss(distance_m=1000)
                     self.show_checkpoint_message("BOSS PHASE STARTED!")
                     self.boss_wave_index = 1
-                    from core.boss_data import load_boss_data
                     self.boss_hp = load_boss_data().armor
                     self.boss_start_time = self.session.elapsed()
                     self._update_boss_ui()
@@ -1028,7 +1035,6 @@ class GamePlayScreen(Screen):
         self.manager.current = "report"
 
     def _update_boss_ui(self):
-        from core.boss_data import load_boss_data
         wave = load_boss_data().waves.get(self.boss_wave_index)
         if not wave:
             self.boss_wall_label.text = ""
@@ -1037,7 +1043,12 @@ class GamePlayScreen(Screen):
             
         self.boss_wall_label.text = wave.wall_text
         
-        items = sorted(list(self.grid.boss_items.items()), key=lambda x: x[0][0] + x[0][1])
+        items = [
+            (pos, data[1]) for pos, data in self.grid.boss_items.items() 
+            if data[0] == self.boss_wave_index
+        ]
+        items.sort(key=lambda x: x[0][0] + x[0][1])
+        
         if len(items) >= 2:
             item1, item2 = items[0], items[1]
             if item1[0][0] < item2[0][0]:
@@ -1086,6 +1097,8 @@ class GamePlayScreen(Screen):
         self.renderer.cam_y = None
         self.renderer.tile_textures.clear()
         self._start_new_session()
+        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
+        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
         self.boss_wave_index = 0
         self.boss_hp = 0
         self.boss_start_time = 0

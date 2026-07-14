@@ -61,6 +61,7 @@ class GridManager:
         self._seg_count = 0
         self._last_cleaned_idx = 0
         self._total_generated = 0
+        self._boss_wave = 0
         self.checkpoints_generated = 0
         self.resolved_fork = None
         # Day 1: D1-A2 Zone-Based Spawning
@@ -92,6 +93,7 @@ class GridManager:
         self._last_dir = self.DIR_A
         self._seg_count = 0
         self._last_cleaned_idx = 0
+        self._boss_wave = 0
         self.resolved_fork = None
         self._build_start_platform()
         self.spawning_system = SpawningSystem()
@@ -284,8 +286,6 @@ class GridManager:
         แล้วต่อด้วย corner เพื่อเปลี่ยนทิศ
         """
         if self._total_generated >= 1000:
-            if not hasattr(self, "_boss_wave"):
-                self._boss_wave = 0
             if self._boss_wave < 3:
                 self._build_boss_wave(self._boss_wave)
                 self._boss_wave += 1
@@ -479,11 +479,8 @@ class GridManager:
                 is_left_correct = random.choice([True, False])
                 left_item = wave.correct_item if is_left_correct else wave.wrong_item
                 right_item = wave.wrong_item if is_left_correct else wave.correct_item
-                self.boss_items[(left_col, left_row)] = left_item
-                self.boss_items[(right_col, right_row)] = right_item
-                self.current_boss_left_item = left_item
-                self.current_boss_right_item = right_item
-
+                self.boss_items[(left_col, left_row)] = (wave_index + 1, left_item)
+                self.boss_items[(right_col, right_row)] = (wave_index + 1, right_item)
 
         # Merge back
         for _ in range(2):
