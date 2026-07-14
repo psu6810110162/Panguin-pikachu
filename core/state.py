@@ -1,4 +1,7 @@
+import json
+from collections.abc import Callable
 from enum import Enum, auto
+from typing import Any
 
 
 class GameState(Enum):
@@ -13,8 +16,8 @@ class GameState(Enum):
 
 
 class StateManager:
-    # คลาส Singleton ที่รับหน้าที่เปลี่ยนย้าย State ภาพรวมของเกม
-    # เพื่อป้องกันการสับ State ชนกันระหว่างหน้าจอ
+    """Singleton ที่ควบคุม state ของหน้าจอหลักของเกม"""
+
     _instance: "StateManager | None" = None
     current_state: GameState
     selected_skin: str
@@ -56,12 +59,6 @@ class InvalidTransitionError(Exception):
     """เกิดขึ้นเมื่อพยายามเปลี่ยน RunState ไปยังสถานะที่ไม่อนุญาต หรือไม่ผ่านเงื่อนไข (guard)"""
 
 
-# สถานะปัจจุบัน -> ชุดสถานะถัดไปที่อนุญาตให้เปลี่ยนได้
-#
-# ข้อสังเกตเชิงดีไซน์ (ยืนยันกับทีมเกมแล้วถ้าจะเปลี่ยน): BOSS ไม่มีทางกลับไป
-# RESPAWNING/RUNNING — สมมติฐานคือ boss phase ไม่มีการ respawn (โดนบอสตีเสีย
-# คะแนนผ่าน BossPhaseEvent(outcome="damaged") แต่ไม่ตาย/ไม่ย้อน state) ถ้ากติกา
-# เกมเปลี่ยนให้แพ้บอสได้ ต้องเพิ่ม transition ที่นี่พร้อม test ประกบ
 _ALLOWED_TRANSITIONS: dict[RunState, set[RunState]] = {
     RunState.LOBBY: {RunState.RUNNING},
     RunState.RUNNING: {RunState.RESPAWNING, RunState.BOSS},
@@ -71,7 +68,6 @@ _ALLOWED_TRANSITIONS: dict[RunState, set[RunState]] = {
     RunState.SYNCED: set(),
 }
 
-# BOSS_MIN_DISTANCE_M: เข้าสู่ Boss ได้ก็ต่อเมื่อวิ่งถึงเส้นชัย 1,000 เมตรแล้วเท่านั้น
 BOSS_MIN_DISTANCE_M = 1000
 
 
@@ -93,3 +89,101 @@ def validate_transition(current: RunState, new: RunState, **context: object) -> 
             raise InvalidTransitionError(
                 f"RUNNING -> BOSS requires distance_m >= {BOSS_MIN_DISTANCE_M}, got {distance_m!r}"
             )
+
+
+# ══════════════════════════════════════════════════════════════
+#  Dual-Meter & Hearts System (Day 1 - Dev A)
+# ══════════════════════════════════════════════════════════════
+
+
+def load_difficulty() -> dict[str, Any]:
+    try:
+        with open("balance/v1/difficulty.json", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {
+            "meters": {
+                "start_heat": 50.0,
+                "start_capitalist_anger": 50.0,
+                "max": 100.0,
+                "game_over_at": 100.0,
+                "min": 0.0,
+            },
+            "hearts": {"start": 5},
+        }
+
+
+class RunMetrics:
+    """จัดการ State ของตัวแปรระหว่างการวิ่ง (Day 1: D1-A1 & D1-A4)
+    รับผิดชอบเกี่ยวกับทรัพยากรผู้เล่นและการตัดสิน Game Over
+    """
+
+    def __init__(
+        self,
+        heat_meter: float | None = None,
+        capitalist_anger: float | None = None,
+        hearts: int | None = None,
+        on_game_over: Callable[[], None] | None = None,
+    ) -> None:
+        self.on_game_over = on_game_over
+        diff = load_difficulty()
+        meters_diff: dict[str, Any] = diff.get("meters", {}) if isinstance(diff, dict) else {}
+        hearts_diff: dict[str, Any] = diff.get("hearts", {}) if isinstance(diff, dict) else {}
+
+        self.heat_meter: float = (
+            heat_meter if heat_meter is not None else float(meters_diff.get("start_heat", 50.0))
+        )
+        self.capitalist_anger: float = (
+            capitalist_anger
+            if capitalist_anger is not None
+            else float(meters_diff.get("start_capitalist_anger", 50.0))
+        )
+        self.hearts: int = hearts if hearts is not None else int(hearts_diff.get("start", 5))
+        self.max_hearts: int = int(hearts_diff.get("cap", 5))
+
+        self.max_meter: float = float(meters_diff.get("max", 100.0))
+        self.min_meter: float = float(meters_diff.get("min", 0.0))
+        self.game_over_at: float = float(meters_diff.get("game_over_at", 100.0))
+
+        self.is_game_over: bool = False
+        self.needs_respawn: bool = False
+        self.is_invincible: bool = False
+
+    def update_meters(self, heat_delta: float, anger_delta: float) -> None:
+        """D1-A1: รับค่า Delta เพื่ออัปเดตหลอดวัด (Dual-Meter)"""
+        if self.is_game_over:
+            return
+
+        self.heat_meter = max(
+            self.min_meter, min(self.max_meter, self.heat_meter + float(heat_delta))
+        )
+        self.capitalist_anger = max(
+            self.min_meter, min(self.max_meter, self.capitalist_anger + float(anger_delta))
+        )
+
+        if self.heat_meter >= self.game_over_at or self.capitalist_anger >= self.game_over_at:
+            self.trigger_game_over()
+
+    def decrease_heart(self) -> None:
+        """D1-A4: ลดหัวใจเมื่อตกเหว"""
+        if self.is_game_over or self.is_invincible:
+            return
+
+        self.hearts -= 1
+        if self.hearts <= 0:
+            self.hearts = 0
+            self.trigger_game_over()
+        else:
+            self.needs_respawn = True
+            self.is_invincible = True
+
+    def trigger_game_over(self) -> None:
+        """เปลี่ยนสถานะภายในเป็น Game Over และเรียก Callback เพื่อให้ระบบนอก (เช่น RunState) รับทราบ"""
+        self.is_game_over = True
+        if self.on_game_over:
+            self.on_game_over()
+
+    def increase_heart(self) -> None:
+        """เพิ่มหัวใจเมื่อเก็บไอเทมได้ (จำกัดไม่เกิน cap)"""
+        if not self.is_game_over:
+            self.hearts = min(self.max_hearts, self.hearts + 1)
