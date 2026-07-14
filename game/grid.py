@@ -394,7 +394,7 @@ class GridManager:
         # Splitting
         left_col, left_row = self._last_pos
         right_col, right_row = self._last_pos
-        
+
         for _ in range(2):
             left_col -= perp[0]; left_row -= perp[1]
             right_col += perp[0]; right_row += perp[1]
@@ -415,7 +415,7 @@ class GridManager:
             right_col -= perp[0]; right_row -= perp[1]
             self._add_tile(left_col, left_row, is_fork=True)
             self._add_tile(right_col, right_row, is_fork=True)
-        
+
         self.merge_points.append((left_col, left_row))
         self.path.append((left_col, left_row))
         self._add_tile(left_col, left_row, is_safe=True)
