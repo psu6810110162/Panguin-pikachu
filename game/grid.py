@@ -1,6 +1,7 @@
 import random
 
 from core.config import TILE_TO_METER
+from core.spawning import SpawningSystem
 from game.obstacle_factory import ObstacleFactory
 
 
@@ -14,6 +15,8 @@ class Tile:
         self.trigger_timer = 1.2
         self.offset_y = 0.0
         self.fall_velocity = 0.0
+        self.zone_id = None
+        self.side = None
 
 
 PATH_WIDTH = 1  # กว้าง 1 tile (ผอมลงตามสั่ง)
@@ -57,6 +60,11 @@ class GridManager:
         self._last_cleaned_idx = 0
         self._total_generated = 0
         self.checkpoints_generated = 0
+        self.resolved_fork = None
+        # Day 1: D1-A2 Zone-Based Spawning
+        self.spawning_system = SpawningSystem()
+        self.next_zone = 1
+        self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
 
     # ═══════════════════════════════════════════
     #  PUBLIC API
@@ -81,7 +89,11 @@ class GridManager:
         self._last_dir = self.DIR_A
         self._seg_count = 0
         self._last_cleaned_idx = 0
+        self.resolved_fork = None
         self._build_start_platform()
+        self.spawning_system = SpawningSystem()
+        self.next_zone = 1
+        self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
         for _ in range(PRELOAD_SEGMENTS):
             self._append_segment()
 
@@ -90,6 +102,18 @@ class GridManager:
 
     def get_distance_m(self):
         return self.forward_tiles * TILE_TO_METER
+
+    def check_fork_resolution(self, col, row):
+        tile = self.path_set.get((col, row))
+        if tile and tile.zone_id is not None and tile.side is not None:
+            self.resolved_fork = (tile.zone_id, tile.side)
+            tile.zone_id = None
+            tile.side = None
+
+    def pop_resolved_fork(self):
+        res = self.resolved_fork
+        self.resolved_fork = None
+        return res
 
     def update_obstacles(self, dt, view_radius, penguin_pos):
         """อัปเดตแอนิเมชันของอุปสรรคที่อยู่ในระยะมองเห็น"""
@@ -262,9 +286,21 @@ class GridManager:
 
         if self._total_generated >= (self.checkpoints_generated) * 100:
             self._build_checkpoint_platform()
-        if random.random() < FORK_CHANCE and self._seg_count >= 2:
+
+        current_distance_m = self._total_generated * TILE_TO_METER
+        should_spawn_fork = False
+
+        if (
+            self.next_zone <= self.spawning_system.NUM_ZONES
+            and current_distance_m >= self.next_spawn_distance
+        ):
+            should_spawn_fork = True
+            self.next_zone += 1
+            self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
+
+        if should_spawn_fork and self._seg_count >= 2:
             # ─── Diamond Fork ───
-            self._build_diamond_fork()
+            self._build_diamond_fork(self.next_zone - 1)
         else:
             # ─── Straight Segment ───
             self._build_straight(random.randint(SEGMENT_LEN_MIN, SEGMENT_LEN_MAX))
@@ -314,7 +350,7 @@ class GridManager:
     # ───────────────────────────────────────────
     #  Diamond Fork
     # ───────────────────────────────────────────
-    def _build_diamond_fork(self):
+    def _build_diamond_fork(self, zone_id=None):
         """
         สร้าง diamond fork จาก _last_pos:
           cur_dir = ทิศหลัก  (เช่น DIR_A)
@@ -332,13 +368,22 @@ class GridManager:
         # ทิศตั้งฉาก (เอาทิศอื่นมาอ้อม)
         perp = self.DIR_B if cur_dir == self.DIR_A else self.DIR_A
 
+        is_perp_left = cur_dir == self.DIR_A
+        long_side = "left" if is_perp_left else "right"
+        short_side = "right" if is_perp_left else "left"
+
         # ── Branch Short (centerline หลัก) ──
         col, row = start_col, start_row
-        for _ in range(FORK_SHORT_LEN):
+        for i in range(FORK_SHORT_LEN):
             col += cur_dir[0]
             row += cur_dir[1]
             is_safe = self._add_center(col, row)
             self._add_width(col, row, cur_dir, is_safe=is_safe)
+            if i == 0 and zone_id is not None:
+                tile = self.path_set.get((col, row))
+                if tile:
+                    tile.zone_id = zone_id
+                    tile.side = short_side
         # short_end คือ merge point
         merge_col, merge_row = col, row
 
@@ -348,11 +393,16 @@ class GridManager:
         SIDE_OFFSET = 2  # ระยะห่างสำหรับ 1-tile path
 
         # ออกด้านข้าง
-        for _ in range(SIDE_OFFSET):
+        for i in range(SIDE_OFFSET):
             lc += perp[0]
             lr += perp[1]
             self._add_tile(lc, lr, is_fork=True)
             self.fork_tiles.add((lc, lr))
+            if i == 0 and zone_id is not None:
+                tile = self.path_set.get((lc, lr))
+                if tile:
+                    tile.zone_id = zone_id
+                    tile.side = long_side
 
         # วิ่งตรงขนาน (เพิ่ม Gem ที่นี่)
         for _ in range(FORK_LONG_LEN):
@@ -382,7 +432,7 @@ class GridManager:
     # ───────────────────────────────────────────
     def _build_boss_wave(self, wave_index):
         """
-        สร้างทางแยก 2 เลนซ้าย-ขวา 
+        สร้างทางแยก 2 เลนซ้าย-ขวา
         """
         start_col, start_row = self._last_pos
         cur_dir = self._last_dir
@@ -396,14 +446,18 @@ class GridManager:
         right_col, right_row = self._last_pos
 
         for _ in range(2):
-            left_col -= perp[0]; left_row -= perp[1]
-            right_col += perp[0]; right_row += perp[1]
+            left_col -= perp[0]
+            left_row -= perp[1]
+            right_col += perp[0]
+            right_row += perp[1]
             self._add_tile(left_col, left_row, is_fork=True)
             self._add_tile(right_col, right_row, is_fork=True)
 
         for _ in range(4):
-            left_col += cur_dir[0]; left_row += cur_dir[1]
-            right_col += cur_dir[0]; right_row += cur_dir[1]
+            left_col += cur_dir[0]
+            left_row += cur_dir[1]
+            right_col += cur_dir[0]
+            right_row += cur_dir[1]
             self._add_tile(left_col, left_row, is_fork=True)
             self._add_tile(right_col, right_row, is_fork=True)
             self.fork_tiles.add((left_col, left_row))
@@ -411,8 +465,10 @@ class GridManager:
 
         # Merge back
         for _ in range(2):
-            left_col += perp[0]; left_row += perp[1]
-            right_col -= perp[0]; right_row -= perp[1]
+            left_col += perp[0]
+            left_row += perp[1]
+            right_col -= perp[0]
+            right_row -= perp[1]
             self._add_tile(left_col, left_row, is_fork=True)
             self._add_tile(right_col, right_row, is_fork=True)
 

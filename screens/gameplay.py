@@ -19,6 +19,8 @@ from kivy.uix.widget import Widget
 
 from core.audio import AudioManager
 from core.config import TARGET_FPS, TILE_H, TILE_IMG_H, TILE_W
+from core.interaction import YJunctionInteraction
+from core.junction_data import get_junction
 from core.logger import logger
 from core.session import GameSession
 from core.state import RunMetrics, RunState
@@ -505,14 +507,14 @@ class GamePlayScreen(Screen):
         super().__init__(**kwargs)
         self.grid = GridManager()
         self.penguin = Penguin()
+        self.game_over = False
         self.game_event = None
         self._keyboard = None
         self.path_index = 0
-        self.gems_collected = 0
-        # RunRecord ของรอบเล่นปัจจุบัน (single-writer) — สร้างใหม่ทุกครั้งที่เริ่มเล่น
-        # ดู core/session.py + docs/ENGINEERING_PLAN.md (RunRecord Ownership)
+
         self.session = GameSession()
         self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
+        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
         self.last_checkpoint_col = self.grid.path[0][0]
         self.last_checkpoint_row = self.grid.path[0][1]
         self.is_respawning = False
@@ -875,6 +877,14 @@ class GamePlayScreen(Screen):
         self.penguin.action = "Jump"
         self.penguin.action_timer = 0.25
         self.renderer.anim_frame = 0
+
+        self.grid.check_fork_resolution(new_col, new_row)
+        resolved_fork = self.grid.pop_resolved_fork()
+        if resolved_fork:
+            zone_id, side = resolved_fork
+            junction = get_junction(zone_id)
+            if junction:
+                self.junction_interaction.handle_choice(junction, side)
 
         if self.grid.is_on_path(new_col, new_row):
             self.grid.step_forward()
