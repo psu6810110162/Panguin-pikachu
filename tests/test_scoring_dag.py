@@ -47,6 +47,18 @@ def test_non_systemic_run_choice_marks_its_decision_incorrect_with_tooltip():
     assert edge_1.tooltip is not None and len(edge_1.tooltip) > 0
 
 
+def test_duplicate_zone_events_use_first_write_wins_explicitly():
+    # zone1 ปรากฏสองครั้ง (ตายกลาง fork แล้ว respawn เดินผ่านซ้ำ, #46) — ตัวแรก systemic
+    # (correct) ตัวสองไม่ใช่ (incorrect) ผลต้องยึดตัวแรก ไม่ใช่ตัวหลัง — ต้องตรงกับ
+    # core/scoring/stealth.py::systemic_choice_count (cross-module contract เดียวกัน)
+    events: list[GameEvent] = [_policy("zone1-right"), _policy("zone1-left")]
+    projection = dag.build_projection(events)
+
+    edge_1 = next(e for e in projection.edges if e.decision == 1)
+    assert edge_1.status == "correct"
+    assert edge_1.tooltip is None
+
+
 def test_other_run_decisions_stay_unplayed_when_only_one_zone_was_chosen():
     events: list[GameEvent] = [_policy("zone1-right")]
     projection = dag.build_projection(events)

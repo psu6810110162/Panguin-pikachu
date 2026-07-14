@@ -27,7 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from core.events import BossPhaseEvent, GameEvent, PolicyChoiceEvent
-from core.junction_data import option_for_policy_id
+from core.junction_data import option_for_policy_id, parse_policy_id
 
 BALANCE_DIR = Path(__file__).resolve().parent.parent.parent / "balance" / "v1"
 
@@ -67,12 +67,25 @@ def load_config() -> ScoringConfig:
 
 
 def systemic_choice_count(events: list[GameEvent]) -> int:
-    """จำนวน Y-Junction ที่ผู้เล่นเลือกตัวเลือก systemic (แก้ที่ต้นเหตุ)"""
-    return sum(
-        1
-        for e in events
-        if isinstance(e, PolicyChoiceEvent) and option_for_policy_id(e.policy_id).systemic
-    )
+    """จำนวน Y-Junction ที่ผู้เล่นเลือกตัวเลือก systemic (แก้ที่ต้นเหตุ)
+
+    Cross-module contract (ดู core/scoring/dag.py::_zone_choice_status): ถ้า zone เดียวมี
+    PolicyChoiceEvent มากกว่า 1 ตัวใน RunRecord เดียวกัน (เช่น ตายกลาง fork แล้ว respawn
+    เดินผ่านซ้ำ — #46 ตั้งใจปล่อยให้เกิดเคสนี้ได้) ทุก consumer ที่อ่าน event log ต้องยึด
+    **first-write-wins**: นับ/ใช้แค่ event แรกที่เจอต่อ zone เสมอ ไม่ใช่นับซ้ำทุกตัว
+    """
+    seen_zones: set[int] = set()
+    count = 0
+    for e in events:
+        if not isinstance(e, PolicyChoiceEvent):
+            continue
+        zone, _side = parse_policy_id(e.policy_id)
+        if zone in seen_zones:
+            continue
+        seen_zones.add(zone)
+        if option_for_policy_id(e.policy_id).systemic:
+            count += 1
+    return count
 
 
 def run_reduction_c(events: list[GameEvent], *, config: ScoringConfig | None = None) -> float:

@@ -34,14 +34,44 @@ def test_systemic_choice_count_only_counts_systemic_options():
     assert stealth.systemic_choice_count(events) == 2
 
 
+def test_systemic_choice_count_dedupes_duplicate_zone_first_write_wins():
+    # zone1 ปรากฏสองครั้ง (เช่น ตายกลาง fork แล้ว respawn เดินผ่านซ้ำ, #46) — ตัวแรกเป็น
+    # systemic (right) ตัวสองไม่ใช่ (left) ต้องนับแค่ตัวแรก ไม่ใช่ 0 หรือ 2
+    events: list[GameEvent] = [_policy("zone1-right"), _policy("zone1-left")]
+    assert stealth.systemic_choice_count(events) == 1
+
+
+def test_systemic_choice_count_dedupe_does_not_drop_other_zones():
+    events: list[GameEvent] = [
+        _policy("zone1-right"),
+        _policy("zone1-left"),  # ซ้ำ zone1 — ไม่นับ
+        _policy("zone2-left"),
+    ]
+    assert stealth.systemic_choice_count(events) == 2
+
+
 def test_run_reduction_c_multiplies_systemic_count_by_point_value():
     events: list[GameEvent] = [_policy("zone1-right"), _policy("zone2-left")]
     assert stealth.run_reduction_c(events, config=_CONFIG) == 0.2
 
 
 def test_run_reduction_c_is_capped_at_max_run_reduction():
-    events: list[GameEvent] = [_policy("zone1-right")] * 12  # 12 * 0.1 = 1.2, capped at 1.0
-    assert stealth.run_reduction_c(events, config=_CONFIG) == 1.0
+    # เกมมีแค่ 10 zone จริง (ซ้ำ zone เดียวกันไม่นับซ้ำแล้วหลัง fix dedup) ใช้ 10 zone จริง
+    # แยกกันทั้งหมด (all_junctions) เลือกฝั่ง systemic ทุกอัน = 10 systemic choices แล้วตั้ง
+    # cap ให้แคบกว่านั้นเพื่อทดสอบว่า capping ทำงานจริง
+    from core.junction_data import all_junctions
+
+    events: list[GameEvent] = [
+        _policy(j.policy_id("left" if j.left.systemic else "right")) for j in all_junctions()
+    ]
+    tight_cap_config = ScoringConfig(
+        systemic_point_c=_CONFIG.systemic_point_c,
+        max_run_reduction_c=0.5,  # 10 * 0.1 = 1.0, capped ที่ 0.5
+        boss_bonus_per_wave_c=_CONFIG.boss_bonus_per_wave_c,
+        max_boss_reduction_c=_CONFIG.max_boss_reduction_c,
+        ranks=_CONFIG.ranks,
+    )
+    assert stealth.run_reduction_c(events, config=tight_cap_config) == 0.5
 
 
 def test_correct_boss_wave_count_only_counts_damage_dealt():

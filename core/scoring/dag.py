@@ -123,7 +123,13 @@ def load_graph_data() -> GraphData:
 
 
 def _zone_choice_status(events: list[GameEvent], zone: int) -> EdgeStatus | None:
-    """None ถ้ายังไม่มี PolicyChoiceEvent ของโซนนี้เลย (ยังไม่ถึง หรือรอบเล่นจบก่อนถึง)"""
+    """None ถ้ายังไม่มี PolicyChoiceEvent ของโซนนี้เลย (ยังไม่ถึง หรือรอบเล่นจบก่อนถึง)
+
+    Cross-module contract (ดู core/scoring/stealth.py::systemic_choice_count): ถ้า zone
+    เดียวมี PolicyChoiceEvent ซ้ำกัน (ตายกลาง fork แล้ว respawn เดินผ่านซ้ำ — #46 ตั้งใจ
+    ปล่อยให้เกิดได้) ยึด **first-write-wins เสมอ** — for-loop นี้ return ตัวแรกที่เจอโดย
+    ตั้งใจ ไม่ใช่ผลพลอยได้ ห้ามเปลี่ยนเป็นวนหาตัวสุดท้ายโดยไม่ปรับ stealth.py คู่กัน
+    """
     for e in events:
         if isinstance(e, PolicyChoiceEvent):
             event_zone, _ = parse_policy_id(e.policy_id)
