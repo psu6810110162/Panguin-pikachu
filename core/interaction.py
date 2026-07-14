@@ -1,13 +1,30 @@
-from typing import Any, cast
+from typing import Protocol, cast
 
 from core.junction_data import Junction, Side
 from core.state import RunMetrics
 
 
+class PolicyChoiceSink(Protocol):
+    """รูปร่างของสิ่งที่ YJunctionInteraction ต้องการจาก game_session — ประกาศเป็น
+    Protocol แทน import GameSession ตรง ๆ เพราะ core/session.py มาจากเลน Dev B (#58/#62)
+    ที่ยังไม่ถูก merge เข้า branch นี้ (import จริงจะพัง). structural typing ให้ mypy ตรวจ
+    signature ของ policy_choice() ได้จริง — ต่างจาก Any ที่ปิดการตรวจทั้งก้อน
+    """
+
+    def policy_choice(
+        self,
+        *,
+        checkpoint_index: int,
+        policy_id: str,
+        meter_deltas: dict[str, float],
+        distance_m: int,
+    ) -> None: ...
+
+
 class YJunctionInteraction:
     """ระบบจัดการการตอบสนอง Y-Junction (D1-A3)"""
 
-    def __init__(self, run_metrics: RunMetrics, game_session: Any) -> None:
+    def __init__(self, run_metrics: RunMetrics, game_session: PolicyChoiceSink) -> None:
         self.run_metrics = run_metrics
         self.game_session = game_session  # ใช้ GameSession เป็นตัวจัดการรวม
 
@@ -33,10 +50,10 @@ class YJunctionInteraction:
         # policy_id ต้องเป็น canonical form "zone{N}-{side}" (Junction.policy_id) — ฝั่ง
         # consumer (core/scoring/stealth.py, dag.py) parse ด้วย parse_policy_id/
         # option_for_policy_id ซึ่ง raise ValueError ถ้าได้ "left"/"right" ดิบ ๆ
-        if hasattr(self.game_session, "policy_choice"):
-            self.game_session.policy_choice(
-                checkpoint_index=junction.zone,
-                policy_id=junction.policy_id(side),
-                meter_deltas=dict(selected_choice.meter_deltas),
-                distance_m=junction.zone * 100,
-            )
+        # ไม่ต้อง hasattr แล้ว — PolicyChoiceSink การันตีว่าเมธอดมีจริง (mypy บังคับ caller)
+        self.game_session.policy_choice(
+            checkpoint_index=junction.zone,
+            policy_id=junction.policy_id(side),
+            meter_deltas=dict(selected_choice.meter_deltas),
+            distance_m=junction.zone * 100,
+        )
