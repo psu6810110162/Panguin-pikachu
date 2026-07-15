@@ -82,3 +82,30 @@ def test_increase_heart():
     assert metrics.hearts == 5
     metrics.increase_heart()
     assert metrics.hearts == 5  # capped at 5
+
+
+def test_respawn_seconds_loaded_from_difficulty():
+    # balance/v1/difficulty.json: hearts.respawn_seconds = 3.0
+    metrics = RunMetrics()
+    assert metrics.respawn_seconds == 3.0
+
+
+def test_decrease_heart_without_respawn_keeps_flags_clear():
+    """โหมดบอส (ตอบผิด): เสียหัวใจตรง ๆ ห้ามตั้ง needs_respawn/is_invincible
+    ไม่งั้น invincible ค้างถาวรเพราะไม่มี respawn cycle มาเคลียร์"""
+    metrics = RunMetrics(hearts=5)
+    metrics.decrease_heart(allow_respawn=False)
+    assert metrics.hearts == 4
+    assert not metrics.needs_respawn
+    assert not metrics.is_invincible
+
+    # เสียซ้ำได้ทันที (ไม่มี invincible frame)
+    metrics.decrease_heart(allow_respawn=False)
+    assert metrics.hearts == 3
+
+
+def test_decrease_heart_without_respawn_still_triggers_game_over_at_zero():
+    metrics = RunMetrics(hearts=1)
+    metrics.decrease_heart(allow_respawn=False)
+    assert metrics.hearts == 0
+    assert metrics.is_game_over
