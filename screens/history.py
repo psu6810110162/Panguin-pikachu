@@ -17,7 +17,8 @@ class HistoryScreen(Screen):
         self.ids.history_list.clear_widgets()
 
         db = DatabaseManager()
-        history = db.get_history("Penguin")  # ดึงมา 100 ตาม default ใหม่
+        # เรียงจากคะแนนดีสุดก่อนแล้ว (get_history), แถวแรกคือ PB จริงเสมอ
+        history = db.get_history(db.get_last_player_name())  # ดึงมา 100 ตาม default ใหม่
 
         if not history:
             self.ids.history_list.add_widget(
@@ -31,14 +32,12 @@ class HistoryScreen(Screen):
             return
 
         for i, row in enumerate(history, 1):
-            date_str = row["played_at"].split(" ")[0]  # เอาแค่วันที่
             dist = row["distance_m"]
             gems = row["gems_collected"]
 
-            # เน้นแถวบนสุดถ้าเป็น PB (สมมติเล่นๆ ไว้ก่อน)
             award = " 🏆" if i == 1 else ""
 
-            label_text = f"{i}. {date_str}: {dist} m ({gems} Gems){award}"
+            label_text = f"{i}. {dist} m ({gems} Gems){award}"
 
             self.ids.history_list.add_widget(
                 Label(
