@@ -28,7 +28,7 @@ from core.state import RunMetrics, RunState, load_difficulty
 from game.grid import GridManager
 from game.particles import ParticleSystem
 from game.penguin import Penguin
-from ui.components import HoverButton
+from ui.components import HoverButton, MeterBar
 
 GRASS_TILES = [
     "assets/isometric-nature-pack/grass1.png",
@@ -107,6 +107,18 @@ class KivyRenderer(Widget):
             if self.shake_amount < 0.5:
                 self.shake_amount = 0
 
+        # D1-A5: neon tint at turn points + chevron warning on the 3 tiles leading
+        # into the nearest upcoming turn (visual scaffolding — no new assets,
+        # reuses grid_manager.turn_points already recorded by _build_corner)
+        turn_point_set = set(grid_manager.turn_points)
+        chevron_positions = set()
+        if path_index >= 0:
+            lookahead = grid_manager.path[path_index + 1 : path_index + 11]
+            for i, pos in enumerate(lookahead):
+                if pos in turn_point_set:
+                    chevron_positions.update(lookahead[max(0, i - 3) : i])
+                    break
+
         self.canvas.clear()
         with self.canvas:
             view_radius = 15
@@ -176,7 +188,11 @@ class KivyRenderer(Widget):
                 y_off = tile.offset_y if tile else 0
 
                 if itype == "tile":
-                    if obj.is_fork:
+                    if (col, row) in turn_point_set:
+                        Color(0.2, 1, 1, 1)  # neon pivot tile
+                    elif (col, row) in chevron_positions:
+                        Color(1, 0.6, 0.1, 1)  # chevron warning lead-in
+                    elif obj.is_fork:
                         Color(1, 0.9, 0.4, 1)
                     else:
                         Color(1, 1, 1, 1)
@@ -591,23 +607,43 @@ class GamePlayScreen(Screen):
             bold=True,
             font_name="assets/Component_UI/Font/Kenney Future.ttf",
         )
-        self.heat_label = Label(
-            text=f"Heat: {self.metrics.heat_meter:.0f}",
-            font_size="20sp",
-            bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
-            color=(1, 0.5, 0.5, 1),
+        self.heat_bar = MeterBar(
+            value=self.metrics.heat_meter,
+            max_value=self.metrics.max_meter,
+            warn_threshold=0.8 * self.metrics.max_meter,
+            bar_color=[1, 0.5, 0.2, 1],
+            size_hint=(None, None),
+            size=(110, 16),
         )
-        self.anger_label = Label(
-            text=f"Anger: {self.metrics.capitalist_anger:.0f}",
-            font_size="20sp",
-            bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
-            color=(0.8, 0.2, 0.2, 1),
+        self.anger_bar = MeterBar(
+            value=self.metrics.capitalist_anger,
+            max_value=self.metrics.max_meter,
+            warn_threshold=0.8 * self.metrics.max_meter,
+            bar_color=[0.8, 0.2, 0.2, 1],
+            size_hint=(None, None),
+            size=(110, 16),
         )
+
+        def _meter_column(caption, bar):
+            column = BoxLayout(
+                orientation="vertical", size_hint=(None, None), size=(110, 40), spacing=2
+            )
+            column.add_widget(
+                Label(
+                    text=caption,
+                    font_size="12sp",
+                    bold=True,
+                    font_name="assets/Component_UI/Font/Kenney Future.ttf",
+                    size_hint=(1, None),
+                    height=16,
+                )
+            )
+            column.add_widget(bar)
+            return column
+
         self.hud_bg.add_widget(self.hearts_label)
-        self.hud_bg.add_widget(self.heat_label)
-        self.hud_bg.add_widget(self.anger_label)
+        self.hud_bg.add_widget(_meter_column("HEAT", self.heat_bar))
+        self.hud_bg.add_widget(_meter_column("ANGER", self.anger_bar))
         self.inventory_label = Label(
             text="Items: -",
             font_size="18sp",
@@ -797,10 +833,10 @@ class GamePlayScreen(Screen):
         self._update_inventory_hud()
 
     def _refresh_status_hud(self):
-        """Sync hearts/heat/anger labels กับ RunMetrics ปัจจุบัน — จุดเดียวใช้ทุก path"""
+        """Sync hearts label + heat/anger bars กับ RunMetrics ปัจจุบัน — จุดเดียวใช้ทุก path"""
         self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
-        self.heat_label.text = f"Heat: {self.metrics.heat_meter:.0f}"
-        self.anger_label.text = f"Anger: {self.metrics.capitalist_anger:.0f}"
+        self.heat_bar.value = self.metrics.heat_meter
+        self.anger_bar.value = self.metrics.capitalist_anger
 
     def _update_inventory_hud(self):
         names = [item.value.replace("_", " ").title() for item in self.inventory.get_items()]
