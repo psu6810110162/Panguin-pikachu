@@ -3,6 +3,8 @@ from collections.abc import Callable
 from enum import Enum, auto
 from typing import Any
 
+from core.config import BOSS_DISTANCE_M
+
 
 class GameState(Enum):
     """โครงสร้าง Enum สำหรับเก็บสถานะปัจจุบันของเกม"""
@@ -68,7 +70,7 @@ _ALLOWED_TRANSITIONS: dict[RunState, set[RunState]] = {
     RunState.SYNCED: set(),
 }
 
-BOSS_MIN_DISTANCE_M = 1000
+BOSS_MIN_DISTANCE_M = BOSS_DISTANCE_M
 
 
 def validate_transition(current: RunState, new: RunState, **context: object) -> None:

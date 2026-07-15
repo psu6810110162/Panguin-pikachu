@@ -4,6 +4,11 @@ from core.junction_data import Junction, Side
 from core.state import RunMetrics
 
 
+def junction_prompt_text(junction: Junction) -> str:
+    """Pure text for a pre-commit Y-junction banner."""
+    return f"{junction.situation}\n< LEFT: {junction.left.label} | RIGHT: {junction.right.label} >"
+
+
 class PolicyChoiceSink(Protocol):
     """รูปร่างของสิ่งที่ YJunctionInteraction ต้องการจาก game_session — ประกาศเป็น
     Protocol แทน import GameSession ตรง ๆ เพราะ core/session.py มาจากเลน Dev B (#58/#62)

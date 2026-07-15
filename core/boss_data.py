@@ -9,8 +9,21 @@ import json
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
 BALANCE_DIR = Path(__file__).resolve().parent.parent / "balance" / "v1"
+
+
+class BossItemPlacement(NamedTuple):
+    """A boss item's build-time identity; its Grid dictionary key is its position.
+
+    Grid owns placement (zone/side/wave at build time), Gameplay owns resolution,
+    and GameSession owns the event history.
+    """
+
+    wave: int
+    item_id: str
+    side: str
 
 
 @dataclass(frozen=True)

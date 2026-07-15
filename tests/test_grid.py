@@ -22,6 +22,19 @@ def test_reset_builds_start_platform_and_preloads_segments():
     assert (0, 0) in grid.path_set
 
 
+def test_reset_is_idempotent():
+    grid = GridManager()
+    grid.reset()
+    grid.forward_tiles = 12
+    grid._boss_wave = 2
+    grid.next_zone = 7
+    grid.reset()
+
+    assert grid.forward_tiles == 0
+    assert grid._boss_wave == 0
+    assert grid.next_zone in (1, 2)
+
+
 def test_step_forward_and_distance():
     grid = GridManager()
     grid.reset()

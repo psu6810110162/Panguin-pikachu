@@ -20,6 +20,9 @@
     "heat_reduction": -20.0,
     "repairs_blocks": true
   },
+  "items": {
+    "spawn_chance": 0.08
+  },
   "scoring": {
     "initial_crisis_temp_c": 2.0,
     "systemic_point_c": 0.1,
