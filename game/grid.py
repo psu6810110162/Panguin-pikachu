@@ -2,6 +2,7 @@ import random
 
 from core.boss_data import load_boss_data
 from core.config import TILE_TO_METER
+from core.logger import logger
 from core.spawning import SpawningSystem
 from game.obstacle_factory import ObstacleFactory
 
@@ -93,6 +94,8 @@ class GridManager:
         self._seg_count = 0
         self._last_cleaned_idx = 0
         self.resolved_fork = None
+        # ต้อง reset ไม่งั้นรอบเล่นที่ 2 บอสไม่สร้างเวฟ (ค้างค่า 3 จากรอบก่อน)
+        self._boss_wave = 0
         self._build_start_platform()
         self.spawning_system = SpawningSystem()
         self.next_zone = 1
@@ -297,21 +300,25 @@ class GridManager:
             self._build_checkpoint_platform()
 
         current_distance_m = self._total_generated * TILE_TO_METER
-        should_spawn_fork = False
 
-        if (
+        # D1-A2: โซนถึงกำหนด spawn แล้วหรือยัง — consume โซนเฉพาะเมื่อ fork
+        # ถูกสร้างจริงเท่านั้น ไม่งั้นโซนหาย (junction < 10) ถ้า _seg_count ยังไม่พอ
+        should_spawn_fork = (
             self.next_zone <= self.spawning_system.NUM_ZONES
             and current_distance_m >= self.next_spawn_distance
-        ):
-            should_spawn_fork = True
-            self.next_zone += 1
-            self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
+        )
 
         if should_spawn_fork and self._seg_count >= 2:
             # ─── Diamond Fork ───
-            self._build_diamond_fork(self.next_zone - 1)
+            self._build_diamond_fork(self.next_zone)
+            logger.info(
+                f"[SPAWN] Y-Junction โซน {self.next_zone} ที่ระยะ ~{current_distance_m}m "
+                f"(กำหนด {self.next_spawn_distance}m)"
+            )
+            self.next_zone += 1
+            self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
         else:
-            # ─── Straight Segment ───
+            # ─── Straight Segment ─── (โซนที่ค้างจะถูกลองใหม่ segment ถัดไป)
             self._build_straight(random.randint(SEGMENT_LEN_MIN, SEGMENT_LEN_MAX))
 
         # corner เปลี่ยนทิศ
@@ -476,7 +483,9 @@ class GridManager:
             self.fork_tiles.add((right_col, right_row))
 
             if i == 1 and wave:
-                is_left_correct = random.choice([True, False])
+                # Deterministic ตาม parity ของ wave (ไม่ random) — Stealth Assessment
+                # ต้อง reproducible; ผู้เล่นเห็น item ต่อเลนจาก HUD อยู่แล้ว
+                is_left_correct = wave_index % 2 == 0
                 left_item = wave.correct_item if is_left_correct else wave.wrong_item
                 right_item = wave.wrong_item if is_left_correct else wave.correct_item
                 self.boss_items[(left_col, left_row)] = left_item
