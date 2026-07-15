@@ -28,9 +28,13 @@ class YJunctionInteraction:
         self.run_metrics = run_metrics
         self.game_session = game_session  # ใช้ GameSession เป็นตัวจัดการรวม
 
-    def handle_choice(self, junction: Junction, choice_side: str) -> None:
+    def handle_choice(self, junction: Junction, choice_side: str, distance_m: int) -> None:
         """
         รับค่า Input (ซ้าย/ขวา) อัปเดตสเตตัส Dual-Meter และบันทึก Log ผ่าน GameSession
+
+        Args:
+            distance_m: ระยะวิ่งจริง ณ ตอนตัดสินใจ (จาก grid.get_distance_m()) —
+                ห้ามใช้ zone*100 เพราะ junction spawn แบบสุ่มในโซน telemetry จะเพี้ยน
         """
         if choice_side == "left":
             selected_choice = junction.left
@@ -55,5 +59,5 @@ class YJunctionInteraction:
             checkpoint_index=junction.zone,
             policy_id=junction.policy_id(side),
             meter_deltas=dict(selected_choice.meter_deltas),
-            distance_m=junction.zone * 100,
+            distance_m=distance_m,
         )

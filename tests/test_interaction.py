@@ -48,7 +48,7 @@ def test_handle_choice_emits_canonical_policy_id(side: str) -> None:
     interaction, session = _interaction()
     junction = get_junction(1)
 
-    interaction.handle_choice(junction, side)
+    interaction.handle_choice(junction, side, distance_m=42)
 
     assert len(session.calls) == 1
     policy_id = session.calls[0]["policy_id"]
@@ -62,7 +62,7 @@ def test_emitted_policy_id_is_accepted_by_every_junction() -> None:
     for junction in all_junctions():
         for side in ("left", "right"):
             interaction, session = _interaction()
-            interaction.handle_choice(junction, side)
+            interaction.handle_choice(junction, side, distance_m=junction.zone * 100)
             policy_id = str(session.calls[0]["policy_id"])
             assert parse_policy_id(policy_id) == (junction.zone, side)
 
@@ -72,14 +72,23 @@ def test_handle_choice_updates_meters_from_selected_option() -> None:
     junction = get_junction(1)
     expected = junction.left.meter_deltas
 
-    interaction.handle_choice(junction, "left")
+    interaction.handle_choice(junction, "left", distance_m=57)
 
     assert interaction.run_metrics.heat_meter == 50.0 + expected.get("heat", 0.0)
     assert interaction.run_metrics.capitalist_anger == 50.0 + expected.get("capitalist_anger", 0.0)
     assert session.calls[0]["meter_deltas"] == dict(expected)
 
 
+def test_handle_choice_records_actual_run_distance() -> None:
+    """distance_m ต้องเป็นระยะจริงที่ส่งเข้ามา ไม่ใช่ zone*100 (junction spawn สุ่มในโซน)"""
+    interaction, session = _interaction()
+
+    interaction.handle_choice(get_junction(3), "left", distance_m=257)
+
+    assert session.calls[0]["distance_m"] == 257
+
+
 def test_handle_choice_rejects_invalid_side() -> None:
     interaction, _ = _interaction()
     with pytest.raises(ValueError):
-        interaction.handle_choice(get_junction(1), "up")
+        interaction.handle_choice(get_junction(1), "up", distance_m=0)
