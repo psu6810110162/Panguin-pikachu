@@ -222,7 +222,7 @@ class DatabaseManager:
             JOIN sessions ss ON s.session_id = ss.id
             JOIN players p ON ss.player_id = p.id
             WHERE p.name = ?
-            ORDER BY ss.played_at DESC
+            ORDER BY s.distance_m DESC, ss.played_at DESC
             LIMIT ?
         """,
             (player_name, limit),
