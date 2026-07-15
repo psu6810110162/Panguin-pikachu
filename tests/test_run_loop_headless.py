@@ -19,7 +19,9 @@ def _play_once(grid):
     resolved_zones = set()
     for tile in grid.path_set.values():
         if tile.zone_id is not None and tile.zone_id not in resolved_zones:
-            interaction.handle_choice(get_junction(tile.zone_id), tile.side)
+            interaction.handle_choice(
+                get_junction(tile.zone_id), tile.side, distance_m=tile.zone_id * 100
+            )
             resolved_zones.add(tile.zone_id)
 
     for wave in range(3):

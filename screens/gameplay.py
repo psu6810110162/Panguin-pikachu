@@ -518,8 +518,9 @@ class GamePlayScreen(Screen):
         self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
         self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
         self.inventory = Inventory()
-        self._boss_warned = False
         self.is_respawning = False
+        self.respawn_count = 0
+        self._boss_warning_shown = False
         self.grid.reset()
         self.last_checkpoint_col = self.grid.path[0][0]
         self.last_checkpoint_row = self.grid.path[0][1]
@@ -726,6 +727,11 @@ class GamePlayScreen(Screen):
 
     def _trigger_gameover_from_metrics(self):
         self.penguin.is_dead = True
+        # หัวใจหมด/หลอดแตะ 100 ในบอส: ปิด record ให้ถึง terminal state
+        # (BOSS → FINISHED ถูก allow; RUNNING ไม่มี transition จบ — ติด contract
+        # state machine เดิม flag ไว้คุยกับ Dev B แล้ว ห้ามแก้ฝั่งเดียว)
+        if self.session.run_record.state == RunState.BOSS:
+            self.session.finish()
         Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
 
     def _respawn_penguin(self, dt=None):
@@ -737,35 +743,64 @@ class GamePlayScreen(Screen):
         self.renderer.trigger_shake(0)
         self.active_prompt_zone = None
         self.junction_banner.text = ""
+        # RESPAWNING → RUNNING ตาม state machine (ADR-010 / state-machines.md §3)
+        if self.session.state == RunState.RESPAWNING:
+            self.session.resume_after_respawn()
 
     def _handle_fall(self):
         if self.is_respawning or self.penguin.is_dead:
             return
         self.penguin.is_dead = True
         self.metrics.decrease_heart()
-        self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
+        self._refresh_status_hud()
         if self.metrics.needs_respawn:
             self.metrics.needs_respawn = False
             self.is_respawning = True
-            Clock.schedule_once(self._respawn_penguin, 3.0)
+            self.respawn_count += 1
+            # ADR-002/010: RUNNING → RESPAWNING + RespawnEvent (respawn_count,
+            # score_penalty 10%) — การหักคะแนนจริงเป็นหน้าที่ scoring ฝั่ง server
+            if self.session.state == RunState.RUNNING:
+                self.session.begin_respawn()
+                self.session.respawn(
+                    checkpoint_col=self.last_checkpoint_col,
+                    checkpoint_row=self.last_checkpoint_row,
+                    respawn_count=self.respawn_count,
+                    score_penalty=0.1,
+                    distance_m=self.grid.get_distance_m(),
+                )
+            self.show_checkpoint_message("RESPAWNING...")
+            Clock.schedule_once(self._respawn_penguin, self.metrics.respawn_seconds)
 
     def _start_new_session(self):
         """Create the session, metrics, and junction interaction as one run unit.
 
         Call only after ``grid.reset()``: all three objects must reference this run,
-        otherwise policy events are silently written to an obsolete session.
+        otherwise policy events are silently written to an obsolete session
+        (interaction holds a reference to session — if not rebound here, the new
+        run's PolicyChoiceEvents land in the discarded RunRecord and the Report
+        Card shows everything as "unplayed"). Checkpoint reset also depends on
+        grid.reset() having run first, since it reads grid.path[0].
         """
         self.session = GameSession()
         self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
         self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
         self.inventory = Inventory()
         self.session.start()
-        start = self.grid.path[0]
-        self.last_checkpoint_col, self.last_checkpoint_row = start
-        self._boss_warned = False
+        self.is_respawning = False
+        self.respawn_count = 0
+        self._boss_warning_shown = False
         self.active_prompt_zone = None
         self.junction_banner.text = ""
+        start = self.grid.path[0]
+        self.last_checkpoint_col, self.last_checkpoint_row = start
+        self._refresh_status_hud()
         self._update_inventory_hud()
+
+    def _refresh_status_hud(self):
+        """Sync hearts/heat/anger labels กับ RunMetrics ปัจจุบัน — จุดเดียวใช้ทุก path"""
+        self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
+        self.heat_label.text = f"Heat: {self.metrics.heat_meter:.0f}"
+        self.anger_label.text = f"Anger: {self.metrics.capitalist_anger:.0f}"
 
     def _update_inventory_hud(self):
         names = [item.value.replace("_", " ").title() for item in self.inventory.get_items()]
@@ -963,38 +998,33 @@ class GamePlayScreen(Screen):
             wave_data = boss_data.waves.get(placement.wave)
             is_correct = placement.item_id == wave_data.correct_item if wave_data else False
 
+            # ผลของแต่ละเวฟอ่านจาก balance/v1/boss.json (on_correct/on_wrong ใช้
+            # key "boss_armor"/"hearts") — ไม่ hardcode เพื่อให้ balance pass แก้ data ได้
             if is_correct:
                 AudioManager().play_sfx("Coin")
-                self.boss_hp -= 1
+                if wave_data:
+                    self.boss_hp += wave_data.on_correct.get("boss_armor", -1)
                 self.session.boss_phase(
                     phase=placement.wave,
                     outcome="damage_dealt",
                     distance_m=self.grid.get_distance_m(),
                 )
                 self.show_checkpoint_message("CORRECT!")
-                if wave_data:
-                    self.metrics.update_meters(
-                        heat_delta=wave_data.on_correct.get("heat", 0),
-                        anger_delta=wave_data.on_correct.get("anger", 0),
-                    )
             else:
                 AudioManager().play_sfx("Down")
-                self.metrics.decrease_heart()
-                self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
+                hearts_delta = wave_data.on_wrong.get("hearts", -1) if wave_data else -1
+                # ในบอสไม่มี fall-respawn (state-machines.md §3) — เสียหัวใจตรง ๆ
+                # ห้ามตั้ง needs_respawn/is_invincible ไม่งั้น invincible ค้างถาวร
+                for _ in range(-hearts_delta):
+                    self.metrics.decrease_heart(allow_respawn=False)
                 self.session.boss_phase(
                     phase=placement.wave,
                     outcome="damaged",
                     distance_m=self.grid.get_distance_m(),
                 )
                 self.show_checkpoint_message("WRONG FACT!")
-                if wave_data:
-                    self.metrics.update_meters(
-                        heat_delta=wave_data.on_wrong.get("heat", 0),
-                        anger_delta=wave_data.on_wrong.get("anger", 0),
-                    )
 
-            self.heat_label.text = f"Heat: {self.metrics.heat_meter:.0f}"
-            self.anger_label.text = f"Anger: {self.metrics.capitalist_anger:.0f}"
+            self._refresh_status_hud()
 
             self.boss_wave_index = placement.wave + 1
             self.grid.pop_boss_wave(placement.wave)
@@ -1013,6 +1043,7 @@ class GamePlayScreen(Screen):
                 self.show_checkpoint_message("FAILED TO DEFEAT BOSS!")
                 self.boss_wall_label.text = ""
                 self.boss_choices_label.text = ""
+                # trigger_game_over → callback ปิด record (BOSS → FINISHED) ให้เอง
                 self.metrics.trigger_game_over()
             else:
                 self._update_boss_ui(self.boss_wave_index)
@@ -1043,7 +1074,10 @@ class GamePlayScreen(Screen):
             self.junction_banner.text = ""
             try:
                 junction = get_junction(zone_id)
-                self.junction_interaction.handle_choice(junction, side)
+                self.junction_interaction.handle_choice(
+                    junction, side, distance_m=self.grid.get_distance_m()
+                )
+                self._refresh_status_hud()
             except KeyError:
                 logger.warning("No junction data for resolved zone %s", zone_id)
 
@@ -1069,9 +1103,12 @@ class GamePlayScreen(Screen):
                         checkpoint_index=self.grid.forward_tiles // 100,
                         distance_m=dist_m,
                     )
-                if dist_m == BOSS_DISTANCE_M - 20 and not self._boss_warned:
+                if (
+                    BOSS_DISTANCE_M - 20 <= dist_m < BOSS_DISTANCE_M - 10
+                    and not self._boss_warning_shown
+                ):
                     self.show_checkpoint_message("WARNING: CARBON BARON APPROACHING!")
-                    self._boss_warned = True
+                    self._boss_warning_shown = True
 
             if dist_m >= BOSS_DISTANCE_M and self.session.run_record.state == RunState.RUNNING:
                 self.session.enter_boss(distance_m=dist_m)
@@ -1083,14 +1120,12 @@ class GamePlayScreen(Screen):
                 self.boss_start_time = self.session.elapsed()
                 self._update_boss_ui(self.boss_wave_index)
 
-            if self.path_index == len(self.grid.path) - 1:
-                logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
-                self.manager.current = "gameover"
         else:
-            self.penguin.is_dead = True
+            # ตกนอกเส้นทาง = เสียหัวใจ + respawn ที่ checkpoint (ADR-010)
+            # ไม่ game over ตรง ๆ — หัวใจหมดค่อยจบผ่าน callback ของ RunMetrics
             AudioManager().play_sfx("Down")
-            logger.info(f"ตก! ระยะ {self.grid.get_distance_m()} m")
-            Clock.schedule_once(lambda dt: self._go_gameover(), 0.5)
+            logger.info(f"ตกนอกเส้นทาง! ระยะ {self.grid.get_distance_m()} m")
+            self._handle_fall()
 
     def _go_gameover(self):
         self.manager.current = "gameover"

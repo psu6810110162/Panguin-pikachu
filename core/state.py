@@ -142,6 +142,7 @@ class RunMetrics:
         )
         self.hearts: int = hearts if hearts is not None else int(hearts_diff.get("start", 5))
         self.max_hearts: int = int(hearts_diff.get("cap", 5))
+        self.respawn_seconds: float = float(hearts_diff.get("respawn_seconds", 3.0))
 
         self.max_meter: float = float(meters_diff.get("max", 100.0))
         self.min_meter: float = float(meters_diff.get("min", 0.0))
@@ -166,8 +167,14 @@ class RunMetrics:
         if self.heat_meter >= self.game_over_at or self.capitalist_anger >= self.game_over_at:
             self.trigger_game_over()
 
-    def decrease_heart(self) -> None:
-        """D1-A4: ลดหัวใจเมื่อตกเหว"""
+    def decrease_heart(self, allow_respawn: bool = True) -> None:
+        """D1-A4: ลดหัวใจเมื่อตกเหว
+
+        Args:
+            allow_respawn: True (default) = ตกเหวระหว่างวิ่ง ตั้ง needs_respawn +
+                invincible frame ตาม state-machines.md §3 / False = เสียหัวใจตรง ๆ
+                (เช่น ตอบผิดในบอส — ไม่มี fall-respawn ใน RunState.BOSS)
+        """
         if self.is_game_over or self.is_invincible:
             return
 
@@ -175,7 +182,7 @@ class RunMetrics:
         if self.hearts <= 0:
             self.hearts = 0
             self.trigger_game_over()
-        else:
+        elif allow_respawn:
             self.needs_respawn = True
             self.is_invincible = True
 

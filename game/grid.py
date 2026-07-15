@@ -3,6 +3,7 @@ import random
 from core.boss_data import BossItemPlacement, load_boss_data
 from core.config import BOSS_DISTANCE_M, TILE_TO_METER
 from core.items import ItemType
+from core.logger import logger
 from core.spawning import SpawningSystem
 from core.state import load_difficulty
 from game.obstacle_factory import ObstacleFactory
@@ -101,6 +102,7 @@ class GridManager:
         self._seg_count = 0
         self._last_cleaned_idx = 0
         self.resolved_fork = None
+        # ต้อง reset ไม่งั้นรอบเล่นที่ 2 บอสไม่สร้างเวฟ (ค้างค่า 3 จากรอบก่อน)
         self._boss_wave = 0
         self._build_start_platform()
         self.spawning_system = SpawningSystem()
@@ -320,21 +322,25 @@ class GridManager:
             self._build_checkpoint_platform()
 
         current_distance_m = self._total_generated * TILE_TO_METER
-        should_spawn_fork = False
 
-        if (
+        # D1-A2: โซนถึงกำหนด spawn แล้วหรือยัง — consume โซนเฉพาะเมื่อ fork
+        # ถูกสร้างจริงเท่านั้น ไม่งั้นโซนหาย (junction < 10) ถ้า _seg_count ยังไม่พอ
+        should_spawn_fork = (
             self.next_zone <= self.spawning_system.NUM_ZONES
             and current_distance_m >= self.next_spawn_distance
-        ):
-            should_spawn_fork = True
-            self.next_zone += 1
-            self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
+        )
 
         if should_spawn_fork and self._seg_count >= 2:
             # ─── Diamond Fork ───
-            self._build_diamond_fork(self.next_zone - 1)
+            self._build_diamond_fork(self.next_zone)
+            logger.info(
+                f"[SPAWN] Y-Junction โซน {self.next_zone} ที่ระยะ ~{current_distance_m}m "
+                f"(กำหนด {self.next_spawn_distance}m)"
+            )
+            self.next_zone += 1
+            self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
         else:
-            # ─── Straight Segment ───
+            # ─── Straight Segment ─── (โซนที่ค้างจะถูกลองใหม่ segment ถัดไป)
             self._build_straight(random.randint(SEGMENT_LEN_MIN, SEGMENT_LEN_MAX))
 
         # corner เปลี่ยนทิศ
@@ -507,7 +513,9 @@ class GridManager:
         dir_lane = build_lane(((cur_dir, 4), (perp, 2)))
         perp_lane = build_lane(((perp, 2), (cur_dir, 4)))
         if wave:
-            dir_correct = random.choice([True, False])
+            # Deterministic by wave parity (not random) — reproducible across runs/
+            # replays; the player already sees which item is on which side via HUD.
+            dir_correct = wave_index % 2 == 0
             placements = (
                 (dir_lane[1], dir_side, wave.correct_item if dir_correct else wave.wrong_item),
                 (perp_lane[1], perp_side, wave.wrong_item if dir_correct else wave.correct_item),
