@@ -29,11 +29,12 @@ class Config:
     port: int
     rate_limit: str
     debug: bool
+    stealth_assessment_enabled: bool
 
 
 def load_config() -> Config:
-    """อ่านค่าจาก env var: DATABASE_URL, SYNC_SECRET, PORT, RATE_LIMIT, FLASK_DEBUG —
-    ไม่มีก็ใช้ default ของ dev
+    """อ่านค่าจาก env var: DATABASE_URL, SYNC_SECRET, PORT, RATE_LIMIT, FLASK_DEBUG,
+    STEALTH_ASSESSMENT_ENABLED — ไม่มีก็ใช้ default ของ dev
 
     Raises:
         RuntimeError: FLASK_DEBUG ไม่เปิดแต่ SYNC_SECRET ยังเป็นค่า default — ค่า default
@@ -53,6 +54,15 @@ def load_config() -> Config:
     # debugger รันโค้ดจาก browser ได้ ถ้าเผลอเปิดผ่าน ngrok/LAN คือช่อง RCE ตรง ๆ
     debug = os.environ.get("FLASK_DEBUG", "0").lower() in {"1", "true", "yes"}
 
+    # คุมแค่ persist/API/dashboard ของ Stealth Assessment fields (net_impact_score/
+    # cognitive_score/rank) — evaluator ยัง derive ค่าพวกนี้เสมอไม่ว่า flag จะเป็นอะไร
+    # (ดู core/scoring/evaluator.py, docs/adr/012) ปิดโดย default จนกว่าทีมจะพร้อมโชว์
+    stealth_assessment_enabled = os.environ.get("STEALTH_ASSESSMENT_ENABLED", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
     if not debug and sync_secret == DEFAULT_SYNC_SECRET:
         raise RuntimeError(
             "SYNC_SECRET is still the public dev default while FLASK_DEBUG is off — "
@@ -67,4 +77,5 @@ def load_config() -> Config:
         port=port,
         rate_limit=rate_limit,
         debug=debug,
+        stealth_assessment_enabled=stealth_assessment_enabled,
     )

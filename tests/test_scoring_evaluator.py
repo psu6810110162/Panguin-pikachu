@@ -1,4 +1,10 @@
-from core.events import CheckpointReachedEvent, MissionCompleteEvent, QuizAnswerEvent
+from core.events import (
+    BossPhaseEvent,
+    CheckpointReachedEvent,
+    MissionCompleteEvent,
+    PolicyChoiceEvent,
+    QuizAnswerEvent,
+)
 from core.schema import RunRecord
 from core.scoring.evaluator import evaluate
 
@@ -73,6 +79,48 @@ def test_evaluate_with_no_events_gives_zero_distance_and_scores():
     assert result.distance_m == 0
     assert result.mission_score == 0.0
     assert result.respawn_count == 0
+    assert result.net_impact_score == 0.0
+    assert result.cognitive_score == 0.0
+    assert result.rank is None  # 0.0°C ต่ำกว่า rank ต่ำสุด (A: 0.8-1.2°C)
+
+
+def test_evaluate_computes_stealth_assessment_fields_from_policy_and_boss_events():
+    record = RunRecord(run_id="run-4", player_id="player-4")
+    # zone1-right (โซลาร์ฟาร์ม) เป็นตัวเลือก systemic ตาม balance/v1/junctions.json
+    record.record(
+        PolicyChoiceEvent(
+            timestamp=0.1,
+            distance_m=100,
+            checkpoint_index=1,
+            policy_id="zone1-right",
+            meter_deltas={"heat": -20, "capitalist_anger": 25},
+        )
+    )
+    record.record(BossPhaseEvent(timestamp=0.2, distance_m=1000, phase=1, outcome="damage_dealt"))
+
+    result = evaluate(record, pretest_pct=40.0, posttest_pct=90.0, total_missions=2)
+
+    assert result.cognitive_score == 0.1  # 1 boss wave ถูก x boss_bonus_per_wave_c (0.1)
+    assert result.net_impact_score == 0.2  # systemic 1 ข้อ (0.1) + cognitive (0.1)
+    assert result.rank is None  # 0.2°C ยังต่ำกว่า rank ต่ำสุด (A: 0.8-1.2°C)
+
+
+def test_evaluate_is_deterministic_across_repeated_calls():
+    """ตาม ADR-012: event log เดียวกัน -> RunResult เดิม 100% เสมอ (หัวใจของ replay)"""
+    record = RunRecord(run_id="run-5", player_id="player-5")
+    record.record(
+        PolicyChoiceEvent(
+            timestamp=0.1,
+            distance_m=100,
+            checkpoint_index=1,
+            policy_id="zone1-right",
+            meter_deltas={"heat": -20, "capitalist_anger": 25},
+        )
+    )
+
+    first = evaluate(record, pretest_pct=40.0, posttest_pct=90.0, total_missions=2)
+    second = evaluate(record, pretest_pct=40.0, posttest_pct=90.0, total_missions=2)
+    assert first.to_dict() == second.to_dict()
 
 
 def test_evaluate_quiz_score_averages_only_phases_the_player_has_reached():

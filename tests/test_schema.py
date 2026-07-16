@@ -15,6 +15,7 @@ def test_new_record_defaults_to_lobby_with_no_events():
     assert record.state == RunState.LOBBY
     assert record.events == []
     assert record.result is None
+    assert record.balance_version == "v1"
 
 
 def test_record_appends_events_in_order():
@@ -72,6 +73,19 @@ def test_run_record_round_trip_with_no_result():
     record = _make_record()
     restored = RunRecord.from_dict(record.to_dict())
     assert restored.result is None
+
+
+def test_run_record_round_trips_balance_version():
+    record = RunRecord(run_id="run-1", player_id="player-1", balance_version="v2")
+    restored = RunRecord.from_dict(record.to_dict())
+    assert restored.balance_version == "v2"
+
+
+def test_run_record_from_dict_defaults_balance_version_to_v1_for_old_payloads():
+    """run ที่ sync ก่อนมี field นี้ (ไม่มี balance_version ใน dict เลย) ต้องถือว่าเป็น v1
+    เพราะ balance/v1/ คือ version เดียวที่เคยมีอยู่ตอนนั้น"""
+    restored = RunRecord.from_dict({"run_id": "run-1", "player_id": "player-1"})
+    assert restored.balance_version == "v1"
 
 
 # ── Malformed data — บันทึกพฤติกรรมปัจจุบันของ contract ──────────────────

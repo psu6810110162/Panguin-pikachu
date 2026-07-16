@@ -14,22 +14,30 @@ def create_app(
     db_uri: str | None = None,
     sync_secret: bytes | None = None,
     rate_limit: str | None = None,
+    stealth_assessment_enabled: bool | None = None,
 ) -> Flask:
-    """db_uri/sync_secret/rate_limit ที่ไม่ระบุ (None) จะ fallback ไปอ่านจาก env var ผ่าน
-    load_config() — จำเป็นเพราะ `flask db migrate`/`upgrade` (Alembic CLI ผ่าน FLASK_APP=server)
-    เรียก create_app() แบบไม่มี argument เลย ถ้า default เป็นค่า SQLite ตายตัวจะทำให้คำสั่งพวกนี้
-    มองไม่เห็น DATABASE_URL ที่ตั้งไว้ (เช่นตอนรันใส่ Postgres จริงใน container) เลย
+    """db_uri/sync_secret/rate_limit/stealth_assessment_enabled ที่ไม่ระบุ (None) จะ fallback
+    ไปอ่านจาก env var ผ่าน load_config() — จำเป็นเพราะ `flask db migrate`/`upgrade`
+    (Alembic CLI ผ่าน FLASK_APP=server) เรียก create_app() แบบไม่มี argument เลย ถ้า default
+    เป็นค่า SQLite ตายตัวจะทำให้คำสั่งพวกนี้มองไม่เห็น DATABASE_URL ที่ตั้งไว้ (เช่นตอนรันใส่
+    Postgres จริงใน container) เลย
     """
     config = load_config()
     db_uri = db_uri if db_uri is not None else config.database_uri
     sync_secret = sync_secret if sync_secret is not None else config.sync_secret
     rate_limit = rate_limit if rate_limit is not None else config.rate_limit
+    stealth_assessment_enabled = (
+        stealth_assessment_enabled
+        if stealth_assessment_enabled is not None
+        else config.stealth_assessment_enabled
+    )
 
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
     app.config["SYNC_SECRET"] = sync_secret
     app.config["NONCE_STORE"] = InMemoryNonceStore()
     app.config["RATELIMIT_DEFAULT"] = rate_limit
+    app.config["STEALTH_ASSESSMENT_ENABLED"] = stealth_assessment_enabled
 
     db.init_app(app)
     # directory เป็น path relative จาก cwd ตอนรัน `flask db ...` (ไม่ใช่ relative จาก

@@ -102,6 +102,8 @@ def ingest_signed_run(
     signed_payload: SignedPayload,
     secret: bytes,
     nonce_store: NonceStore,
+    *,
+    stealth_enabled: bool = False,
 ) -> RunModel:
     """Verify -> parse -> validate -> score -> upsert ทับ run_id เดิม (idempotent)
 
@@ -146,7 +148,7 @@ def ingest_signed_run(
         run = RunModel(session_id=session.id, run_id=record.run_id, player_id=record.player_id)
         db.session.add(run)
 
-    _apply_result(run, record, result, player_name)
+    _apply_result(run, record, result, player_name, stealth_enabled=stealth_enabled)
 
     # query-แล้วค่อย-insert ข้างบนไม่ atomic ภายใต้ async_mode="threading" — สอง request
     # ของ run_id เดียวกัน (เช่น client retry จาก offline queue) อาจเห็น run is None พร้อม
@@ -160,12 +162,19 @@ def ingest_signed_run(
         run = (
             db.session.query(RunModel).filter_by(run_id=record.run_id, session_id=session.id).one()
         )
-        _apply_result(run, record, result, player_name)
+        _apply_result(run, record, result, player_name, stealth_enabled=stealth_enabled)
         db.session.commit()
     return run
 
 
-def _apply_result(run: RunModel, record: RunRecord, result: RunResult, player_name: str) -> None:
+def _apply_result(
+    run: RunModel,
+    record: RunRecord,
+    result: RunResult,
+    player_name: str,
+    *,
+    stealth_enabled: bool = False,
+) -> None:
     run.player_name = player_name
     run.status = _STATE_TO_DASHBOARD_STATUS[record.state]
     run.distance_m = result.distance_m
@@ -175,6 +184,15 @@ def _apply_result(run: RunModel, record: RunRecord, result: RunResult, player_na
     run.quiz_score = result.quiz_score
     run.hake_gain = result.hake_gain
     run.heat_controlled_pct = result.heat_controlled_pct
+    run.balance_version = record.balance_version
+
+    # Stealth Assessment fields: evaluator() คำนวณเสมอ (result.* มีค่าอยู่แล้ว) แต่ persist
+    # เฉพาะตอน flag เปิด — ปิดอยู่แล้วเว้นเป็น None (nullable) แทนที่จะเขียนค่าที่ยังไม่พร้อม
+    # โชว์ต่อสาธารณะ (ดู server/config.py::STEALTH_ASSESSMENT_ENABLED, docs/adr/012)
+    if stealth_enabled:
+        run.net_impact_score = result.net_impact_score
+        run.cognitive_score = result.cognitive_score
+        run.rank = result.rank
     run.events_json = json.dumps(record.to_dict())
     run.synced_at = datetime.now(UTC)
 
@@ -210,6 +228,10 @@ def leaderboard_payload(session: SessionModel) -> list[dict[str, Any]]:
             "respawn_count": run.respawn_count,
             "environmental_score": run.environmental_score,
             "status": run.status,
+            # None ถ้า STEALTH_ASSESSMENT_ENABLED ปิดอยู่ตอน ingest — client ต้อง null-safe
+            # อยู่แล้ว (เหมือน environmental_score ตอนยังไม่ finish)
+            "net_impact_score": run.net_impact_score,
+            "rank": run.rank,
         }
         for run in leaderboard(session)
     ]
