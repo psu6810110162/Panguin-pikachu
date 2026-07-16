@@ -1,6 +1,7 @@
 import json
 from collections.abc import Callable
 from enum import Enum, StrEnum, auto
+from pathlib import Path
 from typing import Any
 
 from core.config import BOSS_DISTANCE_M
@@ -124,7 +125,8 @@ def validate_transition(current: RunState, new: RunState, **context: object) -> 
 
 def load_difficulty() -> dict[str, Any]:
     try:
-        with open("balance/v1/difficulty.json", encoding="utf-8") as f:
+        path = Path(__file__).resolve().parent.parent / "balance" / "v1" / "difficulty.json"
+        with path.open(encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         return {
@@ -150,9 +152,10 @@ class RunMetrics:
         capitalist_anger: float | None = None,
         hearts: int | None = None,
         on_game_over: Callable[[], None] | None = None,
+        difficulty: dict[str, Any] | None = None,
     ) -> None:
         self.on_game_over = on_game_over
-        diff = load_difficulty()
+        diff = difficulty if difficulty is not None else load_difficulty()
         meters_diff: dict[str, Any] = diff.get("meters", {}) if isinstance(diff, dict) else {}
         hearts_diff: dict[str, Any] = diff.get("hearts", {}) if isinstance(diff, dict) else {}
 

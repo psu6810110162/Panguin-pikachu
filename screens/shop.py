@@ -1,10 +1,10 @@
 from kivy.clock import Clock
 from kivy.uix.screenmanager import Screen
 
-from core.audio import AudioManager
-from core.database import DatabaseManager
-from core.logger import logger
 from core.state import StateManager
+from infrastructure.audio import AudioManager
+from infrastructure.database import DatabaseManager
+from infrastructure.logging_config import logger
 
 
 class ShopScreen(Screen):

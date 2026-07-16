@@ -1,5 +1,9 @@
 # 🐧 PENGUIN DASH - Kivy Project Assignment
 
+> **Current execution plan:** [Game-First Release Plan](docs/GAME_FIRST_PLAN.md) — โฟกัส Local Game + Windows ZIP; Teacher Dashboard, Sync และ Docker เป็น P2 optional และไม่ block release
+>
+> UI handoff: [UI/UX Spec](docs/UI_UX_HANDOFF.md) · Release: [Windows Runbook](docs/RELEASE_RUNBOOK.md)
+
 **Penguin Dash** เป็นโปรเจกต์เกมแนว Endless Runner พัฒนาด้วย Kivy Framework (Python) สำหรับส่งวิชาการเขียนโปรแกรม โดยเน้นการสร้าง Application ที่มีความสวยงาม ลื่นไหล และมีระบบ Logic ที่ซับซ้อนตามเงื่อนไขที่อาจารย์กำหนด
 
 ---

@@ -1,21 +1,22 @@
 # CLAUDE.md — Penguin Dash (The Great Melt)
 
-เกม Kivy (client) + Flask/SocketIO (backend) สำหรับ NSC 2026 — endless runner isometric
-สอนประเด็นภูมิอากาศ. ไฟล์นี้คือ context ที่ agent/dev ต้องรู้ก่อนแก้โค้ด. รายละเอียดการ
-ตัดสินใจเชิงสถาปัตยกรรมอยู่ใน `docs/adr/`.
+เกม Kivy offline-first สำหรับ NSC 2026 — endless runner isometric สอนประเด็นภูมิอากาศ
+Game Release scope และสถานะจริงอยู่ที่ `docs/GAME_FIRST_PLAN.md`; Flask/SocketIO เป็น P2
+ที่ไม่ block และไม่อยู่ใน client bundle. คำศัพท์กลางอยู่ใน `CONTEXT.md`.
 
 ## เลเยอร์และขอบเขต
-- `core/` — ตรรกะบริสุทธิ์ **ห้าม import kivy** (ยกเว้น `core/audio.py`) เพราะ server re-import
-  ตรรกะเดียวกันไปคิดคะแนน — บังคับด้วย `tests/test_no_kivy_in_core.py`
-- `game/`, `screens/` — เลเยอร์ Kivy (rendering, input, scene)
-- `server/` — Flask API + SocketIO dashboard, re-import `core/` เพื่อ score
+- `core/` — domain/scoring **ห้าม import Kivy, SQLite หรือ server**
+- `game/controller.py` — mutation boundary + immutable ViewState; ห้าม import UI/persistence/server
+- `game/`, `screens/`, `ui/` — Kivy rendering/input ระหว่าง incremental extraction
+- `infrastructure/` — SQLite, runtime paths, audio, logs, telemetry, resources, crash reports
+- `server/` — P2 Flask/SocketIO; optional/manual CI เท่านั้น
 - `balance/v1/*.json` — ค่า tuning/content ทั้งหมด (ไม่ hardcode ในโค้ด)
 
 ## กติกาที่ห้ามพลาด (load-bearing invariants)
 1. **Event-sourced** (ADR-001): `RunRecord.events` = source of truth, `RunResult` = projection
    ที่ recompute ได้เสมอ. แก้ `RunResult` ได้ที่เดียวคือ `core/scoring/evaluator.py`
-2. **Server-authoritative** (ADR-006): `evaluate()` กิน event log จาก **client ที่เชื่อไม่ได้**
-   → ต้องทนต่อ input เสีย ห้าม crash จาก field ผิดรูป
+2. **Single writer** (ADR-016): `GameSession` เป็น writer เดียวของ `RunRecord.events` และ
+   `GameplayController` เป็น mutation boundary ของ live gameplay
 3. **Determinism** (ADR-012): event log เดียวกัน → `RunResult` เดิม 100%
 4. **policy_id contract**: producer (`core/interaction.py`) ต้องสร้าง policy_id ผ่าน
    `Junction.policy_id(side)` = `f"zone{zone}-{side}"` **เท่านั้น** — ห้ามส่งค่าดิบ `"left"/"right"`
@@ -32,9 +33,11 @@
 
 ## ก่อนเปิด PR (ต้องผ่านทุกอัน)
 ```bash
-env KIVY_NO_ARGS=1 KIVY_WINDOW=mock pytest -q   # เทสต์ต้องเขียวทั้งหมด
+env KIVY_NO_ARGS=1 KIVY_WINDOW=mock pytest -q
 ruff check . && ruff format --check .
-mypy core/ server/                               # disallow_untyped_defs — type hints ครบ
+mypy
+python -m scripts.validate_resources
+python main.py --self-test
 ```
 - **ทุก feature/logic ใหม่ต้องมี unit test** (ผูกกับ acceptance criteria ใน issue)
 - **แก้ contract/dependency/security → เพิ่ม ADR ใหม่** ใน `docs/adr/` (ห้ามแก้ ADR เก่าย้อนหลัง)

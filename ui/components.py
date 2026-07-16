@@ -37,7 +37,7 @@ class HoverButton(Button):
             return
         self.hovering = True
 
-        from core.audio import AudioManager
+        from infrastructure.audio import AudioManager
 
         AudioManager().play_sfx("switch")
 

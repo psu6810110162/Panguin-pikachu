@@ -29,10 +29,13 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
-from core.audio import AudioManager
-from core.logger import logger
 from core.scoring import stealth
 from core.scoring.dag import GraphProjection, build_projection
+from infrastructure.audio import AudioManager
+from infrastructure.logging_config import logger
+from infrastructure.repository import LocalCompletedRunRepository
+from infrastructure.telemetry import TelemetryRecorder
+from infrastructure.version import APP_VERSION
 from ui.components import HoverButton
 
 _STATUS_COLORS = {
@@ -133,6 +136,7 @@ class ReportScreen(Screen):
         )
         self._reveal_event = None
         self._revealed = 0
+        self._saved_run_id = None
         self.projection = build_projection([])
 
         self.dag_widget = DAGGraphWidget(size_hint=(1, 1))
@@ -245,8 +249,41 @@ class ReportScreen(Screen):
             f"(วิ่ง {run_c:.1f}°C + บอส {cog_c:.1f}°C)"
         )
 
+        self._persist_completed_run()
         self._populate_tooltips()
         self._start_reveal_animation()
+
+    def _persist_completed_run(self) -> None:
+        """Persist a winning Game Run once; failures remain recoverable."""
+        gameplay = None
+        try:
+            gameplay = self.manager.get_screen("gameplay")
+            run_id = gameplay.session.run_record.run_id
+            if self._saved_run_id == run_id:
+                return
+            result = gameplay.controller.take_terminal_result()
+            if result is None:
+                result = gameplay.controller.finish()
+            repository = LocalCompletedRunRepository()
+            repository.save_completed_run(repository.last_player_name(), result)
+            gameplay.controller.set_recoverable_error(None)
+            self._saved_run_id = run_id
+        except Exception as error:
+            logger.exception("Completed Game Run could not be saved: %s", error)
+            if gameplay is not None:
+                notice = "บันทึกไม่สำเร็จ เกมยังเล่นต่อได้ กรุณาตรวจ error.log"
+                gameplay.controller.set_recoverable_error(notice)
+                self.summary_label.text = f"{self.summary_label.text}\n{notice}"
+            return
+
+        try:
+            TelemetryRecorder().record(
+                build_version=APP_VERSION,
+                play_duration_s=round(gameplay.session.elapsed(), 3),
+                terminal_reason="boss_victory",
+            )
+        except Exception as error:
+            logger.exception("Optional telemetry could not be recorded: %s", error)
 
     def on_leave(self) -> None:
         if self._reveal_event:

@@ -1,4 +1,4 @@
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 
 from core.junction_data import Junction, Side
 from core.state import RunMetrics
@@ -38,7 +38,7 @@ class PolicyChoiceSink(Protocol):
         policy_id: str,
         meter_deltas: dict[str, float],
         distance_m: int,
-        outcome: str = "left",
+        outcome: Literal["left", "right", "timeout"] = "left",
     ) -> None: ...
 
 
@@ -56,7 +56,7 @@ class YJunctionInteraction:
         policy_id: str,
         meter_deltas: dict[str, float],
         distance_m: int,
-        outcome: str,
+        outcome: Literal["left", "right", "timeout"],
     ) -> None:
         try:
             self.game_session.policy_choice(
@@ -110,7 +110,7 @@ class YJunctionInteraction:
             policy_id=junction.policy_id(side),
             meter_deltas=dict(selected_choice.meter_deltas),
             distance_m=distance_m,
-            outcome=choice_side,
+            outcome=side,
         )
 
     def handle_timeout(self, junction: Junction, distance_m: int, meter_penalty: float) -> None:

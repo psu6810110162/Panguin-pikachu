@@ -2,9 +2,9 @@ from kivy.clock import Clock
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 
-from core.audio import AudioManager
-from core.database import DatabaseManager
-from core.logger import logger
+from infrastructure.audio import AudioManager
+from infrastructure.database import DatabaseManager
+from infrastructure.logging_config import logger
 
 
 class HistoryScreen(Screen):

@@ -1,0 +1,49 @@
+name: Windows Release Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_license_gate:
+        description: "Require every asset license to be resolved"
+        required: true
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-build.txt
+      - name: Resource validation for RC
+        if: github.event_name == 'workflow_dispatch' && !inputs.release_license_gate
+        run: python -m scripts.validate_resources
+      - name: Resource validation for GA or explicit gate
+        if: github.event_name == 'push' || inputs.release_license_gate
+        run: python -m scripts.validate_resources --release
+      - run: python -m scripts.generate_build_info
+      - run: pyinstaller --noconfirm --clean PenguinDash.spec
+      - shell: pwsh
+        run: Copy-Item README.txt,CHANGELOG.md,KNOWN_ISSUES.md,LICENSES.md,THIRD_PARTY_NOTICES.md,build_info.json dist/PenguinDash/
+      - run: dist\PenguinDash\PenguinDash.exe --self-test
+      - run: python -m scripts.verify_client_bundle dist/PenguinDash
+      - name: Create ZIP and SHA-256
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/PenguinDash -DestinationPath PenguinDash-${{ github.ref_name }}-windows-x64.zip
+          (Get-FileHash PenguinDash-${{ github.ref_name }}-windows-x64.zip -Algorithm SHA256).Hash.ToLower() + "  PenguinDash-${{ github.ref_name }}-windows-x64.zip" | Set-Content PenguinDash-${{ github.ref_name }}-windows-x64.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PenguinDash-${{ github.ref_name }}-windows-x64
+          path: |
+            PenguinDash-${{ github.ref_name }}-windows-x64.zip
+            PenguinDash-${{ github.ref_name }}-windows-x64.zip.sha256
+          if-no-files-found: error

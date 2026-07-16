@@ -3,6 +3,10 @@
 > ไฟล์นี้เพิ่งเริ่มทำ — ยังไม่ครอบคลุมทุก asset ในโปรเจกต์ (งานย้อนหลังตรวจ license asset เดิมยังไม่เสร็จ)
 > เพิ่ม entry ใหม่ทุกครั้งที่โหลด asset จากภายนอกเข้ามาใช้จริง
 
+> **GA blocker:** legacy UI, gem และ audio assets ที่ระบุ `LicenseRef-PendingReview` ใน
+> `resource_manifest.json` ยังไม่มีหลักฐาน provenance/license ที่ยืนยันแล้ว เจ้าของ UI ต้อง
+> เติม source/license หรือแทนด้วย asset ที่มีหลักฐานก่อนสร้าง GA
+
 ## Fonts
 
 **Noto Sans Thai** — `assets/Component_UI/Font/NotoSansThai-Regular.ttf`

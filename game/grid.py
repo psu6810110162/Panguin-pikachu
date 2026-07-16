@@ -3,10 +3,10 @@ import random
 from core.boss_data import BossItemPlacement, load_boss_data
 from core.config import BOSS_DISTANCE_M, TILE_TO_METER
 from core.items import ItemType
-from core.logger import logger
 from core.spawning import SpawningSystem
 from core.state import load_difficulty
 from game.obstacle_factory import ObstacleFactory
+from infrastructure.logging_config import logger
 
 
 class Tile:
@@ -407,13 +407,14 @@ class GridManager:
             col += cur_dir[0]
             row += cur_dir[1]
             is_safe = self._add_center(col, row)
+            is_centerline = (col, row) in self.path
             self._add_width(col, row, cur_dir, is_safe=is_safe)
             if mark_fork:
                 self.fork_tiles.add((col, row))
 
             # สุ่มวาง Obstacle บน centerline (ยกเว้นช่วงแรกๆ)
             # ปรับโอกาสเหลือ 0.2 เพื่อไม่ให้รกเกินไปเมื่อซิกแซกถี่ขึ้น
-            if self._seg_count > 0 and random.random() < 0.2 and not mark_fork:
+            if self._seg_count > 0 and is_centerline and random.random() < 0.2 and not mark_fork:
                 # เช็คไม่ให้วางทับพิกัดเดิมที่มีกล่องอยู่แล้ว (กันการเจนซ้ำซ้อน)
                 if (col, row) not in self.obstacles:
                     dist = self.get_distance_m()
@@ -424,6 +425,7 @@ class GridManager:
             # [FIX] เช็คให้ชัวร์ว่าไม่ทับ Obstacle ที่เพิ่งวางไปหมาดๆ หรือที่มีอยู่แล้ว
             elif (
                 self._seg_count > 0
+                and is_centerline
                 and random.random() < 0.4
                 and not mark_fork
                 and (col, row) not in self.obstacles
@@ -434,6 +436,7 @@ class GridManager:
 
             if (
                 self._seg_count > 0
+                and is_centerline
                 and not mark_fork
                 and (col, row) not in self.obstacles
                 and (col, row) not in self.gems

@@ -1,72 +1,77 @@
-name: CI
+name: Game Release Gates
+
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
 
 jobs:
-  lint:
+  quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+      - run: python -m pip install --upgrade pip ruff mypy
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: python -m compileall -q core game infrastructure screens ui main.py
 
-      - name: Install lint/type-check tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff mypy
-
-      - name: ruff check
-        run: ruff check .
-
-      - name: ruff format --check
-        run: ruff format --check .
-
-      - name: mypy
-        run: mypy
-
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  game:
+    name: game-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
-      - name: Install system deps for Kivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libsdl2-dev libsdl2-image-dev \
-            libsdl2-mixer-dev libsdl2-ttf-dev libmtdev-dev \
-            xvfb
-
-      - name: Install python deps
+      - name: Install game test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
-      - name: Compile check
-        run: python -m compileall -q .
-
-      - name: Run tests
+          pip install -r requirements.txt pytest==8.4.*
+      - name: Validate resources
+        run: python -m scripts.validate_resources
+      - name: Run game tests
         env:
           KIVY_NO_ARGS: "1"
           KIVY_WINDOW: mock
-        run: pytest -v
-
-  docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: docker compose build (build only — catches a broken Dockerfile early)
-        run: docker compose build
+        run: >-
+          pytest -v
+          --ignore=tests/test_server.py
+          --ignore=tests/test_server_config.py
+          --ignore=tests/test_sync.py
+      - name: Install Windows builder
+        if: runner.os == 'Windows'
+        run: pip install -r requirements-build.txt
+      - name: Generate build metadata
+        if: runner.os == 'Windows'
+        run: python -m scripts.generate_build_info
+      - name: Build Windows onedir client
+        if: runner.os == 'Windows'
+        run: pyinstaller --noconfirm --clean PenguinDash.spec
+      - name: Add release documentation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Copy-Item README.txt,CHANGELOG.md,KNOWN_ISSUES.md,LICENSES.md,THIRD_PARTY_NOTICES.md,build_info.json dist/PenguinDash/
+      - name: Packaged self-test
+        if: runner.os == 'Windows'
+        run: dist\PenguinDash\PenguinDash.exe --self-test
+      - name: Verify client bundle
+        if: runner.os == 'Windows'
+        run: python -m scripts.verify_client_bundle dist/PenguinDash
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: PenguinDash-windows-${{ github.sha }}
+          path: dist/PenguinDash
+          if-no-files-found: error

@@ -37,9 +37,8 @@ def evaluate(
     # Stealth Assessment (Educational Score, ADR-011) — derive เสมอไม่ขึ้นกับ feature
     # flag ใด ๆ (flag ฝั่ง server คุมแค่ persist/แสดงผล ไม่คุม logic การคำนวณ — ดู ADR-012
     # และ server/config.py::STEALTH_ASSESSMENT_ENABLED)
-    # TODO(balance-v2): record.balance_version ถูก persist แล้วแต่ยังไม่ถูกใช้เลือกชุด
-    # ค่า balance ที่นี่ — scoring ใช้ balance/v1 เสมอ เมื่อมี balance/v2/ ต้อง branch ตาม
-    # record.balance_version เพื่อ replay run เก่าให้ตรง (ดู core/schema.py::balance_version)
+    # v0.1 supports balance/v1 only. A future balance-version migration must dispatch
+    # from record.balance_version so historical runs continue to replay identically.
     net_impact = stealth.net_impact_score_c(events)
     cognitive = stealth.cognitive_score_c(events)
     rank = stealth.rank_for(net_impact)

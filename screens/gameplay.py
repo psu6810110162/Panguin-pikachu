@@ -24,25 +24,24 @@ from core.asset_contract import (
     OBSTACLE_REVIEW_SHEET,
     PLAYER_REVIEW_SHEET,
 )
-from core.audio import AudioManager
 from core.config import BOSS_DISTANCE_M, TARGET_FPS, TILE_H, TILE_IMG_H, TILE_W
-from core.interaction import YJunctionInteraction, junction_prompt_text
-from core.items import Inventory, ItemType
+from core.interaction import junction_prompt_text
+from core.items import ItemType
 from core.junction_data import get_junction
-from core.logger import logger
 from core.messages import death_cause_text
-from core.session import GameSession
 from core.state import (
     DeathCause,
     DecisionPhase,
     GameOverReason,
-    RunMetrics,
     RunState,
     load_difficulty,
 )
+from game.controller import GameplayController, GameplayViewState
 from game.grid import VISIBLE_BUFFER, GridManager
 from game.particles import ParticleSystem
 from game.penguin import Penguin
+from infrastructure.audio import AudioManager
+from infrastructure.logging_config import logger
 from ui.components import (
     BossBanner,
     ChoiceCard,
@@ -534,7 +533,7 @@ class PauseOverlay(FloatLayout):
         )
 
     def sync_sound_button(self):
-        from core.audio import AudioManager
+        from infrastructure.audio import AudioManager
 
         if AudioManager().bgm_muted:
             self.btn_sound.background_normal = "assets/Component_UI/Button Sounds/volume_down.png"
@@ -544,7 +543,7 @@ class PauseOverlay(FloatLayout):
             self.btn_sound.background_down = "assets/Component_UI/Button Sounds/volume_up.png"
 
     def toggle_sound(self, *args):
-        from core.audio import AudioManager
+        from infrastructure.audio import AudioManager
 
         am = AudioManager()
         am.toggle_mute()
@@ -591,7 +590,12 @@ class ArrowButton(ButtonBehavior, Image):
 class GamePlayScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.grid = GridManager()
+        self.controller = GameplayController(
+            grid=GridManager(),
+            difficulty=load_difficulty(),
+            on_game_over=self._trigger_gameover_from_metrics,
+        )
+        self.grid = self.controller.grid
         self.penguin = Penguin()
         self.game_over = False
         self.game_event = None
@@ -607,10 +611,10 @@ class GamePlayScreen(Screen):
         self.pending_policy_zone: int | None = None
         self.handled_policy_zones: set[int] = set()
 
-        self.session = GameSession()
-        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
-        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
-        self.inventory = Inventory()
+        self.session = self.controller.session
+        self.metrics = self.controller.metrics
+        self.junction_interaction = self.controller.interaction
+        self.inventory = self.controller.inventory
         self.is_respawning = False
         self.respawn_count = 0
         self.decision_grace_active = False
@@ -1135,11 +1139,7 @@ class GamePlayScreen(Screen):
 
     def _trigger_gameover_from_metrics(self):
         self.penguin.is_dead = True
-        # หัวใจหมด/หลอดแตะ 100 ในบอส: ปิด record ให้ถึง terminal state
-        # (BOSS → FINISHED ถูก allow; RUNNING ไม่มี transition จบ — ติด contract
-        # state machine เดิม flag ไว้คุยกับ Dev B แล้ว ห้ามแก้ฝั่งเดียว)
-        if self.session.run_record.state == RunState.BOSS:
-            self.session.finish()
+        self.controller.finish(self.metrics.game_over_reason)
         if self._nav_event is None:
             self._nav_event = Clock.schedule_once(self._go_gameover, 0.8)
 
@@ -1232,11 +1232,12 @@ class GamePlayScreen(Screen):
         Card shows everything as "unplayed"). Checkpoint reset also depends on
         grid.reset() having run first, since it reads grid.path[0].
         """
-        self.session = GameSession()
-        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
-        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
-        self.inventory = Inventory()
-        self.session.start()
+        self.controller.start_run()
+        self.grid = self.controller.grid
+        self.session = self.controller.session
+        self.metrics = self.controller.metrics
+        self.junction_interaction = self.controller.interaction
+        self.inventory = self.controller.inventory
         self._cancel_pending_events()
         self.is_respawning = False
         self.respawn_count = 0
@@ -1255,9 +1256,16 @@ class GamePlayScreen(Screen):
 
     def _refresh_status_hud(self):
         """Sync hearts label + heat/anger bars กับ RunMetrics ปัจจุบัน — จุดเดียวใช้ทุก path"""
-        self.hearts_label.text = f"♥ {self.metrics.hearts}"
-        self.heat_bar.value = self.metrics.heat_meter
-        self.anger_bar.value = self.metrics.capitalist_anger
+        snapshot = self._view_state()
+        self.hearts_label.text = f"♥ {snapshot.hearts}"
+        self.heat_bar.value = snapshot.heat
+        self.anger_bar.value = snapshot.anger
+
+    def _view_state(self) -> GameplayViewState:
+        """Create a fresh immutable presentation snapshot for this update cycle."""
+        self.controller.gems = self.gems_collected
+        self.controller.decision_phase = self.decision_phase
+        return self.controller.view_state()
 
     def _update_inventory_hud(self):
         names = [item.value.replace("_", " ").title() for item in self.inventory.get_items()]
@@ -1317,10 +1325,11 @@ class GamePlayScreen(Screen):
             self._keyboard = None
 
     def update(self, dt):
-        dist = self.grid.get_distance_m()
+        snapshot = self._view_state()
+        dist = snapshot.distance_m
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
         self.score_label.text = f"SCORE: {dist_str}"
-        self.gem_label.text = f"GEMS {self.gems_collected}"
+        self.gem_label.text = f"GEMS {snapshot.gems}"
 
         self.grid.update_obstacles(
             dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row)
@@ -1346,7 +1355,7 @@ class GamePlayScreen(Screen):
 
         self.particle_system.update(dt)
         self.renderer.advance_visual(dt)
-        self.metrics.tick_grace(dt)
+        self.controller.tick(dt)
         self._update_decision(dt)
 
         if self.decision_phase is not None:
@@ -1574,7 +1583,7 @@ class GamePlayScreen(Screen):
                 self.boss_status_label.text = ""
                 self.boss_status_label.opacity = 0
                 self.boss_portrait.opacity = 0
-                self.session.finish()
+                self.controller.finish()
                 self._nav_event = Clock.schedule_once(self._go_report, 2.0)
                 return
             elif self.boss_wave_index > 3:
@@ -1733,6 +1742,7 @@ class GamePlayScreen(Screen):
 
     def pause_game(self):
         """Pause: unschedule game loop, show overlay, sync sound button."""
+        self.controller.pause()
         if self.game_event:
             self.game_event.cancel()
             self.game_event = None
@@ -1743,6 +1753,7 @@ class GamePlayScreen(Screen):
 
     def resume_game(self):
         """Resume: hide overlay, re-schedule game loop."""
+        self.controller.resume()
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:
@@ -1752,7 +1763,7 @@ class GamePlayScreen(Screen):
     def restart_game(self):
         """Full restart: clear grid, reset scores/gems, generate fresh 4x4 platform."""
         AudioManager().play_sfx("click")
-        self.grid.reset()
+        self._start_new_session()
         self.penguin.is_dead = False
         self.penguin.action = "Idle"
         self.penguin.action_timer = 0.0
@@ -1770,7 +1781,6 @@ class GamePlayScreen(Screen):
         self.renderer.cam_x = None
         self.renderer.cam_y = None
         self.renderer.tile_textures.clear()
-        self._start_new_session()
         self.boss_wall_label.text = ""
         self.boss_choices_label.text = ""
         self.boss_status_label.text = ""

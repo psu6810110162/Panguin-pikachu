@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "penguin-dash://schemas/balance-junctions-v1",
+  "type": "object",
+  "required": ["version", "meter_keys", "junctions"],
+  "properties": {
+    "version": {"type": "integer"},
+    "meter_keys": {"type": "array", "minItems": 2},
+    "junctions": {"type": "array", "minItems": 10}
+  }
+}
