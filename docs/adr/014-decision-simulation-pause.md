@@ -1,5 +1,7 @@
 # ADR-014: Pause simulation, continue presentation
 
+Status: Accepted; respawn-grace clause superseded by [ADR-015](015-respawn-grace-lifecycle.md)
+
 ## Decision
 
 Policy and boss decisions enter an explicit presentation phase. During that phase
@@ -11,10 +13,9 @@ timeout is recorded as `PolicyChoiceEvent.outcome="timeout"`; it is never encode
 as a fabricated left/right choice. Timeout applies the configured small meter
 penalty, does not remove a heart, and contributes no systemic-choice score.
 
-Respawn has a behavioral invariant rather than a UI-only delay: after returning to
-the checkpoint, the player cannot die from the same fallen-tile cause until they
-move or the configured invincibility grace expires. Simulation remains paused while
-the respawn timer runs, while presentation continues.
+Respawn has a behavioral invariant rather than a UI-only delay. Its lifecycle and
+the rule for when protection expires are defined by ADR-015. Simulation remains
+paused while the respawn timer runs, while presentation continues.
 
 ## Rationale
 

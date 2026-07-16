@@ -1,4 +1,4 @@
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 
 from core.junction_data import Junction, Side
 from core.state import RunMetrics
@@ -10,9 +10,17 @@ def junction_prompt_text(junction: Junction) -> str:
     เขียนบรรทัดคำสั่งให้ชัดว่า "เดินเข้าเลน" คือการเลือก ไม่ใช่มีปุ่มกดตอบ —
     ผู้เล่นทดสอบสับสนว่าไม่รู้จะ "ตอบ" ยังไงตอนโชว์ป้ายนี้
     """
+
+    def option_text(label: str, deltas: dict[str, float]) -> str:
+        heat = deltas.get("heat", 0.0)
+        anger = deltas.get("capitalist_anger", 0.0)
+        return f"{label} (Heat {heat:+g} · Anger {anger:+g})"
+
     return (
         f"{junction.situation}\n"
-        f"เดินเข้าเลนซ้าย/ขวาเพื่อเลือก — ซ้าย: {junction.left.label}  |  ขวา: {junction.right.label}"
+        f"ซ้าย: {option_text(junction.left.label, junction.left.meter_deltas)}\n"
+        f"ขวา: {option_text(junction.right.label, junction.right.meter_deltas)}\n"
+        "เดินเข้าเลนซ้าย/ขวาเพื่อเลือก"
     )
 
 
@@ -30,7 +38,7 @@ class PolicyChoiceSink(Protocol):
         policy_id: str,
         meter_deltas: dict[str, float],
         distance_m: int,
-        outcome: str = "left",
+        outcome: Literal["left", "right", "timeout"] = "left",
     ) -> None: ...
 
 
@@ -48,7 +56,7 @@ class YJunctionInteraction:
         policy_id: str,
         meter_deltas: dict[str, float],
         distance_m: int,
-        outcome: str,
+        outcome: Literal["left", "right", "timeout"],
     ) -> None:
         try:
             self.game_session.policy_choice(
@@ -102,7 +110,7 @@ class YJunctionInteraction:
             policy_id=junction.policy_id(side),
             meter_deltas=dict(selected_choice.meter_deltas),
             distance_m=distance_m,
-            outcome=choice_side,
+            outcome=side,
         )
 
     def handle_timeout(self, junction: Junction, distance_m: int, meter_penalty: float) -> None:

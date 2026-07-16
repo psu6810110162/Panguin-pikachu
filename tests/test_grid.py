@@ -35,6 +35,39 @@ def test_reset_is_idempotent():
     assert grid.next_zone in (1, 2)
 
 
+def test_update_tiles_can_suppress_current_tile_trigger_during_grace():
+    grid = GridManager()
+    grid.reset()
+    current = grid.path[0]
+    tile = grid.path_set[current]
+    tile.state = "normal"
+    tile.trigger_timer = 0.0
+
+    grid.update_tiles(1.0, current, suppress_current_tile_trigger=True)
+
+    assert tile.state == "normal"
+    assert tile.trigger_timer == 0.0
+
+
+def test_update_tiles_suppression_does_not_pause_other_triggered_tiles():
+    grid = GridManager()
+    grid.reset()
+    current = grid.path[0]
+    other = grid.path[1]
+    tile = grid.path_set[current]
+    tile.state = "normal"
+    tile.trigger_timer = 0.0
+    other_tile = grid.path_set[other]
+    other_tile.is_safe = False
+    other_tile.state = "triggered"
+    other_tile.trigger_timer = 1.0
+
+    grid.update_tiles(0.25, current, suppress_current_tile_trigger=True)
+
+    assert tile.state == "normal"
+    assert other_tile.trigger_timer == 0.75
+
+
 def test_step_forward_and_distance():
     grid = GridManager()
     grid.reset()

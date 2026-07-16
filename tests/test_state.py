@@ -40,6 +40,11 @@ def test_respawn_and_resume_running():
     validate_transition(RunState.RESPAWNING, RunState.RUNNING)
 
 
+def test_game_over_can_finish_from_running_or_respawning():
+    validate_transition(RunState.RUNNING, RunState.FINISHED)
+    validate_transition(RunState.RESPAWNING, RunState.FINISHED)
+
+
 def test_rejects_out_of_order_transition():
     with pytest.raises(InvalidTransitionError):
         validate_transition(RunState.LOBBY, RunState.BOSS)

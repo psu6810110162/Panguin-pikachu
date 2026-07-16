@@ -1,0 +1,56 @@
+{
+  "evaluation": {
+    "posttest_pct": 90.0,
+    "pretest_pct": 40.0,
+    "starting_heat": 50.0,
+    "total_missions": 2
+  },
+  "run_record": {
+    "balance_version": "v1",
+    "events": [
+      {
+        "checkpoint_index": 1,
+        "distance_m": 100,
+        "event_type": "checkpoint_reached",
+        "timestamp": 0.1
+      },
+      {
+        "checkpoint_index": 1,
+        "distance_m": 100,
+        "event_type": "policy_choice",
+        "meter_deltas": {"capitalist_anger": 25, "heat": -20},
+        "outcome": "right",
+        "policy_id": "zone1-right",
+        "timestamp": 0.2
+      },
+      {
+        "distance_m": 300,
+        "event_type": "mission_complete",
+        "mission_id": "mission-a",
+        "module_index": 0,
+        "timestamp": 0.3
+      },
+      {
+        "correct": true,
+        "distance_m": 800,
+        "event_type": "quiz_answer",
+        "phase": "posttest",
+        "question_id": "1",
+        "quiz_id": "q1",
+        "timestamp": 0.4
+      },
+      {
+        "distance_m": 1000,
+        "event_type": "boss_phase",
+        "outcome": "damage_dealt",
+        "phase": 1,
+        "timestamp": 0.5
+      }
+    ],
+    "player_id": "golden-player",
+    "result": null,
+    "run_id": "golden-run-v1",
+    "schema_version": "1.0",
+    "state": "RUNNING"
+  }
+}

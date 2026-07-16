@@ -1,5 +1,7 @@
 # Timeline
 
+> **Historical reference:** สถานะและ timeline ปัจจุบันย้ายไป [GAME_FIRST_PLAN.md](GAME_FIRST_PLAN.md#status) เพื่อไม่ให้ checklist หลายไฟล์ขัดกัน
+
 สถานะปัจจุบัน (PR-based, GDD V.2) อยู่ด้านบน — แผน 3 วันดั้งเดิม (D1–D9, foundation) เก็บไว้ด้านล่างเป็น historical reference
 
 ---

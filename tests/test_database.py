@@ -1,16 +1,30 @@
-import core.database as database
-from core.database import DatabaseManager
+import sqlite3
+
+import pytest
+
+from infrastructure.database import (
+    DATABASE_SCHEMA_VERSION,
+    SAVE_VERSION,
+    DatabaseManager,
+    UnsupportedSchemaVersionError,
+)
 
 
 def _fresh_db(monkeypatch, tmp_path):
-    """DatabaseManager เป็น singleton hardcode DB_FILE — reset instance +
-    ชี้ DB_FILE ไปไฟล์ชั่วคราวต่อเทสต์ กัน state รั่วข้ามเทสต์"""
+    """Use an isolated writable database for every test."""
     db_file = tmp_path / "test_game.db"
-    monkeypatch.setattr(database, "DB_FILE", str(db_file))
-    DatabaseManager._instance = None
-    db = DatabaseManager()
+    DatabaseManager.reset_for_tests()
+    db = DatabaseManager(db_file)
     db.connect()
     return db
+
+
+def test_database_versions_are_recorded(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    assert db.conn is not None
+    assert db.conn.execute("PRAGMA user_version").fetchone()[0] == DATABASE_SCHEMA_VERSION
+    row = db.conn.execute("SELECT value FROM app_metadata WHERE key = 'save_version'").fetchone()
+    assert row[0] == str(SAVE_VERSION)
 
 
 def test_get_history_empty_when_no_runs(monkeypatch, tmp_path):
@@ -75,3 +89,46 @@ def test_get_personal_best_returns_max_distance(monkeypatch, tmp_path):
 def test_get_personal_best_zero_when_no_runs(monkeypatch, tmp_path):
     db = _fresh_db(monkeypatch, tmp_path)
     assert db.get_personal_best("Nobody") == 0
+
+
+def test_corrupted_database_is_renamed_and_recovered(monkeypatch, tmp_path):
+    db_file = tmp_path / "game.db"
+    db_file.write_bytes(b"not a sqlite database")
+    DatabaseManager.reset_for_tests()
+
+    db = DatabaseManager(db_file)
+    db.connect()
+
+    assert db.recovery_notice is not None
+    assert db.get_history("Nobody") == []
+    assert list(tmp_path.glob("game.db.corrupt-*"))
+
+
+def test_newer_schema_is_not_renamed_or_recovered(tmp_path):
+    db_file = tmp_path / "future.db"
+    conn = sqlite3.connect(db_file)
+    conn.execute("PRAGMA user_version=999")
+    conn.commit()
+    conn.close()
+
+    DatabaseManager.reset_for_tests()
+    db = DatabaseManager(db_file)
+    with pytest.raises(UnsupportedSchemaVersionError, match="newer"):
+        db.connect()
+
+    assert db.recovery_notice is not None
+    assert "newer game version" in db.recovery_notice
+    assert db_file.exists()
+    assert not list(tmp_path.glob("future.db.corrupt-*"))
+
+
+def test_terminal_reason_and_state_are_persisted(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.save_game_session(
+        "Alice", distance=42, gems=1, run_state="FINISHED", terminal_reason="hearts"
+    )
+
+    history = db.get_history("Alice")
+
+    assert history[0]["run_state"] == "FINISHED"
+    assert history[0]["terminal_reason"] == "hearts"

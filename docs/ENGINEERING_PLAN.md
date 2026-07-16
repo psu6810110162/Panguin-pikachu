@@ -1,5 +1,7 @@
 # Engineering Plan — Penguin Dash (NSC2026)
 
+> **Historical/extended architecture reference:** แผนที่ใช้ดำเนินงานปัจจุบันคือ [GAME_FIRST_PLAN.md](GAME_FIRST_PLAN.md). Backend, Teacher Dashboard, Sync และ Docker ในเอกสารนี้เป็น P2 optional จนกว่า Game Release จะเสร็จ
+
 ทีม 2 คน: **เพื่อน (Antigravity CLI)** และ **คุณ (Claude Code)**. ฐานโค้ด: `main` หลัง merge [#22](https://github.com/psu6810110162/Panguin-pikachu/pull/22) (rewrite ทั้งหมดของเพื่อน) บวก [#23](https://github.com/psu6810110162/Panguin-pikachu/pull/23) (foundation: tooling/CI/tests/docs)
 
 ดู [OVERVIEW.md](OVERVIEW.md) สำหรับภาพรวมเกมและสารบัญหน้าจอ, [GAME_DESIGN.md](GAME_DESIGN.md) สำหรับ GDD V.2 เต็ม, [SPRINT_2DAY.md](SPRINT_2DAY.md)/[TIMELINE.md](TIMELINE.md) สำหรับตารางงาน, [state-machines.md](state-machines.md) สำหรับ state machine

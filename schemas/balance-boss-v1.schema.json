@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "penguin-dash://schemas/balance-boss-v1",
+  "type": "object",
+  "required": ["version", "boss_id", "armor", "items", "waves"],
+  "properties": {
+    "version": {"type": "integer"},
+    "boss_id": {"type": "string"},
+    "armor": {"type": "integer"},
+    "items": {"type": "array", "minItems": 3},
+    "waves": {"type": "array", "minItems": 3}
+  }
+}

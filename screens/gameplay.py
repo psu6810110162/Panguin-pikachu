@@ -17,18 +17,31 @@ from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 
-from core.asset_contract import BOSS_REVIEW_SHEET, DRONE_REVIEW_SHEET, ENVIRONMENT_TILE_ATLAS
-from core.audio import AudioManager
+from core.asset_contract import (
+    BOSS_REVIEW_SHEET,
+    DRONE_REVIEW_SHEET,
+    ENVIRONMENT_TILE_ATLAS,
+    OBSTACLE_REVIEW_SHEET,
+    PLAYER_REVIEW_SHEET,
+)
 from core.config import BOSS_DISTANCE_M, TARGET_FPS, TILE_H, TILE_IMG_H, TILE_W
-from core.interaction import YJunctionInteraction, junction_prompt_text
-from core.items import Inventory, ItemType
+from core.interaction import junction_prompt_text
+from core.items import ItemType
 from core.junction_data import get_junction
-from core.logger import logger
-from core.session import GameSession
-from core.state import DecisionPhase, RunMetrics, RunState, load_difficulty
+from core.messages import death_cause_text
+from core.state import (
+    DeathCause,
+    DecisionPhase,
+    GameOverReason,
+    RunState,
+    load_difficulty,
+)
+from game.controller import GameplayController, GameplayViewState
 from game.grid import VISIBLE_BUFFER, GridManager
 from game.particles import ParticleSystem
 from game.penguin import Penguin
+from infrastructure.audio import AudioManager
+from infrastructure.logging_config import logger
 from ui.components import (
     BossBanner,
     ChoiceCard,
@@ -37,21 +50,9 @@ from ui.components import (
     HoverButton,
     HudRail,
     MeterBar,
+    ProgressRing,
     StateOverlay,
 )
-
-GRASS_TILES = [
-    "assets/isometric-nature-pack/grass1.png",
-    "assets/isometric-nature-pack/grass2.png",
-    "assets/isometric-nature-pack/grass3.png",
-    "assets/isometric-nature-pack/grass4.png",
-    "assets/isometric-nature-pack/grass5.png",
-    "assets/isometric-nature-pack/grass6.png",
-    "assets/isometric-nature-pack/grass7.png",
-    "assets/isometric-nature-pack/grass8.png",
-    "assets/isometric-nature-pack/grass9.png",
-    "assets/isometric-nature-pack/grass10.png",
-]
 
 ARROW_RIGHT_IMG = "assets/Component_UI/Vector/arrow_right_normal.png"
 ARROW_LEFT_IMG = "assets/Component_UI/Vector/arrow_left_normal.png"
@@ -74,12 +75,12 @@ class KivyRenderer(Widget):
         super().__init__(**kwargs)
         self.tile_textures = {}
         self.anim_frame = 0
-        self._grass_textures = [CoreImage(p).texture for p in GRASS_TILES]
-        self.box_assets = {
-            "Idle": CoreImage("assets/pixelAdventure/Free/Items/Boxes/Box2/Idle.png").texture,
-            "Hit": CoreImage("assets/pixelAdventure/Free/Items/Boxes/Box2/Hit (28x24).png").texture,
-            "Break": CoreImage("assets/pixelAdventure/Free/Items/Boxes/Box2/Break.png").texture,
-        }
+        self.player_sheet_texture = CoreImage(
+            "assets/generated/character/penguin_sheet_v2.png"
+        ).texture
+        self.obstacle_sheet_texture = CoreImage(
+            "assets/generated/obstacles/obstacle_sheet_v1.png"
+        ).texture
         self.gem_texture = CoreImage("assets/Gem/Coin_Gems/spr_coin_strip4.png").texture
         self.background_texture = CoreImage(
             "assets/generated/background/gameplay_background_v1.png"
@@ -137,12 +138,6 @@ class KivyRenderer(Widget):
         # generated tile language visible throughout the run.
         variant = "cool" if (col * 7 + row * 11) % 4 else "frozen"
         return self._environment_textures[variant]
-
-    def _get_fallback_tile_texture(self, col, row):
-        key = (col, row)
-        if key not in self.tile_textures:
-            self.tile_textures[key] = random.choice(self._grass_textures)
-        return self.tile_textures[key]
 
     def grid_to_screen(self, col, row):
         return GridManager.to_isometric(col, row, TILE_W, TILE_H)
@@ -313,13 +308,12 @@ class KivyRenderer(Widget):
             if penguin.visual_x is not None:
                 px, py = penguin.visual_x, penguin.visual_y
 
-            skin_path = penguin.get_skin_path()
-            if skin_path not in self.tile_textures:
-                self.tile_textures[skin_path] = CoreImage(skin_path).texture
-            skin_tex = self.tile_textures[skin_path]
-            if penguin.facing_left:
-                skin_tex = skin_tex.get_region(32, 0, -32, 32)
-            pw, ph = 64, 64
+            skin_tex = self.player_sheet_texture.get_region(
+                *PLAYER_REVIEW_SHEET.cell_origin(penguin.get_generated_frame_name()),
+                PLAYER_REVIEW_SHEET.frame_width,
+                PLAYER_REVIEW_SHEET.frame_height,
+            )
+            pw, ph = 96, 128
             Color(1, 1, 1, 1)
             Rectangle(
                 texture=skin_tex,
@@ -338,25 +332,12 @@ class KivyRenderer(Widget):
 
             px, py = penguin.visual_x, penguin.visual_y
 
-            # Action frame cycling
-            frames_count = penguin.ACTION_FRAMES.get(penguin.action, 1)
-            self.anim_frame = (self.anim_frame + 0.3) % max(1, frames_count)
-            frame_idx = int(self.anim_frame) % max(1, frames_count)
-
-            skin_path = penguin.get_skin_path()
-            cache_key = f"{skin_path}_{frame_idx}_{'L' if penguin.facing_left else 'R'}"
-            if cache_key not in self.tile_textures:
-                if skin_path not in self.tile_textures:
-                    self.tile_textures[skin_path] = CoreImage(skin_path).texture
-                full_tex = self.tile_textures[skin_path]
-                if penguin.facing_left:
-                    self.tile_textures[cache_key] = full_tex.get_region(
-                        (frame_idx + 1) * 32, 0, -32, 32
-                    )
-                else:
-                    self.tile_textures[cache_key] = full_tex.get_region(frame_idx * 32, 0, 32, 32)
-            skin_tex = self.tile_textures[cache_key]
-            pw, ph = 64, 64
+            skin_tex = self.player_sheet_texture.get_region(
+                *PLAYER_REVIEW_SHEET.cell_origin(penguin.get_generated_frame_name()),
+                PLAYER_REVIEW_SHEET.frame_width,
+                PLAYER_REVIEW_SHEET.frame_height,
+            )
+            pw, ph = 96, 128
             Color(1, 1, 1, 1)
             Rectangle(
                 texture=skin_tex,
@@ -366,14 +347,26 @@ class KivyRenderer(Widget):
 
     def _draw_obstacle(self, obs, tx, ty, ox, oy):
         """
-        Draw stacked crate layers using stack_height for visual degradation.
-        When hit, the top layer is removed visually before the hit animation plays.
+        Draw stacked ice/carbon hazard layers using stack_height for degradation.
+        Gameplay still owns hit/deactivation; this method only selects the
+        matching generated visual state.
         """
-        state = obs.state
-        frame = int(obs.anim_frame)
-        full_tex = self.box_assets.get(state)
-        tex = full_tex.get_region(frame * 28, 0, 28, 24)
-        bw, bh = 56, 48
+        if obs.state == obs.STATE_HIT:
+            frame_name = "hit"
+        elif obs.state == obs.STATE_BREAK:
+            frame_name = "breaking"
+        elif obs.stack_height <= 1 and obs.size > 1:
+            frame_name = "almost_destroyed"
+        elif obs.stack_height < obs.size:
+            frame_name = "damaged"
+        else:
+            frame_name = "idle"
+        tex = self.obstacle_sheet_texture.get_region(
+            *OBSTACLE_REVIEW_SHEET.cell_origin(frame_name),
+            OBSTACLE_REVIEW_SHEET.frame_width,
+            OBSTACLE_REVIEW_SHEET.frame_height,
+        )
+        bw, bh = 100, 100
         Color(1, 1, 1, 1)
         # Use stack_height (not hp) for number of layers to render
         layers = max(1, obs.stack_height) if obs.active else max(1, obs.hp)
@@ -541,7 +534,7 @@ class PauseOverlay(FloatLayout):
         )
 
     def sync_sound_button(self):
-        from core.audio import AudioManager
+        from infrastructure.audio import AudioManager
 
         if AudioManager().bgm_muted:
             self.btn_sound.background_normal = "assets/Component_UI/Button Sounds/volume_down.png"
@@ -551,7 +544,7 @@ class PauseOverlay(FloatLayout):
             self.btn_sound.background_down = "assets/Component_UI/Button Sounds/volume_up.png"
 
     def toggle_sound(self, *args):
-        from core.audio import AudioManager
+        from infrastructure.audio import AudioManager
 
         am = AudioManager()
         am.toggle_mute()
@@ -596,9 +589,34 @@ class ArrowButton(ButtonBehavior, Image):
 
 
 class GamePlayScreen(Screen):
+    @property
+    def session(self):
+        """Read-only view of the current run session owned by the controller."""
+        return self.controller.session
+
+    @property
+    def metrics(self):
+        """Read-only view of the current run metrics owned by the controller."""
+        return self.controller.metrics
+
+    @property
+    def junction_interaction(self):
+        """Read-only view of the current interaction service."""
+        return self.controller.interaction
+
+    @property
+    def inventory(self):
+        """Read-only view of the current run inventory."""
+        return self.controller.inventory
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.grid = GridManager()
+        self.controller = GameplayController(
+            grid=GridManager(),
+            difficulty=load_difficulty(),
+            on_game_over=self._trigger_gameover_from_metrics,
+        )
+        self.grid = self.controller.grid
         self.penguin = Penguin()
         self.game_over = False
         self.game_event = None
@@ -612,18 +630,14 @@ class GamePlayScreen(Screen):
         self.decision_remaining = 0.0
         self.decision_grace_active = False
         self.pending_policy_zone: int | None = None
-        self.pending_policy_side: str | None = None
         self.handled_policy_zones: set[int] = set()
 
-        self.session = GameSession()
-        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
-        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
-        self.inventory = Inventory()
         self.is_respawning = False
         self.respawn_count = 0
-        self.respawn_grace_active = False
-        self.respawn_grace_remaining = 0.0
         self.decision_grace_active = False
+        self._respawn_event = None
+        self._respawn_remaining = 0.0
+        self._nav_event = None
         self._boss_warning_shown = False
         self.grid.reset()
         self.last_checkpoint_col = self.grid.path[0][0]
@@ -641,11 +655,11 @@ class GamePlayScreen(Screen):
 
         self.hud_bg = HudRail(
             orientation="horizontal",
-            size_hint=(0.80, None),
-            height=68,
-            spacing=16,
-            padding=[18, 10, 18, 10],
-            pos_hint={"center_x": 0.60, "top": 0.975},
+            size_hint=(0.90, None),
+            height=64,
+            spacing=8,
+            padding=[14, 8, 14, 8],
+            pos_hint={"center_x": 0.53, "top": 0.975},
         )
 
         self.score_label = Label(
@@ -655,12 +669,16 @@ class GamePlayScreen(Screen):
             font_name="assets/Component_UI/Font/Kenney Future.ttf",
             outline_width=2,
             outline_color=(0, 0, 0, 1),
-            size_hint_x=None,
+            size_hint=(None, None),
+            size=(220, 40),
+            halign="left",
+            valign="middle",
+            text_size=(220, 40),
         )
-        self.score_label.bind(texture_size=self.score_label.setter("size"))
 
-        gem_box = BoxLayout(orientation="horizontal", size_hint=(None, None), height=40, spacing=10)
-        gem_box.bind(minimum_width=gem_box.setter("width"))
+        gem_box = BoxLayout(
+            orientation="horizontal", size_hint=(None, None), size=(108, 40), spacing=4
+        )
 
         gem_tex = CoreImage("assets/Gem/Coin_Gems/spr_coin_strip4.png").texture.get_region(
             0, 0, 16, 16
@@ -668,15 +686,18 @@ class GamePlayScreen(Screen):
         gem_icon = Image(texture=gem_tex, size_hint=(None, None), size=(40, 40))
 
         self.gem_label = Label(
-            text="x 0",
-            font_size="22sp",
+            text="GEMS 0",
+            font_size="15sp",
             bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
             outline_width=2,
             outline_color=(0, 0, 0, 1),
-            size_hint_x=None,
+            size_hint=(None, None),
+            size=(66, 40),
+            halign="left",
+            valign="middle",
+            text_size=(66, 40),
         )
-        self.gem_label.bind(texture_size=self.gem_label.setter("size"))
 
         gem_box.add_widget(gem_icon)
         gem_box.add_widget(self.gem_label)
@@ -684,20 +705,24 @@ class GamePlayScreen(Screen):
         self.hud_bg.add_widget(self.score_label)
         self.hud_bg.add_widget(gem_box)
         self.hearts_label = Label(
-            text=f"Hearts: {self.metrics.hearts}",
-            font_size="18sp",
+            text=f"♥ {self.metrics.hearts}",
+            font_size="20sp",
             bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
-            size_hint_x=None,
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+            color=(1.0, 0.55, 0.75, 1.0),
+            size_hint=(None, None),
+            size=(92, 40),
+            halign="center",
+            valign="middle",
+            text_size=(92, 40),
         )
-        self.hearts_label.bind(texture_size=self.hearts_label.setter("size"))
         self.heat_bar = MeterBar(
             value=self.metrics.heat_meter,
             max_value=self.metrics.max_meter,
             warn_threshold=0.8 * self.metrics.max_meter,
             bar_color=[1, 0.5, 0.2, 1],
             size_hint=(None, None),
-            size=(110, 16),
+            size=(126, 14),
         )
         self.anger_bar = MeterBar(
             value=self.metrics.capitalist_anger,
@@ -705,37 +730,58 @@ class GamePlayScreen(Screen):
             warn_threshold=0.8 * self.metrics.max_meter,
             bar_color=[0.8, 0.2, 0.2, 1],
             size_hint=(None, None),
-            size=(110, 16),
+            size=(126, 14),
         )
 
         def _meter_column(caption, bar):
             column = BoxLayout(
-                orientation="vertical", size_hint=(None, None), size=(110, 40), spacing=2
+                orientation="vertical", size_hint=(None, None), size=(126, 42), spacing=2
             )
             column.add_widget(
                 Label(
                     text=caption,
-                    font_size="12sp",
+                    font_size="11sp",
                     bold=True,
-                    font_name="assets/Component_UI/Font/Kenney Future.ttf",
+                    font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+                    color=(0.9, 0.95, 1.0, 1.0),
                     size_hint=(1, None),
-                    height=16,
+                    height=20,
+                    halign="center",
+                    valign="middle",
+                    text_size=(126, 20),
                 )
             )
             column.add_widget(bar)
             return column
 
         self.hud_bg.add_widget(self.hearts_label)
-        self.hud_bg.add_widget(_meter_column("HEAT", self.heat_bar))
-        self.hud_bg.add_widget(_meter_column("ANGER", self.anger_bar))
+        self.hud_bg.add_widget(_meter_column("HEAT · โลก", self.heat_bar))
+        self.hud_bg.add_widget(_meter_column("ANGER · เศรษฐกิจ", self.anger_bar))
+        self.meter_hint_label = Label(
+            text="แตะ 100 = แพ้",
+            font_size="12sp",
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+            color=(0.8, 0.9, 1.0, 0.9),
+            size_hint=(None, None),
+            size=(112, 42),
+            halign="center",
+            valign="middle",
+            text_size=(112, 42),
+        )
+        self.hud_bg.add_widget(self.meter_hint_label)
         self.inventory_label = Label(
             text="Items: -",
-            font_size="16sp",
+            font_size="14sp",
             bold=True,
             font_name="assets/Component_UI/Font/Kenney Future.ttf",
-            size_hint_x=None,
+            size_hint=(None, None),
+            size=(270, 40),
+            halign="left",
+            valign="middle",
+            text_size=(270, 40),
+            shorten=True,
+            shorten_from="right",
         )
-        self.inventory_label.bind(texture_size=self.inventory_label.setter("size"))
         self.hud_bg.add_widget(self.inventory_label)
 
         self.add_widget(self.hud_bg)
@@ -812,7 +858,7 @@ class GamePlayScreen(Screen):
         self.checkpoint_label.bind(texture_size=self.checkpoint_label.setter("size"))
         self.add_widget(self.checkpoint_label)
         self.respawn_overlay = StateOverlay(
-            text="RESPAWNING...",
+            text="RESPAWNING...\nกำลังสร้างเส้นทางปลอดภัย",
             font_size="30sp",
             color=(0.65, 0.9, 1.0, 1),
             size_hint=(1, 1),
@@ -824,6 +870,26 @@ class GamePlayScreen(Screen):
             disabled=True,
         )
         self.add_widget(self.respawn_overlay)
+        self.respawn_ring = ProgressRing(
+            size_hint=(None, None),
+            size=(96, 96),
+            pos_hint={"center_x": 0.5, "center_y": 0.42},
+            opacity=0,
+        )
+        self.add_widget(self.respawn_ring)
+        self.respawn_grace_label = Label(
+            text="",
+            font_size="18sp",
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+            color=(0.55, 0.95, 1.0, 1),
+            size_hint=(None, None),
+            size=(520, 36),
+            pos_hint={"center_x": 0.5, "center_y": 0.32},
+            halign="center",
+            valign="middle",
+            opacity=0,
+        )
+        self.add_widget(self.respawn_grace_label)
 
         # Boss UI
         self.boss_wall_label = Label(
@@ -878,8 +944,8 @@ class GamePlayScreen(Screen):
                 BOSS_REVIEW_SHEET.frame_height,
             ),
             size_hint=(None, None),
-            size=(176, 176),
-            pos_hint={"center_x": 0.5, "center_y": 0.80},
+            size=(224, 190),
+            pos_hint={"right": 0.95, "top": 0.60},
             allow_stretch=True,
             keep_ratio=True,
             opacity=0,
@@ -949,6 +1015,11 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.decision_countdown)
 
+        # Keep the boss portrait above the decision dimmer so the character is
+        # readable during every wave instead of becoming a dark silhouette.
+        self.remove_widget(self.boss_portrait)
+        self.add_widget(self.boss_portrait)
+
     def _build_decision_choice(self, title, pos_hint, accent):
         """Create one keyboard-mapped choice card without owning game logic."""
         card = ChoiceCard(
@@ -994,12 +1065,13 @@ class GamePlayScreen(Screen):
     def _open_policy_decision(self, zone_id: int):
         junction = get_junction(zone_id)
         cfg = load_difficulty().get("decision", {})
+        AudioManager().play_sfx("quiz_open")
         self.decision_phase = DecisionPhase.POLICY
         self._set_drone_pose("point_forward")
         self.decision_zone = zone_id
         self.decision_ready = False
-        self.decision_intro_remaining = float(cfg.get("intro_seconds", 0.8))
-        self.decision_remaining = float(cfg.get("policy_seconds", 8.0))
+        self.decision_intro_remaining = float(cfg.get("intro_seconds", 1.5))
+        self.decision_remaining = float(cfg.get("policy_seconds", 15.0))
         self.decision_card.text = f"ZONE {zone_id}\n{junction.situation}"
         self.decision_left.text = f"←  {junction.left.label}"
         self.decision_right.text = f"{junction.right.label}  →"
@@ -1013,6 +1085,7 @@ class GamePlayScreen(Screen):
 
     def _open_boss_decision(self, wave_no: int):
         cfg = load_difficulty().get("decision", {})
+        AudioManager().play_sfx("boss_alert")
         sides = {
             placement.side: placement.item_id
             for placement in self.grid.boss_items.values()
@@ -1022,8 +1095,8 @@ class GamePlayScreen(Screen):
         self._set_drone_pose("warning")
         self.decision_zone = wave_no
         self.decision_ready = False
-        self.decision_intro_remaining = float(cfg.get("intro_seconds", 0.8))
-        self.decision_remaining = float(cfg.get("boss_seconds", 6.0))
+        self.decision_intro_remaining = float(cfg.get("intro_seconds", 1.5))
+        self.decision_remaining = float(cfg.get("boss_seconds", 12.0))
         self.decision_card.text = f"BOSS WAVE {wave_no}\nเลือกหลักฐานที่หักล้างกำแพงนี้"
         self.decision_left.text = f"←  {sides.get('left', '?')}"
         self.decision_right.text = f"{sides.get('right', '?')}  →"
@@ -1066,15 +1139,15 @@ class GamePlayScreen(Screen):
             self.handled_policy_zones.add(zone_id)
             penalty = float(load_difficulty().get("decision", {}).get("timeout_meter_penalty", 5.0))
             try:
-                self.junction_interaction.handle_timeout(
+                self.controller.resolve_timeout(
                     get_junction(zone_id), self.grid.get_distance_m(), penalty
                 )
             except KeyError:
                 logger.warning("No junction data for timeout zone %s", zone_id)
             self.pending_policy_zone = None
-            self.pending_policy_side = None
             self.show_checkpoint_message("TIMEOUT — ไม่มีการเลือก")
         elif self.decision_phase is DecisionPhase.BOSS:
+            AudioManager().play_sfx("wrong")
             self.show_checkpoint_message("TIMEOUT — เลือกเลนขวาอัตโนมัติ")
             self._close_decision()
             self._move(DIR_RIGHT)
@@ -1093,44 +1166,30 @@ class GamePlayScreen(Screen):
             tile.offset_y = 0.0
             tile.fall_velocity = 0.0
 
-    def _apply_policy_route(self, direction):
-        """Keep the selected answer meaningful without moving during the quiz."""
-        if self.pending_policy_zone is None or self.pending_policy_side is None:
-            return direction
+    def _blocked_in_decision_corridor(self, new_col: int, new_row: int) -> bool:
+        """Block an invalid input in the corridor after a policy quiz.
 
-        candidates = []
-        for candidate in (DIR_LEFT, DIR_RIGHT):
-            position = (
-                self.penguin.col + candidate[0],
-                self.penguin.row + candidate[1],
-            )
-            tile = self.grid.path_set.get(position)
-            if tile:
-                candidates.append((candidate, tile))
-                if (
-                    tile.zone_id == self.pending_policy_zone
-                    and tile.side == self.pending_policy_side
-                ):
-                    # At the actual split, the quiz answer owns the lane.
-                    return candidate
+        The quiz chooses policy semantics only; it never chooses the movement
+        lane.  Until the physical split is reached, a wrong-direction input is
+        ignored rather than silently redirected or treated as a fall.
+        """
+        return self.pending_policy_zone is not None and not self.grid.is_on_path(new_col, new_row)
 
-        # Prompt tiles are placed a few steps before the split.  If there is
-        # only one physical continuation, keep the player on the generated path
-        # until the selected left/right entries become available.
-        if len(candidates) == 1:
-            return candidates[0][0]
-        return direction
+    def _cancel_pending_events(self) -> None:
+        """Cancel callbacks owned by this screen before replacing a run."""
+        for attr in ("_respawn_event", "_nav_event"):
+            event = getattr(self, attr)
+            if event is not None:
+                event.cancel()
+                setattr(self, attr, None)
 
     def _trigger_gameover_from_metrics(self):
         self.penguin.is_dead = True
-        # หัวใจหมด/หลอดแตะ 100 ในบอส: ปิด record ให้ถึง terminal state
-        # (BOSS → FINISHED ถูก allow; RUNNING ไม่มี transition จบ — ติด contract
-        # state machine เดิม flag ไว้คุยกับ Dev B แล้ว ห้ามแก้ฝั่งเดียว)
-        if self.session.run_record.state == RunState.BOSS:
-            self.session.finish()
-        Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+        if self._nav_event is None:
+            self._nav_event = Clock.schedule_once(self._go_gameover, 0.8)
 
     def _respawn_penguin(self, dt=None):
+        self._respawn_event = None
         self.penguin.is_dead = False
         self.is_respawning = False
         self.penguin.col = self.last_checkpoint_col
@@ -1143,7 +1202,6 @@ class GamePlayScreen(Screen):
         self.idle_timer = 0.0
         self.decision_grace_active = False
         self.pending_policy_zone = None
-        self.pending_policy_side = None
         checkpoint_index = self.grid.get_path_index(
             self.last_checkpoint_col, self.last_checkpoint_row
         )
@@ -1156,9 +1214,9 @@ class GamePlayScreen(Screen):
             self.last_checkpoint_row,
             tiles_ahead=VISIBLE_BUFFER,
         )
-        self.respawn_grace_active = True
-        self.respawn_grace_remaining = self.metrics.invincible_seconds
-        self.metrics.is_invincible = True
+        self.controller.complete_respawn()
+        if self.metrics.last_death_cause is not None:
+            self.show_checkpoint_message(death_cause_text(self.metrics.last_death_cause))
         self.renderer.trigger_shake(0)
         self.renderer.cam_x = None
         self.renderer.cam_y = None
@@ -1166,52 +1224,52 @@ class GamePlayScreen(Screen):
         self.junction_banner.text = ""
         self.respawn_overlay.opacity = 0
         self.respawn_overlay.disabled = True
+        self.respawn_ring.opacity = 0
+        self.respawn_grace_label.opacity = 1
         self._close_decision()
         # RESPAWNING → RUNNING ตาม state machine (ADR-010 / state-machines.md §3)
-        if self.session.state == RunState.RESPAWNING:
-            self.session.resume_after_respawn()
+        self.controller.resume_after_respawn()
 
-    def _handle_fall(self):
+    def _handle_fall(self, cause: DeathCause) -> bool:
         if self.is_respawning or self.penguin.is_dead:
-            return
-        # A respawn grace window protects the player from the same collapsing
-        # tile while the checkpoint is being restored.  Do not mark the sprite
-        # dead before ``decrease_heart``: that method intentionally ignores
-        # damage while invincible, and doing so would otherwise leave the
-        # penguin falling forever with no respawn scheduled.
-        if self.metrics.is_invincible or self.respawn_grace_active:
+            return False
+        if not self.controller.request_death(cause):
             current_tile = self.grid.path_set.get((self.penguin.col, self.penguin.row))
             if current_tile and current_tile.state == "falling":
                 current_tile.state = "normal"
                 current_tile.trigger_timer = 0.0
                 current_tile.fall_velocity = 0.0
             self.idle_timer = 0.0
-            return
+            return False
         self.penguin.is_dead = True
-        self.metrics.decrease_heart()
         self._refresh_status_hud()
         if self.metrics.needs_respawn:
-            self.metrics.needs_respawn = False
             self.is_respawning = True
             self.respawn_count += 1
             # ADR-002/010: RUNNING → RESPAWNING + RespawnEvent (respawn_count,
             # score_penalty 10%) — การหักคะแนนจริงเป็นหน้าที่ scoring ฝั่ง server
-            if self.session.state == RunState.RUNNING:
-                self.session.begin_respawn()
-                self.session.respawn(
-                    checkpoint_col=self.last_checkpoint_col,
-                    checkpoint_row=self.last_checkpoint_row,
-                    respawn_count=self.respawn_count,
-                    score_penalty=0.1,
-                    distance_m=self.grid.get_distance_m(),
-                )
+            self.controller.begin_respawn()
+            self.controller.record_respawn(
+                checkpoint_col=self.last_checkpoint_col,
+                checkpoint_row=self.last_checkpoint_row,
+                respawn_count=self.respawn_count,
+                distance_m=self.grid.get_distance_m(),
+            )
             # The full-screen StateOverlay is the single respawn composition;
             # do not show a second toast carrying the same message underneath.
             Animation.cancel_all(self.checkpoint_label)
             self.checkpoint_label.opacity = 0
             self.respawn_overlay.opacity = 1
             self.respawn_overlay.disabled = False
-            Clock.schedule_once(self._respawn_penguin, self.metrics.respawn_seconds)
+            self._respawn_remaining = self.metrics.respawn_seconds
+            self.respawn_ring.progress = 0.0
+            self.respawn_ring.opacity = 1
+            self.respawn_grace_label.opacity = 0
+            AudioManager().play_sfx("respawn")
+            self._respawn_event = Clock.schedule_once(
+                self._respawn_penguin, self.metrics.respawn_seconds
+            )
+        return True
 
     def _start_new_session(self):
         """Create the session, metrics, and junction interaction as one run unit.
@@ -1223,23 +1281,20 @@ class GamePlayScreen(Screen):
         Card shows everything as "unplayed"). Checkpoint reset also depends on
         grid.reset() having run first, since it reads grid.path[0].
         """
-        self.session = GameSession()
-        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
-        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
-        self.inventory = Inventory()
-        self.session.start()
+        self.controller.start_run()
+        self.grid = self.controller.grid
+        self._cancel_pending_events()
         self.is_respawning = False
         self.respawn_count = 0
-        self.respawn_grace_active = False
-        self.respawn_grace_remaining = 0.0
         self._boss_warning_shown = False
         self.active_prompt_zone = None
         self.pending_policy_zone = None
-        self.pending_policy_side = None
         self.handled_policy_zones.clear()
         self.junction_banner.text = ""
         self.respawn_overlay.opacity = 0
         self.respawn_overlay.disabled = True
+        self.respawn_ring.opacity = 0
+        self.respawn_grace_label.opacity = 0
         self.checkpoint_label.opacity = 0
         start = self.grid.path[0]
         self.last_checkpoint_col, self.last_checkpoint_row = start
@@ -1248,9 +1303,17 @@ class GamePlayScreen(Screen):
 
     def _refresh_status_hud(self):
         """Sync hearts label + heat/anger bars กับ RunMetrics ปัจจุบัน — จุดเดียวใช้ทุก path"""
-        self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
-        self.heat_bar.value = self.metrics.heat_meter
-        self.anger_bar.value = self.metrics.capitalist_anger
+        snapshot = self._view_state()
+        self.hearts_label.text = f"♥ {snapshot.hearts}"
+        self.heat_bar.value = snapshot.heat
+        self.anger_bar.value = snapshot.anger
+
+    def _view_state(self) -> GameplayViewState:
+        """Create a fresh immutable presentation snapshot for this update cycle."""
+        self.controller.set_view_context(
+            gems=self.gems_collected, decision_phase=self.decision_phase
+        )
+        return self.controller.view_state()
 
     def _update_inventory_hud(self):
         names = [item.value.replace("_", " ").title() for item in self.inventory.get_items()]
@@ -1310,15 +1373,19 @@ class GamePlayScreen(Screen):
             self._keyboard = None
 
     def update(self, dt):
-        dist = self.grid.get_distance_m()
+        snapshot = self._view_state()
+        dist = snapshot.distance_m
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
         self.score_label.text = f"SCORE: {dist_str}"
-        self.gem_label.text = f"x {self.gems_collected}"
+        self.gem_label.text = f"GEMS {snapshot.gems}"
 
-        self.grid.update_obstacles(
-            dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row)
-        )
-        self.grid.cleanup_behind(self.path_index)
+        # Decision and respawn states pause the simulation clock. Presentation
+        # animation still advances below, but obstacles and cleanup do not.
+        if self.decision_phase is None and not self.is_respawning:
+            self.grid.update_obstacles(
+                dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row)
+            )
+            self.grid.cleanup_behind(self.path_index)
 
         # Physics update
         if self.penguin.is_dead:
@@ -1339,12 +1406,21 @@ class GamePlayScreen(Screen):
 
         self.particle_system.update(dt)
         self.renderer.advance_visual(dt)
-        if self.respawn_grace_active:
-            self.respawn_grace_remaining -= dt
-            if self.respawn_grace_remaining <= 0:
-                self.respawn_grace_active = False
-                self.metrics.is_invincible = False
+        if self.decision_phase is None:
+            self.controller.tick(dt)
         self._update_decision(dt)
+
+        if self.is_respawning:
+            duration = max(0.001, self.metrics.respawn_seconds)
+            self._respawn_remaining = max(0.0, self._respawn_remaining - dt)
+            self.respawn_ring.progress = min(1.0, 1.0 - (self._respawn_remaining / duration))
+        elif self.metrics.grace_active:
+            self.respawn_grace_label.text = (
+                f"ปลอดภัยชั่วคราว · ขยับต่อได้ ({self.metrics.grace_remaining:.1f}s)"
+            )
+            self.respawn_grace_label.opacity = 1
+        else:
+            self.respawn_grace_label.opacity = 0
 
         if self.decision_phase is not None:
             self.renderer.draw(self.grid, self.penguin, self.path_index)
@@ -1356,13 +1432,19 @@ class GamePlayScreen(Screen):
             and not self.decision_grace_active
             and self.game_started
         ):
-            self.grid.update_tiles(dt, (self.penguin.col, self.penguin.row))
+            self.grid.update_tiles(
+                dt,
+                (self.penguin.col, self.penguin.row),
+                suppress_current_tile_trigger=self.metrics.grace_active,
+            )
 
             # Check if penguin's tile is falling
             current_tile = self.grid.path_set.get((self.penguin.col, self.penguin.row))
             if current_tile and current_tile.state == "falling":
                 AudioManager().play_sfx("Down")
-                self._handle_fall()
+                if self._handle_fall(DeathCause.MELT):
+                    self.renderer.draw(self.grid, self.penguin, self.path_index)
+                    return
 
             self.idle_timer += dt
             is_shaking = current_tile and current_tile.state == "triggered"
@@ -1373,7 +1455,9 @@ class GamePlayScreen(Screen):
                     current_tile.state = "falling"
                     current_tile.fall_velocity = 0.0
                     AudioManager().play_sfx("Down")
-                    self._handle_fall()
+                    if self._handle_fall(DeathCause.IDLE):
+                        self.renderer.draw(self.grid, self.penguin, self.path_index)
+                        return
 
             self.renderer.draw(
                 self.grid, self.penguin, self.path_index, is_shaking_floor=is_shaking
@@ -1382,7 +1466,11 @@ class GamePlayScreen(Screen):
             # Respawn pauses gameplay simulation; rendering and presentation still
             # run, but no additional tiles may decay while the player is away.
             if not self.is_respawning and not self.decision_grace_active:
-                self.grid.update_tiles(dt, (self.penguin.col, self.penguin.row))
+                self.grid.update_tiles(
+                    dt,
+                    (self.penguin.col, self.penguin.row),
+                    suppress_current_tile_trigger=self.metrics.grace_active,
+                )
             self.renderer.draw(self.grid, self.penguin, self.path_index)
 
     def _move(self, direction):
@@ -1403,18 +1491,18 @@ class GamePlayScreen(Screen):
                 return
             decision_phase = self.decision_phase
             selected_side = "left" if direction == DIR_LEFT else "right"
+            AudioManager().play_sfx(f"choice_{selected_side}")
             if decision_phase is DecisionPhase.POLICY and self.decision_zone is not None:
                 zone_id = self.decision_zone
                 # A quiz answer is a semantic choice, not a movement command.
                 # Keep the penguin on the prompt tile; the selected side is
-                # applied only when movement later reaches the actual split.
+                # not a movement command and does not own a lane.
                 self.pending_policy_zone = zone_id
-                self.pending_policy_side = selected_side
                 self.handled_policy_zones.add(zone_id)
                 try:
                     junction = get_junction(zone_id)
                     before = (self.metrics.heat_meter, self.metrics.capitalist_anger)
-                    self.junction_interaction.handle_choice(
+                    self.controller.choose_policy(
                         junction, selected_side, self.grid.get_distance_m()
                     )
                     self._refresh_status_hud()
@@ -1430,7 +1518,6 @@ class GamePlayScreen(Screen):
 
         if self.decision_grace_active:
             self.decision_grace_active = False
-        direction = self._apply_policy_route(direction)
 
         if direction == DIR_LEFT:
             self.penguin.facing_left = True
@@ -1439,6 +1526,9 @@ class GamePlayScreen(Screen):
 
         new_col = self.penguin.col + direction[0]
         new_row = self.penguin.row + direction[1]
+        if self._blocked_in_decision_corridor(new_col, new_row):
+            self.idle_timer = 0.0
+            return
 
         # ── Obstacle collision check ──
         obs = self.grid.get_obstacle_at(new_col, new_row)
@@ -1448,7 +1538,7 @@ class GamePlayScreen(Screen):
             AudioManager().play_sfx("Hit")
             self.idle_timer = 0
             self.game_started = True
-            self.session.obstacle_hit(
+            self.controller.record_obstacle_hit(
                 col=new_col,
                 row=new_row,
                 damage=1,
@@ -1486,7 +1576,7 @@ class GamePlayScreen(Screen):
                 f"[COLLECT] Gem ที่ ({new_col}, {new_row}) ชนิด {tile_type} | รวม: {self.gems_collected}"
             )
             self.grid.gems.pop((new_col, new_row), None)
-            self.session.collect(
+            self.controller.collect(
                 item_type="gem",
                 col=new_col,
                 row=new_row,
@@ -1497,8 +1587,8 @@ class GamePlayScreen(Screen):
         item = self.grid.get_scientific_item_at(new_col, new_row)
         if item:
             self.grid.scientific_items.pop((new_col, new_row), None)
-            if self.inventory.add_item(item):
-                self.session.collect(
+            if self.controller.add_inventory_item(item):
+                self.controller.collect(
                     item_type="scientific_item",
                     col=new_col,
                     row=new_row,
@@ -1519,23 +1609,22 @@ class GamePlayScreen(Screen):
             # ผลของแต่ละเวฟอ่านจาก balance/v1/boss.json (on_correct/on_wrong ใช้
             # key "boss_armor"/"hearts") — ไม่ hardcode เพื่อให้ balance pass แก้ data ได้
             if is_correct:
-                AudioManager().play_sfx("Coin")
+                AudioManager().play_sfx("correct")
                 if wave_data:
                     self.boss_hp += wave_data.on_correct.get("boss_armor", -1)
-                self.session.boss_phase(
+                self.controller.record_boss_phase(
                     phase=placement.wave,
                     outcome="damage_dealt",
                     distance_m=self.grid.get_distance_m(),
                 )
                 self.show_checkpoint_message("CORRECT!")
             else:
-                AudioManager().play_sfx("Down")
+                AudioManager().play_sfx("wrong")
                 hearts_delta = wave_data.on_wrong.get("hearts", -1) if wave_data else -1
                 # ในบอสไม่มี fall-respawn (state-machines.md §3) — เสียหัวใจตรง ๆ
-                # ห้ามตั้ง needs_respawn/is_invincible ไม่งั้น invincible ค้างถาวร
                 for _ in range(-hearts_delta):
-                    self.metrics.decrease_heart(allow_respawn=False)
-                self.session.boss_phase(
+                    self.controller.request_death(None, allow_respawn=False)
+                self.controller.record_boss_phase(
                     phase=placement.wave,
                     outcome="damaged",
                     distance_m=self.grid.get_distance_m(),
@@ -1549,18 +1638,20 @@ class GamePlayScreen(Screen):
 
             if self.boss_hp <= 0:
                 self._set_drone_pose("report_celebration")
-                self.session.boss_victory(
+                self.controller.record_boss_victory(
                     total_time_s=self.session.elapsed() - self.boss_start_time,
                     distance_m=self.grid.get_distance_m(),
                 )
                 self.show_checkpoint_message("BOSS DEFEATED!")
+                AudioManager().play_sfx("victory")
                 self.boss_wall_label.text = ""
                 self.boss_choices_label.text = ""
                 self.boss_status_label.text = ""
                 self.boss_status_label.opacity = 0
                 self.boss_portrait.opacity = 0
-                self.session.finish()
-                Clock.schedule_once(lambda dt: self._go_report(), 2.0)
+                self.controller.finish()
+                self._nav_event = Clock.schedule_once(self._go_report, 2.0)
+                return
             elif self.boss_wave_index > 3:
                 self.show_checkpoint_message("FAILED TO DEFEAT BOSS!")
                 self.boss_wall_label.text = ""
@@ -1569,7 +1660,8 @@ class GamePlayScreen(Screen):
                 self.boss_status_label.opacity = 0
                 self.boss_portrait.opacity = 0
                 # trigger_game_over → callback ปิด record (BOSS → FINISHED) ให้เอง
-                self.metrics.trigger_game_over()
+                self.controller.trigger_game_over(GameOverReason.BOSS)
+                return
             else:
                 self._update_boss_ui(self.boss_wave_index)
                 self._open_boss_decision(self.boss_wave_index)
@@ -1577,12 +1669,6 @@ class GamePlayScreen(Screen):
         # ── Move penguin to new position ──
         self.penguin.col = new_col
         self.penguin.row = new_row
-        if self.respawn_grace_active and (new_col, new_row) != (
-            self.last_checkpoint_col,
-            self.last_checkpoint_row,
-        ):
-            self.respawn_grace_active = False
-            self.metrics.is_invincible = False
         self.game_started = True
 
         self.penguin.action = "Jump"
@@ -1608,7 +1694,7 @@ class GamePlayScreen(Screen):
             if zone_id not in self.handled_policy_zones:
                 try:
                     junction = get_junction(zone_id)
-                    self.junction_interaction.handle_choice(
+                    self.controller.choose_policy(
                         junction, side, distance_m=self.grid.get_distance_m()
                     )
                     self._refresh_status_hud()
@@ -1616,7 +1702,6 @@ class GamePlayScreen(Screen):
                     logger.warning("No junction data for resolved zone %s", zone_id)
             if zone_id == self.pending_policy_zone:
                 self.pending_policy_zone = None
-                self.pending_policy_side = None
 
         if self.grid.is_on_path(new_col, new_row):
             self.grid.step_forward()
@@ -1627,7 +1712,7 @@ class GamePlayScreen(Screen):
             if idx >= 0:
                 self.path_index = idx
                 self.grid.extend_if_needed(self.path_index)
-                AudioManager().play_sfx("Jump")
+                AudioManager().play_sfx("step")
                 # Normal movement is intentionally stable; camera shake is
                 # reserved for collisions/falls so the first run does not feel
                 # like the player sprite is vibrating continuously.
@@ -1638,7 +1723,7 @@ class GamePlayScreen(Screen):
                     self.show_checkpoint_message(f"{dist_m}M REACHED!")
                     self.last_checkpoint_col = self.penguin.col
                     self.last_checkpoint_row = self.penguin.row
-                    self.session.checkpoint_reached(
+                    self.controller.record_checkpoint(
                         checkpoint_index=self.grid.forward_tiles // 100,
                         distance_m=dist_m,
                     )
@@ -1650,7 +1735,7 @@ class GamePlayScreen(Screen):
                     self._boss_warning_shown = True
 
             if dist_m >= BOSS_DISTANCE_M and self.session.run_record.state == RunState.RUNNING:
-                self.session.enter_boss(distance_m=dist_m)
+                self.controller.enter_boss(distance_m=dist_m)
                 self.show_checkpoint_message("BOSS PHASE STARTED!")
                 self.boss_wave_index = 1
                 from core.boss_data import load_boss_data
@@ -1665,12 +1750,14 @@ class GamePlayScreen(Screen):
             # ไม่ game over ตรง ๆ — หัวใจหมดค่อยจบผ่าน callback ของ RunMetrics
             AudioManager().play_sfx("Down")
             logger.info(f"ตกนอกเส้นทาง! ระยะ {self.grid.get_distance_m()} m")
-            self._handle_fall()
+            self._handle_fall(DeathCause.FALL)
 
-    def _go_gameover(self):
+    def _go_gameover(self, _dt=None):
+        self._nav_event = None
         self.manager.current = "gameover"
 
-    def _go_report(self):
+    def _go_report(self, _dt=None):
+        self._nav_event = None
         self.manager.current = "report"
 
     def _update_boss_ui(self, wave_no=None):
@@ -1709,6 +1796,9 @@ class GamePlayScreen(Screen):
             f"CARBON BARON  //  WAVE {wave_no}/3  //  ARMOR {max(0, self.boss_hp)}"
         )
         self.boss_status_label.opacity = 1
+        Animation.cancel_all(self.boss_portrait)
+        self.boss_portrait.opacity = 0
+        Animation(opacity=1, duration=0.25, t="out_quad").start(self.boss_portrait)
 
         sides = {
             placement.side: placement.item_id
@@ -1721,6 +1811,7 @@ class GamePlayScreen(Screen):
 
     def pause_game(self):
         """Pause: unschedule game loop, show overlay, sync sound button."""
+        self.controller.pause()
         if self.game_event:
             self.game_event.cancel()
             self.game_event = None
@@ -1731,6 +1822,7 @@ class GamePlayScreen(Screen):
 
     def resume_game(self):
         """Resume: hide overlay, re-schedule game loop."""
+        self.controller.resume()
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:
@@ -1740,7 +1832,7 @@ class GamePlayScreen(Screen):
     def restart_game(self):
         """Full restart: clear grid, reset scores/gems, generate fresh 4x4 platform."""
         AudioManager().play_sfx("click")
-        self.grid.reset()
+        self._start_new_session()
         self.penguin.is_dead = False
         self.penguin.action = "Idle"
         self.penguin.action_timer = 0.0
@@ -1758,7 +1850,6 @@ class GamePlayScreen(Screen):
         self.renderer.cam_x = None
         self.renderer.cam_y = None
         self.renderer.tile_textures.clear()
-        self._start_new_session()
         self.boss_wall_label.text = ""
         self.boss_choices_label.text = ""
         self.boss_status_label.text = ""
@@ -1796,11 +1887,8 @@ class GamePlayScreen(Screen):
             self.btn_right.handle_press()
             return True
         elif keycode[1] == "spacebar" and self.inventory.has_item(ItemType.ECO_SEED):
-            if self.inventory.use_item(ItemType.ECO_SEED):
+            if self.controller.use_eco_seed():
                 eco_seed = load_difficulty().get("eco_seed", {})
-                self.metrics.update_meters(
-                    heat_delta=float(eco_seed.get("heat_reduction", 0.0)), anger_delta=0
-                )
                 if eco_seed.get("repairs_blocks", False):
                     for (col, row), tile in self.grid.path_set.items():
                         if abs(col - self.penguin.col) <= 1 and abs(row - self.penguin.row) <= 1:

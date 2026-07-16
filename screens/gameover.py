@@ -1,51 +1,92 @@
 from kivy.clock import Clock
 from kivy.uix.screenmanager import Screen
 
-from core.audio import AudioManager
-from core.database import DatabaseManager
-from core.logger import logger
+from core.messages import game_over_reason_text
+from infrastructure.audio import AudioManager
+from infrastructure.logging_config import logger
+from infrastructure.repository import LocalCompletedRunRepository
+from infrastructure.telemetry import TelemetryRecorder
+from infrastructure.version import APP_VERSION
 
 
 class GameOverScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ GameOver")
-        db = DatabaseManager()
+        gameplay = None
+        reason = None
+        self.terminal_result = None
+        self._save_enabled = False
+        self.distance = 0
+        self.gems = 0
+        self.reason = "ไม่ทราบสาเหตุ"
 
-        # 1. พรีฟิลชื่อล่าสุด
-        last_name = db.get_last_player_name()
-        if "name_input" in self.ids:
-            self.ids.name_input.text = last_name
-
-        # 2. ดึงข้อมูลจากหน้า gameplay
+        # Read the terminal snapshot independently from optional profile I/O.
         try:
             gameplay = self.manager.get_screen("gameplay")
-            self.distance = int(gameplay.grid.get_distance_m())
-            self.gems = gameplay.gems_collected
-        except Exception as e:
-            logger.error(f"Error getting gameplay data: {e}")
-            self.distance = 0
-            self.gems = 0
+            snapshot = gameplay.controller.view_state()
+            self.terminal_result = gameplay.controller.take_terminal_result()
+            if self.terminal_result is None:
+                self.terminal_result = gameplay.controller.finish(snapshot.terminal_reason)
+            self.distance = self.terminal_result.distance_m
+            self.gems = self.terminal_result.gems
+            reason = self.terminal_result.reason
+            self.reason = game_over_reason_text(reason) if reason is not None else "ไม่ทราบสาเหตุ"
+            self._save_enabled = True
+        except Exception as error:
+            logger.exception("Error getting terminal gameplay data: %s", error)
+            if gameplay is not None:
+                gameplay.controller.set_recoverable_error("ไม่พบผลลัพธ์จบรอบ จึงยังบันทึกคะแนนไม่ได้")
+
+        # Prefill is optional; failure here must not hide the terminal result.
+        try:
+            last_name = LocalCompletedRunRepository().last_player_name()
+            if "name_input" in self.ids:
+                self.ids.name_input.text = last_name
+        except Exception as error:
+            logger.exception("Could not load last player name: %s", error)
+
+        if gameplay is not None and self.terminal_result is not None and reason is not None:
+            try:
+                TelemetryRecorder().record(
+                    build_version=APP_VERSION,
+                    play_duration_s=round(self.terminal_result.duration_s, 3),
+                    terminal_reason=reason.value,
+                )
+            except Exception as error:
+                logger.exception("Optional telemetry could not be recorded: %s", error)
 
         # แสดงผลคะแนน
         if "score_label" in self.ids:
             self.ids.score_label.text = f"DISTANCE: {self.distance} M"
+        if "reason_label" in self.ids:
+            self.ids.reason_label.text = self.reason
         self._saved = False
 
     def _save_data(self):
         if hasattr(self, "_saved") and self._saved:
+            return
+        if not self._save_enabled or self.terminal_result is None:
+            logger.warning("Save skipped: terminal result is unavailable")
             return
         name = self.ids.name_input.text.strip() if "name_input" in self.ids else "Penguin"
         if not name:
             name = "Penguin"
 
         try:
-            db = DatabaseManager()
-            db.save_game_session(name, distance=self.distance, gems=self.gems)
+            repository = LocalCompletedRunRepository()
+            repository.save_completed_run(name, self.terminal_result)
+            gameplay = self.manager.get_screen("gameplay")
+            gameplay.controller.set_recoverable_error(None)
             logger.info(f"บันทึกข้อมูลเรียบร้อยสำหรับ {name}: {self.distance}m, {self.gems} gems")
             self._saved = True
 
         except Exception as e:
-            logger.error(f"Error saving session: {e}")
+            logger.exception("Error saving Game Run: %s", e)
+            gameplay = self.manager.get_screen("gameplay")
+            notice = "บันทึกไม่สำเร็จ เกมยังเล่นต่อได้ กรุณาตรวจ error.log"
+            gameplay.controller.set_recoverable_error(notice)
+            if "reason_label" in self.ids:
+                self.ids.reason_label.text = f"{self.reason}\n{notice}"
 
     def retry_game(self):
         self._save_data()

@@ -1,5 +1,7 @@
 # Penguin Dash — Overview (NSC2026)
 
+> **Game-First scope:** รอบ release ปัจจุบันเป็น Local Single-player ตาม [GAME_FIRST_PLAN.md](GAME_FIRST_PLAN.md). ขั้นตอน Sync และ Teacher Dashboard ด้านล่างเป็นภาพอนาคต P2 ไม่ใช่ release blocker
+
 10-นาทีอ่านจบ: นี่คือเกมอะไร เล่นยังไง มีกี่หน้าจอ แต่ละหน้าทำอะไร
 
 ## แนวเกม

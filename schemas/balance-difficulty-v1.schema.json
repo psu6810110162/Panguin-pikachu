@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "penguin-dash://schemas/balance-difficulty-v1",
+  "type": "object",
+  "required": ["version", "meters", "hearts", "eco_seed", "items", "decision", "scoring"],
+  "properties": {
+    "version": {"type": "integer"},
+    "meters": {"type": "object"},
+    "hearts": {"type": "object"},
+    "eco_seed": {"type": "object"},
+    "items": {"type": "object"},
+    "decision": {"type": "object"},
+    "scoring": {"type": "object"}
+  }
+}

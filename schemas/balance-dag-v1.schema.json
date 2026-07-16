@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "penguin-dash://schemas/balance-dag-v1",
+  "type": "object",
+  "required": ["version", "nodes", "edges"],
+  "properties": {
+    "version": {"type": "integer"},
+    "nodes": {"type": "array", "minItems": 1},
+    "edges": {"type": "array", "minItems": 1}
+  }
+}

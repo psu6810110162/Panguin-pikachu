@@ -1,8 +1,8 @@
 from kivy.clock import Clock
 from kivy.uix.screenmanager import Screen
 
-from core.audio import AudioManager
-from core.logger import logger
+from infrastructure.audio import AudioManager
+from infrastructure.logging_config import logger
 
 
 class MenuScreen(Screen):

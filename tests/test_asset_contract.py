@@ -1,4 +1,12 @@
-from core.asset_contract import BOSS_REVIEW_SHEET, DRONE_REVIEW_SHEET, ENVIRONMENT_TILE_ATLAS
+from pathlib import Path
+
+from core.asset_contract import (
+    BOSS_REVIEW_SHEET,
+    DRONE_REVIEW_SHEET,
+    ENVIRONMENT_TILE_ATLAS,
+    OBSTACLE_REVIEW_SHEET,
+    PLAYER_REVIEW_SHEET,
+)
 
 
 def test_boss_review_sheet_has_stable_named_cells():
@@ -24,3 +32,22 @@ def test_environment_atlas_keeps_named_variant_order():
 def test_drone_contract_covers_all_support_states():
     assert DRONE_REVIEW_SHEET.cell_origin("warning") == (0, 0)
     assert DRONE_REVIEW_SHEET.cell_origin("report_celebration") == (627, 0)
+
+
+def test_player_runtime_sheet_contract_matches_generated_atlas():
+    assert PLAYER_REVIEW_SHEET.cell_origin("idle") == (0, 512)
+    assert PLAYER_REVIEW_SHEET.cell_origin("run_left") == (384, 512)
+    assert PLAYER_REVIEW_SHEET.cell_origin("respawn") == (1152, 0)
+    assert PLAYER_REVIEW_SHEET.frame_width * PLAYER_REVIEW_SHEET.columns == 1536
+    assert PLAYER_REVIEW_SHEET.frame_height * PLAYER_REVIEW_SHEET.rows == 1024
+
+
+def test_obstacle_runtime_sheet_is_versioned_and_transparent():
+    path = Path("assets/generated/obstacles/obstacle_sheet_v1.png")
+    assert path.is_file()
+    from PIL import Image
+
+    image = Image.open(path)
+    assert image.mode == "RGBA"
+    assert image.getpixel((0, 0))[3] == 0
+    assert OBSTACLE_REVIEW_SHEET.cell_origin("breaking") == (0, 0)

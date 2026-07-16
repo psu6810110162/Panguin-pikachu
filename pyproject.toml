@@ -1,3 +1,8 @@
+[project]
+name = "penguin-dash"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
@@ -17,7 +22,7 @@ ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
-files = ["core", "server"]
+files = ["core", "server", "infrastructure"]
 exclude = ["^server/migrations/"]
 ignore_missing_imports = true
 check_untyped_defs = true
