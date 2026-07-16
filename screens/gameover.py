@@ -52,13 +52,7 @@ class GameOverScreen(Screen):
         AudioManager().play_sfx("click")
         # รีเซ็ตสถานะเกมก่อนกลับไปเล่น
         gameplay = self.manager.get_screen("gameplay")
-        gameplay.grid.reset()
-        gameplay.penguin.is_dead = False
-        start_pos = gameplay.grid.path[0]
-        gameplay.penguin.col = start_pos[0]
-        gameplay.penguin.row = start_pos[1]
-        gameplay.path_index = 0
-        gameplay.gems_collected = 0  # รีเซ็ตเพชรที่เก็บได้ในรอบใหม่
+        gameplay.restart_game()
 
         Clock.schedule_once(lambda dt: self._go_gameplay(), 0.2)
 

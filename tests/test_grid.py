@@ -22,6 +22,19 @@ def test_reset_builds_start_platform_and_preloads_segments():
     assert (0, 0) in grid.path_set
 
 
+def test_reset_is_idempotent():
+    grid = GridManager()
+    grid.reset()
+    grid.forward_tiles = 12
+    grid._boss_wave = 2
+    grid.next_zone = 7
+    grid.reset()
+
+    assert grid.forward_tiles == 0
+    assert grid._boss_wave == 0
+    assert grid.next_zone in (1, 2)
+
+
 def test_step_forward_and_distance():
     grid = GridManager()
     grid.reset()
@@ -105,3 +118,47 @@ def test_cleanup_behind_removes_stale_obstacles_and_gems():
 
     assert pos not in grid.obstacles
     assert pos not in grid.gems
+
+
+def test_repair_path_ahead_of_checkpoint_restores_destroyed_tiles():
+    """Regression: update_tiles decays a tile's trigger_timer globally once
+    triggered, regardless of whether the player is still standing on it — so
+    a stretch the player walked before dying can fully melt away while they
+    wait to respawn. Without a repair step, respawning back at the checkpoint
+    then walking forward immediately falls off the (now-missing) path again."""
+    grid = GridManager()
+    grid.reset()
+
+    checkpoint = grid.path[0]
+    stretch = grid.path[1:10]
+    for pos in stretch:
+        tile = grid.path_set[pos]
+        tile.state = "falling"
+        tile.offset_y = -2000  # past the destroy threshold
+    for pos in stretch:
+        grid.path_set.pop(pos, None)
+
+    for pos in stretch:
+        assert not grid.is_on_path(*pos)
+
+    grid.repair_path_ahead_of_checkpoint(*checkpoint)
+
+    for pos in stretch:
+        assert grid.is_on_path(*pos)
+        assert grid.path_set[pos].state == "normal"
+
+
+def test_repair_path_ahead_of_checkpoint_resets_triggered_tiles_without_removing_them():
+    grid = GridManager()
+    grid.reset()
+
+    checkpoint = grid.path[0]
+    pos = grid.path[3]
+    tile = grid.path_set[pos]
+    tile.state = "triggered"
+    tile.trigger_timer = 0.1
+
+    grid.repair_path_ahead_of_checkpoint(*checkpoint)
+
+    assert grid.path_set[pos].state == "normal"
+    assert grid.path_set[pos].trigger_timer == 1.2

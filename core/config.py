@@ -1,3 +1,5 @@
+import os
+
 # ตั้งค่าหน้าจอ
 WINDOW_WIDTH = 1920
 WINDOW_HEIGHT = 1080
@@ -8,6 +10,7 @@ GRID_WIDTH = 100
 GRID_HEIGHT = 100
 TILE_SIZE = 1  # ปรับสเกลภาพของช่องเดิน
 TILE_TO_METER = 1  # 1 ช่อง = ระยะ 1 เมตร
+BOSS_DISTANCE_M = int(os.getenv("PENGUIN_BOSS_DISTANCE_M", "1000"))
 
 # ตั้งค่าขนาด Tile สำหรับ Isometric (วัดจาก asset จริง)
 TILE_W = 130  # ความกว้างเต็มของภาพ tile (px)

@@ -18,13 +18,17 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 
 from core.audio import AudioManager
-from core.config import TARGET_FPS, TILE_H, TILE_IMG_H, TILE_TO_METER, TILE_W
+from core.config import BOSS_DISTANCE_M, TARGET_FPS, TILE_H, TILE_IMG_H, TILE_W
+from core.interaction import YJunctionInteraction, junction_prompt_text
+from core.items import Inventory, ItemType
+from core.junction_data import get_junction
 from core.logger import logger
 from core.session import GameSession
+from core.state import RunMetrics, RunState, load_difficulty
 from game.grid import GridManager
 from game.particles import ParticleSystem
 from game.penguin import Penguin
-from ui.components import HoverButton
+from ui.components import HoverButton, MeterBar
 
 GRASS_TILES = [
     "assets/isometric-nature-pack/grass1.png",
@@ -103,6 +107,18 @@ class KivyRenderer(Widget):
             if self.shake_amount < 0.5:
                 self.shake_amount = 0
 
+        # D1-A5: neon tint at turn points + chevron warning on the 3 tiles leading
+        # into the nearest upcoming turn (visual scaffolding — no new assets,
+        # reuses grid_manager.turn_points already recorded by _build_corner)
+        turn_point_set = set(grid_manager.turn_points)
+        chevron_positions = set()
+        if path_index >= 0:
+            lookahead = grid_manager.path[path_index + 1 : path_index + 11]
+            for i, pos in enumerate(lookahead):
+                if pos in turn_point_set:
+                    chevron_positions.update(lookahead[max(0, i - 3) : i])
+                    break
+
         self.canvas.clear()
         with self.canvas:
             view_radius = 15
@@ -172,7 +188,11 @@ class KivyRenderer(Widget):
                 y_off = tile.offset_y if tile else 0
 
                 if itype == "tile":
-                    if obj.is_fork:
+                    if (col, row) in turn_point_set:
+                        Color(0.2, 1, 1, 1)  # neon pivot tile
+                    elif (col, row) in chevron_positions:
+                        Color(1, 0.6, 0.1, 1)  # chevron warning lead-in
+                    elif obj.is_fork:
                         Color(1, 0.9, 0.4, 1)
                     else:
                         Color(1, 1, 1, 1)
@@ -504,14 +524,22 @@ class GamePlayScreen(Screen):
         super().__init__(**kwargs)
         self.grid = GridManager()
         self.penguin = Penguin()
+        self.game_over = False
         self.game_event = None
         self._keyboard = None
         self.path_index = 0
-        self.gems_collected = 0
-        # RunRecord ของรอบเล่นปัจจุบัน (single-writer) — สร้างใหม่ทุกครั้งที่เริ่มเล่น
-        # ดู core/session.py + docs/ENGINEERING_PLAN.md (RunRecord Ownership)
+        self.active_prompt_zone = None
+
         self.session = GameSession()
+        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
+        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
+        self.inventory = Inventory()
+        self.is_respawning = False
+        self.respawn_count = 0
+        self._boss_warning_shown = False
         self.grid.reset()
+        self.last_checkpoint_col = self.grid.path[0][0]
+        self.last_checkpoint_row = self.grid.path[0][1]
         start = self.grid.path[0]
         self.penguin.col = start[0]
         self.penguin.row = start[1]
@@ -573,6 +601,61 @@ class GamePlayScreen(Screen):
 
         self.hud_bg.add_widget(self.score_label)
         self.hud_bg.add_widget(gem_box)
+        self.hearts_label = Label(
+            text=f"Hearts: {self.metrics.hearts}",
+            font_size="20sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            size_hint_x=None,
+        )
+        self.hearts_label.bind(texture_size=self.hearts_label.setter("size"))
+        self.heat_bar = MeterBar(
+            value=self.metrics.heat_meter,
+            max_value=self.metrics.max_meter,
+            warn_threshold=0.8 * self.metrics.max_meter,
+            bar_color=[1, 0.5, 0.2, 1],
+            size_hint=(None, None),
+            size=(110, 16),
+        )
+        self.anger_bar = MeterBar(
+            value=self.metrics.capitalist_anger,
+            max_value=self.metrics.max_meter,
+            warn_threshold=0.8 * self.metrics.max_meter,
+            bar_color=[0.8, 0.2, 0.2, 1],
+            size_hint=(None, None),
+            size=(110, 16),
+        )
+
+        def _meter_column(caption, bar):
+            column = BoxLayout(
+                orientation="vertical", size_hint=(None, None), size=(110, 40), spacing=2
+            )
+            column.add_widget(
+                Label(
+                    text=caption,
+                    font_size="12sp",
+                    bold=True,
+                    font_name="assets/Component_UI/Font/Kenney Future.ttf",
+                    size_hint=(1, None),
+                    height=16,
+                )
+            )
+            column.add_widget(bar)
+            return column
+
+        self.hud_bg.add_widget(self.hearts_label)
+        self.hud_bg.add_widget(_meter_column("HEAT", self.heat_bar))
+        self.hud_bg.add_widget(_meter_column("ANGER", self.anger_bar))
+        self.inventory_label = Label(
+            text="Items: -",
+            font_size="18sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            size_hint_x=None,
+        )
+        self.inventory_label.bind(texture_size=self.inventory_label.setter("size"))
+        self.hud_bg.add_widget(self.inventory_label)
+
         self.add_widget(self.hud_bg)
 
         OFFSET = 0.2
@@ -625,6 +708,56 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.checkpoint_label)
 
+        # Boss UI
+        self.boss_wall_label = Label(
+            text="",
+            font_size="24sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",  # wall_text เป็นภาษาไทย
+            color=(1, 0.2, 0.2, 1),
+            size_hint=(None, None),
+            pos_hint={"center_x": 0.5, "top": 0.85},
+            outline_width=2,
+            outline_color=(0, 0, 0, 1),
+            text_size=(700, None),
+            halign="center",
+            valign="middle",
+        )
+        self.boss_wall_label.bind(texture_size=self.boss_wall_label.setter("size"))
+        self.add_widget(self.boss_wall_label)
+
+        self.boss_choices_label = Label(
+            text="",
+            font_size="20sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            color=(0.9, 0.9, 0.2, 1),
+            size_hint=(None, None),
+            pos_hint={"center_x": 0.5, "top": 0.78},
+            outline_width=2,
+            outline_color=(0, 0, 0, 1),
+        )
+        self.add_widget(self.boss_choices_label)
+
+        self.junction_banner = Label(
+            text="",
+            font_size="18sp",
+            bold=True,
+            # situation/left.label/right.label ใน junctions.json เป็นภาษาไทยทั้งหมด —
+            # Kenney Future เป็นฟอนต์ Latin-only ไม่มี glyph ไทย ต้องใช้ฟอนต์นี้แทน
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+            color=(0.7, 0.9, 1, 1),
+            size_hint=(None, None),
+            pos_hint={"center_x": 0.5, "top": 0.72},
+            outline_width=2,
+            outline_color=(0, 0, 0, 1),
+            text_size=(700, None),
+            halign="center",
+            valign="middle",
+        )
+        self.junction_banner.bind(texture_size=self.junction_banner.setter("size"))
+        self.add_widget(self.junction_banner)
+
     def show_checkpoint_message(self, message: str):
         """Display a temporary non-blocking message when a checkpoint is reached.
         The label fades in, stays for 1.5 seconds, then fades out.
@@ -642,10 +775,91 @@ class GamePlayScreen(Screen):
         self.hud_rect.pos = instance.pos
         self.hud_rect.size = instance.size
 
+    def _trigger_gameover_from_metrics(self):
+        self.penguin.is_dead = True
+        # หัวใจหมด/หลอดแตะ 100 ในบอส: ปิด record ให้ถึง terminal state
+        # (BOSS → FINISHED ถูก allow; RUNNING ไม่มี transition จบ — ติด contract
+        # state machine เดิม flag ไว้คุยกับ Dev B แล้ว ห้ามแก้ฝั่งเดียว)
+        if self.session.run_record.state == RunState.BOSS:
+            self.session.finish()
+        Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+
+    def _respawn_penguin(self, dt=None):
+        self.penguin.is_dead = False
+        self.is_respawning = False
+        self.penguin.col = self.last_checkpoint_col
+        self.penguin.row = self.last_checkpoint_row
+        # ทางเดินช่วงที่เดินผ่านไปแล้วอาจละลาย/หายไปหมดระหว่างรอ respawn 3 วิ —
+        # แช่แข็งกลับให้เดินต่อได้จริง กัน respawn แล้วตกซ้ำวนไม่จบ
+        self.grid.repair_path_ahead_of_checkpoint(
+            self.last_checkpoint_col, self.last_checkpoint_row
+        )
+        self.metrics.is_invincible = False
+        self.renderer.trigger_shake(0)
+        self.active_prompt_zone = None
+        self.junction_banner.text = ""
+        # RESPAWNING → RUNNING ตาม state machine (ADR-010 / state-machines.md §3)
+        if self.session.state == RunState.RESPAWNING:
+            self.session.resume_after_respawn()
+
+    def _handle_fall(self):
+        if self.is_respawning or self.penguin.is_dead:
+            return
+        self.penguin.is_dead = True
+        self.metrics.decrease_heart()
+        self._refresh_status_hud()
+        if self.metrics.needs_respawn:
+            self.metrics.needs_respawn = False
+            self.is_respawning = True
+            self.respawn_count += 1
+            # ADR-002/010: RUNNING → RESPAWNING + RespawnEvent (respawn_count,
+            # score_penalty 10%) — การหักคะแนนจริงเป็นหน้าที่ scoring ฝั่ง server
+            if self.session.state == RunState.RUNNING:
+                self.session.begin_respawn()
+                self.session.respawn(
+                    checkpoint_col=self.last_checkpoint_col,
+                    checkpoint_row=self.last_checkpoint_row,
+                    respawn_count=self.respawn_count,
+                    score_penalty=0.1,
+                    distance_m=self.grid.get_distance_m(),
+                )
+            self.show_checkpoint_message("RESPAWNING...")
+            Clock.schedule_once(self._respawn_penguin, self.metrics.respawn_seconds)
+
     def _start_new_session(self):
-        """เริ่ม RunRecord รอบใหม่ (LOBBY → RUNNING) — เรียกทุกครั้งที่เริ่ม/รีสตาร์ทเกม"""
+        """Create the session, metrics, and junction interaction as one run unit.
+
+        Call only after ``grid.reset()``: all three objects must reference this run,
+        otherwise policy events are silently written to an obsolete session
+        (interaction holds a reference to session — if not rebound here, the new
+        run's PolicyChoiceEvents land in the discarded RunRecord and the Report
+        Card shows everything as "unplayed"). Checkpoint reset also depends on
+        grid.reset() having run first, since it reads grid.path[0].
+        """
         self.session = GameSession()
+        self.metrics = RunMetrics(on_game_over=self._trigger_gameover_from_metrics)
+        self.junction_interaction = YJunctionInteraction(self.metrics, self.session)
+        self.inventory = Inventory()
         self.session.start()
+        self.is_respawning = False
+        self.respawn_count = 0
+        self._boss_warning_shown = False
+        self.active_prompt_zone = None
+        self.junction_banner.text = ""
+        start = self.grid.path[0]
+        self.last_checkpoint_col, self.last_checkpoint_row = start
+        self._refresh_status_hud()
+        self._update_inventory_hud()
+
+    def _refresh_status_hud(self):
+        """Sync hearts label + heat/anger bars กับ RunMetrics ปัจจุบัน — จุดเดียวใช้ทุก path"""
+        self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
+        self.heat_bar.value = self.metrics.heat_meter
+        self.anger_bar.value = self.metrics.capitalist_anger
+
+    def _update_inventory_hud(self):
+        names = [item.value.replace("_", " ").title() for item in self.inventory.get_items()]
+        self.inventory_label.text = f"Items: {' | '.join(names) if names else '-'}"
 
     def on_enter(self):
         from core.state import StateManager
@@ -672,6 +886,8 @@ class GamePlayScreen(Screen):
         self.game_started = False
         self.renderer.cam_x = None
         self._start_new_session()
+        self.boss_wall_label.text = ""
+        self.boss_choices_label.text = ""
 
     def on_leave(self):
         if self.game_event:
@@ -713,15 +929,14 @@ class GamePlayScreen(Screen):
 
         self.particle_system.update(dt)
 
-        if not self.penguin.is_dead and self.game_started:
+        if not self.penguin.is_dead and not self.is_respawning and self.game_started:
             self.grid.update_tiles(dt, (self.penguin.col, self.penguin.row))
 
             # Check if penguin's tile is falling
             current_tile = self.grid.path_set.get((self.penguin.col, self.penguin.row))
             if current_tile and current_tile.state == "falling":
-                self.penguin.is_dead = True
                 AudioManager().play_sfx("Down")
-                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+                self._handle_fall()
 
             self.idle_timer += dt
             is_shaking = current_tile and current_tile.state == "triggered"
@@ -731,9 +946,8 @@ class GamePlayScreen(Screen):
                 if current_tile and not current_tile.is_safe:
                     current_tile.state = "falling"
                     current_tile.fall_velocity = 0.0
-                self.penguin.is_dead = True
-                AudioManager().play_sfx("Down")
-                Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+                    AudioManager().play_sfx("Down")
+                    self._handle_fall()
 
             self.renderer.draw(
                 self.grid, self.penguin, self.path_index, is_shaking_floor=is_shaking
@@ -817,6 +1031,78 @@ class GamePlayScreen(Screen):
                 distance_m=self.grid.get_distance_m(),
             )
 
+        item = self.grid.get_scientific_item_at(new_col, new_row)
+        if item:
+            self.grid.scientific_items.pop((new_col, new_row), None)
+            if self.inventory.add_item(item):
+                self.session.collect(
+                    item_type="scientific_item",
+                    col=new_col,
+                    row=new_row,
+                    value=1,
+                    distance_m=self.grid.get_distance_m(),
+                )
+                self._update_inventory_hud()
+
+        # ── Boss item collection ──
+        placement = self.grid.get_boss_item_at(new_col, new_row)
+        if placement:
+            from core.boss_data import load_boss_data
+
+            boss_data = load_boss_data()
+            wave_data = boss_data.waves.get(placement.wave)
+            is_correct = placement.item_id == wave_data.correct_item if wave_data else False
+
+            # ผลของแต่ละเวฟอ่านจาก balance/v1/boss.json (on_correct/on_wrong ใช้
+            # key "boss_armor"/"hearts") — ไม่ hardcode เพื่อให้ balance pass แก้ data ได้
+            if is_correct:
+                AudioManager().play_sfx("Coin")
+                if wave_data:
+                    self.boss_hp += wave_data.on_correct.get("boss_armor", -1)
+                self.session.boss_phase(
+                    phase=placement.wave,
+                    outcome="damage_dealt",
+                    distance_m=self.grid.get_distance_m(),
+                )
+                self.show_checkpoint_message("CORRECT!")
+            else:
+                AudioManager().play_sfx("Down")
+                hearts_delta = wave_data.on_wrong.get("hearts", -1) if wave_data else -1
+                # ในบอสไม่มี fall-respawn (state-machines.md §3) — เสียหัวใจตรง ๆ
+                # ห้ามตั้ง needs_respawn/is_invincible ไม่งั้น invincible ค้างถาวร
+                for _ in range(-hearts_delta):
+                    self.metrics.decrease_heart(allow_respawn=False)
+                self.session.boss_phase(
+                    phase=placement.wave,
+                    outcome="damaged",
+                    distance_m=self.grid.get_distance_m(),
+                )
+                self.show_checkpoint_message("WRONG FACT!")
+
+            self._refresh_status_hud()
+
+            self.boss_wave_index = placement.wave + 1
+            self.grid.pop_boss_wave(placement.wave)
+
+            if self.boss_hp <= 0:
+                self.session.boss_victory(
+                    total_time_s=self.session.elapsed() - self.boss_start_time,
+                    distance_m=self.grid.get_distance_m(),
+                )
+                self.show_checkpoint_message("BOSS DEFEATED!")
+                self.boss_wall_label.text = ""
+                self.boss_choices_label.text = ""
+                self.session.finish()
+                Clock.schedule_once(lambda dt: self._go_report(), 2.0)
+            elif self.boss_wave_index > 3:
+                self.show_checkpoint_message("FAILED TO DEFEAT BOSS!")
+                self.boss_wall_label.text = ""
+                self.boss_choices_label.text = ""
+                # trigger_game_over → callback ปิด record (BOSS → FINISHED) ให้เอง
+                self.metrics.trigger_game_over()
+            else:
+                self._update_boss_ui(self.boss_wave_index)
+
         # ── Move penguin to new position ──
         self.penguin.col = new_col
         self.penguin.row = new_row
@@ -826,8 +1112,35 @@ class GamePlayScreen(Screen):
         self.penguin.action_timer = 0.25
         self.renderer.anim_frame = 0
 
+        prompt_zone = self.grid.get_junction_prompt(new_col, new_row)
+        if prompt_zone != self.active_prompt_zone:
+            self.active_prompt_zone = prompt_zone
+            if prompt_zone is not None:
+                try:
+                    self.junction_banner.text = junction_prompt_text(get_junction(prompt_zone))
+                except KeyError:
+                    logger.warning("No junction prompt data for zone %s", prompt_zone)
+
+        self.grid.check_fork_resolution(new_col, new_row)
+        resolved_fork = self.grid.pop_resolved_fork()
+        if resolved_fork:
+            zone_id, side = resolved_fork
+            self.active_prompt_zone = None
+            self.junction_banner.text = ""
+            try:
+                junction = get_junction(zone_id)
+                self.junction_interaction.handle_choice(
+                    junction, side, distance_m=self.grid.get_distance_m()
+                )
+                self._refresh_status_hud()
+            except KeyError:
+                logger.warning("No junction data for resolved zone %s", zone_id)
+
         if self.grid.is_on_path(new_col, new_row):
             self.grid.step_forward()
+            # A fork tile has no centreline index; boss entry is crossing the
+            # distance threshold, not landing on one exact centreline position.
+            dist_m = self.grid.get_distance_m()
             idx = self.grid.get_path_index(new_col, new_row)
             if idx >= 0:
                 self.path_index = idx
@@ -838,24 +1151,63 @@ class GamePlayScreen(Screen):
                 self.renderer.shake_amount = 5
                 # Checkpoint notification
                 if self.grid.forward_tiles % 100 == 0:
-                    meters = self.grid.forward_tiles * TILE_TO_METER
-                    self.show_checkpoint_message(f"{meters}M REACHED!")
+                    self.show_checkpoint_message(f"{dist_m}M REACHED!")
+                    self.last_checkpoint_col = self.penguin.col
+                    self.last_checkpoint_row = self.penguin.row
                     self.session.checkpoint_reached(
                         checkpoint_index=self.grid.forward_tiles // 100,
-                        distance_m=self.grid.get_distance_m(),
+                        distance_m=dist_m,
                     )
+                if (
+                    BOSS_DISTANCE_M - 20 <= dist_m < BOSS_DISTANCE_M - 10
+                    and not self._boss_warning_shown
+                ):
+                    self.show_checkpoint_message("WARNING: CARBON BARON APPROACHING!")
+                    self._boss_warning_shown = True
 
-            if self.path_index == len(self.grid.path) - 1:
-                logger.info(f"ชนะแล้ว! วิ่งถึงเส้นชัยด้วยระยะ {self.grid.get_distance_m()} m")
-                self.manager.current = "gameover"
+            if dist_m >= BOSS_DISTANCE_M and self.session.run_record.state == RunState.RUNNING:
+                self.session.enter_boss(distance_m=dist_m)
+                self.show_checkpoint_message("BOSS PHASE STARTED!")
+                self.boss_wave_index = 1
+                from core.boss_data import load_boss_data
+
+                self.boss_hp = load_boss_data().armor
+                self.boss_start_time = self.session.elapsed()
+                self._update_boss_ui(self.boss_wave_index)
+
         else:
-            self.penguin.is_dead = True
+            # ตกนอกเส้นทาง = เสียหัวใจ + respawn ที่ checkpoint (ADR-010)
+            # ไม่ game over ตรง ๆ — หัวใจหมดค่อยจบผ่าน callback ของ RunMetrics
             AudioManager().play_sfx("Down")
-            logger.info(f"ตก! ระยะ {self.grid.get_distance_m()} m")
-            Clock.schedule_once(lambda dt: self._go_gameover(), 0.5)
+            logger.info(f"ตกนอกเส้นทาง! ระยะ {self.grid.get_distance_m()} m")
+            self._handle_fall()
 
     def _go_gameover(self):
         self.manager.current = "gameover"
+
+    def _go_report(self):
+        self.manager.current = "report"
+
+    def _update_boss_ui(self, wave_no=None):
+        from core.boss_data import load_boss_data
+
+        wave_no = self.boss_wave_index if wave_no is None else wave_no
+        wave = load_boss_data().waves.get(wave_no)
+        if not wave:
+            self.boss_wall_label.text = ""
+            self.boss_choices_label.text = ""
+            return
+
+        self.boss_wall_label.text = wave.wall_text
+
+        sides = {
+            placement.side: placement.item_id
+            for placement in self.grid.boss_items.values()
+            if placement.wave == wave_no
+        }
+        self.boss_choices_label.text = (
+            f"LEFT: {sides.get('left', '?')}  |  RIGHT: {sides.get('right', '?')}"
+        )
 
     def pause_game(self):
         """Pause: unschedule game loop, show overlay, sync sound button."""
@@ -897,6 +1249,8 @@ class GamePlayScreen(Screen):
         self.renderer.cam_y = None
         self.renderer.tile_textures.clear()
         self._start_new_session()
+        self.boss_wall_label.text = ""
+        self.boss_choices_label.text = ""
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:
@@ -926,6 +1280,20 @@ class GamePlayScreen(Screen):
         elif keycode[1] == "right":
             self.btn_right.handle_press()
             return True
+        elif keycode[1] == "spacebar" and self.inventory.has_item(ItemType.ECO_SEED):
+            if self.inventory.use_item(ItemType.ECO_SEED):
+                eco_seed = load_difficulty().get("eco_seed", {})
+                self.metrics.update_meters(
+                    heat_delta=float(eco_seed.get("heat_reduction", 0.0)), anger_delta=0
+                )
+                if eco_seed.get("repairs_blocks", False):
+                    for (col, row), tile in self.grid.path_set.items():
+                        if abs(col - self.penguin.col) <= 1 and abs(row - self.penguin.row) <= 1:
+                            tile.state = "normal"
+                            tile.trigger_timer = 1.2
+                            tile.fall_velocity = 0.0
+                self._update_inventory_hud()
+                return True
         return False
 
     def _on_keyboard_up(self, keyboard, keycode):

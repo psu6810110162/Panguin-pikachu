@@ -4,6 +4,18 @@ from core.junction_data import Junction, Side
 from core.state import RunMetrics
 
 
+def junction_prompt_text(junction: Junction) -> str:
+    """Pure text for a pre-commit Y-junction banner.
+
+    เขียนบรรทัดคำสั่งให้ชัดว่า "เดินเข้าเลน" คือการเลือก ไม่ใช่มีปุ่มกดตอบ —
+    ผู้เล่นทดสอบสับสนว่าไม่รู้จะ "ตอบ" ยังไงตอนโชว์ป้ายนี้
+    """
+    return (
+        f"{junction.situation}\n"
+        f"เดินเข้าเลนซ้าย/ขวาเพื่อเลือก — ซ้าย: {junction.left.label}  |  ขวา: {junction.right.label}"
+    )
+
+
 class PolicyChoiceSink(Protocol):
     """รูปร่างของสิ่งที่ YJunctionInteraction ต้องการจาก game_session — ประกาศเป็น
     Protocol แทน import GameSession ตรง ๆ เพราะ core/session.py มาจากเลน Dev B (#58/#62)
@@ -28,9 +40,13 @@ class YJunctionInteraction:
         self.run_metrics = run_metrics
         self.game_session = game_session  # ใช้ GameSession เป็นตัวจัดการรวม
 
-    def handle_choice(self, junction: Junction, choice_side: str) -> None:
+    def handle_choice(self, junction: Junction, choice_side: str, distance_m: int) -> None:
         """
         รับค่า Input (ซ้าย/ขวา) อัปเดตสเตตัส Dual-Meter และบันทึก Log ผ่าน GameSession
+
+        Args:
+            distance_m: ระยะวิ่งจริง ณ ตอนตัดสินใจ (จาก grid.get_distance_m()) —
+                ห้ามใช้ zone*100 เพราะ junction spawn แบบสุ่มในโซน telemetry จะเพี้ยน
         """
         if choice_side == "left":
             selected_choice = junction.left
@@ -55,5 +71,5 @@ class YJunctionInteraction:
             checkpoint_index=junction.zone,
             policy_id=junction.policy_id(side),
             meter_deltas=dict(selected_choice.meter_deltas),
-            distance_m=junction.zone * 100,
+            distance_m=distance_m,
         )

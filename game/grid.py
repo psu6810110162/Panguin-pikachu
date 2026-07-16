@@ -1,6 +1,11 @@
 import random
 
-from core.config import TILE_TO_METER
+from core.boss_data import BossItemPlacement, load_boss_data
+from core.config import BOSS_DISTANCE_M, TILE_TO_METER
+from core.items import ItemType
+from core.logger import logger
+from core.spawning import SpawningSystem
+from core.state import load_difficulty
 from game.obstacle_factory import ObstacleFactory
 
 
@@ -14,6 +19,8 @@ class Tile:
         self.trigger_timer = 1.2
         self.offset_y = 0.0
         self.fall_velocity = 0.0
+        self.zone_id = None
+        self.side = None
 
 
 PATH_WIDTH = 1  # กว้าง 1 tile (ผอมลงตามสั่ง)
@@ -25,6 +32,7 @@ FORK_CHANCE = 0.30  # 30% โอกาสเกิดทางแยก
 
 FORK_SHORT_LEN = 4  # เส้นสั้น
 FORK_LONG_LEN = 7  # เส้นยาว (อ้อม)
+PROMPT_LEAD = 4
 
 
 class GridManager:
@@ -48,8 +56,11 @@ class GridManager:
         self.turn_points = []  # จุดที่ต้องกดเปลี่ยนทิศ
         self.obstacles = {}  # (col, row) -> Obstacle
         self.gems = {}  # (col, row) -> Gem
+        self.scientific_items = {}  # (col, row) -> ItemType
+        self.boss_items = {}  # (col, row) -> BossItemPlacement
         self.fork_tiles = set()  # tile ที่เป็นส่วน fork (ใช้ render สีต่าง)
         self.merge_points = []  # จุดบรรจบของแต่ละ fork
+        self.junction_prompts = {}
 
         self._last_pos = (0, 0)
         self._last_dir = self.DIR_A
@@ -57,6 +68,12 @@ class GridManager:
         self._last_cleaned_idx = 0
         self._total_generated = 0
         self.checkpoints_generated = 0
+        self._boss_wave = 0
+        self.resolved_fork = None
+        # Day 1: D1-A2 Zone-Based Spawning
+        self.spawning_system = SpawningSystem()
+        self.next_zone = 1
+        self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
 
     # ═══════════════════════════════════════════
     #  PUBLIC API
@@ -75,13 +92,22 @@ class GridManager:
         self.turn_points.clear()
         self.obstacles.clear()
         self.gems.clear()
+        self.scientific_items.clear()
+        self.boss_items.clear()
         self.fork_tiles.clear()
         self.merge_points.clear()
+        self.junction_prompts.clear()
         self._last_pos = (0, 0)
         self._last_dir = self.DIR_A
         self._seg_count = 0
         self._last_cleaned_idx = 0
+        self.resolved_fork = None
+        # ต้อง reset ไม่งั้นรอบเล่นที่ 2 บอสไม่สร้างเวฟ (ค้างค่า 3 จากรอบก่อน)
+        self._boss_wave = 0
         self._build_start_platform()
+        self.spawning_system = SpawningSystem()
+        self.next_zone = 1
+        self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
         for _ in range(PRELOAD_SEGMENTS):
             self._append_segment()
 
@@ -90,6 +116,21 @@ class GridManager:
 
     def get_distance_m(self):
         return self.forward_tiles * TILE_TO_METER
+
+    def check_fork_resolution(self, col, row):
+        tile = self.path_set.get((col, row))
+        if tile and tile.zone_id is not None and tile.side is not None:
+            self.resolved_fork = (tile.zone_id, tile.side)
+            tile.zone_id = None
+            tile.side = None
+
+    def pop_resolved_fork(self):
+        res = self.resolved_fork
+        self.resolved_fork = None
+        return res
+
+    def get_junction_prompt(self, col, row):
+        return self.junction_prompts.get((col, row))
 
     def update_obstacles(self, dt, view_radius, penguin_pos):
         """อัปเดตแอนิเมชันของอุปสรรคที่อยู่ในระยะมองเห็น"""
@@ -142,6 +183,9 @@ class GridManager:
             self.path_set.pop(pos, None)
             self.obstacles.pop(pos, None)
             self.gems.pop(pos, None)
+            self.scientific_items.pop(pos, None)
+            self.boss_items.pop(pos, None)
+            self.junction_prompts.pop(pos, None)
 
     def is_on_path(self, col, row):
         return (col, row) in self.path_set
@@ -158,11 +202,46 @@ class GridManager:
             return gem
         return None
 
+    def get_boss_item_at(self, col, row):
+        return self.boss_items.get((col, row))
+
+    def get_scientific_item_at(self, col, row):
+        return self.scientific_items.get((col, row))
+
+    def pop_boss_wave(self, wave_no):
+        """Remove both alternatives for a resolved boss wave."""
+        for pos, placement in list(self.boss_items.items()):
+            if placement.wave == wave_no:
+                self.boss_items.pop(pos)
+
     def get_path_index(self, col, row):
         try:
             return self.path.index((col, row))
         except ValueError:
             return -1
+
+    def repair_path_ahead_of_checkpoint(self, col, row, tiles_ahead=30):
+        """เรียกตอนกำลังจะ respawn ผู้เล่นที่ checkpoint (col,row)
+
+        `update_tiles` นับถอยหลัง trigger_timer ของทุก tile ที่เคยถูกเหยียบไปแล้ว
+        ต่อเนื่องไปเรื่อย ๆ ไม่สนใจว่าผู้เล่นยังอยู่ตรงนั้นไหม — ถ้าผู้เล่นตายแล้วรอ respawn
+        (3 วิ) ทางเดินที่เดินผ่านมาก่อนตายอาจละลาย/หายไปหมดแล้ว พอ respawn กลับมาที่
+        checkpoint แล้วเดินต่อจะตกทันที (tile ไม่มีอยู่ใน path_set) → ตาย → respawn → วนไม่จบ
+        ฟังก์ชันนี้ "แช่แข็ง" ทางเดินช่วงสั้น ๆ ข้างหน้า checkpoint กลับเป็น normal/สร้างใหม่
+        ถ้าหายไปแล้ว ให้ผู้เล่นมีทางเดินจริงให้เดินต่อได้เสมอหลัง respawn
+        """
+        idx = self.get_path_index(col, row)
+        if idx < 0:
+            return
+        for pos in self.path[idx : idx + tiles_ahead]:
+            tile = self.path_set.get(pos)
+            if tile is None:
+                self._add_tile(*pos)
+            else:
+                tile.state = "normal"
+                tile.trigger_timer = 1.2
+                tile.offset_y = 0.0
+                tile.fall_velocity = 0.0
 
     def get_correct_direction_at(self, path_index):
         """ทิศทาง centerline ณ index นี้"""
@@ -191,6 +270,8 @@ class GridManager:
         # ลบ object ที่อาจจะอยู่บนนั้นด้วย
         self.obstacles.pop(pos, None)
         self.gems.pop(pos, None)
+        self.scientific_items.pop(pos, None)
+        self.boss_items.pop(pos, None)
         # Note: ไม่ลบจาก self.path เพื่อไม่ให้ลำดับพิกัดเสีย (แต่ renderer จะไม่วาดเพราะไม่อยู่ใน path_set)
 
     def cleanup_behind(self, path_index):
@@ -206,6 +287,8 @@ class GridManager:
             pos = self.path[i]
             self.obstacles.pop(pos, None)
             self.gems.pop(pos, None)
+            self.scientific_items.pop(pos, None)
+            self.boss_items.pop(pos, None)
 
         self._last_cleaned_idx = target_idx
 
@@ -250,13 +333,37 @@ class GridManager:
         สร้าง 1 segment: straight หรือ diamond fork (30%)
         แล้วต่อด้วย corner เพื่อเปลี่ยนทิศ
         """
+        if self._total_generated >= BOSS_DISTANCE_M:
+            if self._boss_wave < 3:
+                self._build_boss_wave(self._boss_wave)
+                self._boss_wave += 1
+            else:
+                self._build_straight(10, mark_fork=False)
+            return
+
         if self._total_generated >= (self.checkpoints_generated) * 100:
             self._build_checkpoint_platform()
-        if random.random() < FORK_CHANCE and self._seg_count >= 2:
+
+        current_distance_m = self._total_generated * TILE_TO_METER
+
+        # D1-A2: โซนถึงกำหนด spawn แล้วหรือยัง — consume โซนเฉพาะเมื่อ fork
+        # ถูกสร้างจริงเท่านั้น ไม่งั้นโซนหาย (junction < 10) ถ้า _seg_count ยังไม่พอ
+        should_spawn_fork = (
+            self.next_zone <= self.spawning_system.NUM_ZONES
+            and current_distance_m >= self.next_spawn_distance
+        )
+
+        if should_spawn_fork and self._seg_count >= 2:
             # ─── Diamond Fork ───
-            self._build_diamond_fork()
+            self._build_diamond_fork(self.next_zone)
+            logger.info(
+                f"[SPAWN] Y-Junction โซน {self.next_zone} ที่ระยะ ~{current_distance_m}m "
+                f"(กำหนด {self.next_spawn_distance}m)"
+            )
+            self.next_zone += 1
+            self.next_spawn_distance = self.spawning_system.get_spawn_distance(self.next_zone)
         else:
-            # ─── Straight Segment ───
+            # ─── Straight Segment ─── (โซนที่ค้างจะถูกลองใหม่ segment ถัดไป)
             self._build_straight(random.randint(SEGMENT_LEN_MIN, SEGMENT_LEN_MAX))
 
         # corner เปลี่ยนทิศ
@@ -299,12 +406,21 @@ class GridManager:
                 gem = ObstacleFactory.spawn_gem(col, row)
                 self.gems[(col, row)] = gem
 
+            if (
+                self._seg_count > 0
+                and not mark_fork
+                and (col, row) not in self.obstacles
+                and (col, row) not in self.gems
+                and random.random() < self._scientific_item_spawn_chance()
+            ):
+                self.scientific_items[(col, row)] = random.choice(list(ItemType))
+
         self._last_pos = (col, row)
 
     # ───────────────────────────────────────────
     #  Diamond Fork
     # ───────────────────────────────────────────
-    def _build_diamond_fork(self):
+    def _build_diamond_fork(self, zone_id=None):
         """
         สร้าง diamond fork จาก _last_pos:
           cur_dir = ทิศหลัก  (เช่น DIR_A)
@@ -317,18 +433,30 @@ class GridManager:
           MERGE POINT = ปลาย branch_short
                       = ปลาย branch_long (บรรจบกัน)
         """
+        if zone_id is not None:
+            for pos in self.path[-PROMPT_LEAD:]:
+                self.junction_prompts[pos] = zone_id
         start_col, start_row = self._last_pos
         cur_dir = self._last_dir
         # ทิศตั้งฉาก (เอาทิศอื่นมาอ้อม)
         perp = self.DIR_B if cur_dir == self.DIR_A else self.DIR_A
 
+        is_perp_left = cur_dir == self.DIR_A
+        long_side = "left" if is_perp_left else "right"
+        short_side = "right" if is_perp_left else "left"
+
         # ── Branch Short (centerline หลัก) ──
         col, row = start_col, start_row
-        for _ in range(FORK_SHORT_LEN):
+        for i in range(FORK_SHORT_LEN):
             col += cur_dir[0]
             row += cur_dir[1]
             is_safe = self._add_center(col, row)
             self._add_width(col, row, cur_dir, is_safe=is_safe)
+            if i == 0 and zone_id is not None:
+                tile = self.path_set.get((col, row))
+                if tile:
+                    tile.zone_id = zone_id
+                    tile.side = short_side
         # short_end คือ merge point
         merge_col, merge_row = col, row
 
@@ -338,11 +466,16 @@ class GridManager:
         SIDE_OFFSET = 2  # ระยะห่างสำหรับ 1-tile path
 
         # ออกด้านข้าง
-        for _ in range(SIDE_OFFSET):
+        for i in range(SIDE_OFFSET):
             lc += perp[0]
             lr += perp[1]
             self._add_tile(lc, lr, is_fork=True)
             self.fork_tiles.add((lc, lr))
+            if i == 0 and zone_id is not None:
+                tile = self.path_set.get((lc, lr))
+                if tile:
+                    tile.zone_id = zone_id
+                    tile.side = long_side
 
         # วิ่งตรงขนาน (เพิ่ม Gem ที่นี่)
         for _ in range(FORK_LONG_LEN):
@@ -366,6 +499,58 @@ class GridManager:
         # บันทึก merge point
         self.merge_points.append((merge_col, merge_row))
         self._last_pos = (merge_col, merge_row)
+
+    # ───────────────────────────────────────────
+    #  Boss Wave (Symmetric Fork for 2 Lanes)
+    # ───────────────────────────────────────────
+    def _build_boss_wave(self, wave_index):
+        """Build one forward-only boss fork.
+
+        Meaningful tiles (centreline path, zone commit tiles, boss items, and merge
+        points) must be reachable from ``path[0]`` with only ``(+1, 0)`` and
+        ``(0, +1)``, and must still lead to the path end. Decorative diamond
+        overhangs and start-platform tiles are excluded.
+        """
+        self._build_straight(3, mark_fork=True)
+        start_col, start_row = self._last_pos
+        cur_dir = self._last_dir
+        perp = self.DIR_B if cur_dir == self.DIR_A else self.DIR_A
+        perp_side = "left" if cur_dir == self.DIR_A else "right"
+        dir_side = "right" if perp_side == "left" else "left"
+        wave_no = wave_index + 1
+        wave = load_boss_data().waves.get(wave_no)
+
+        def build_lane(steps):
+            col, row = start_col, start_row
+            positions = []
+            for direction, count in steps:
+                for _ in range(count):
+                    col += direction[0]
+                    row += direction[1]
+                    self._add_tile(col, row, is_fork=True, is_safe=True)
+                    self.fork_tiles.add((col, row))
+                    positions.append((col, row))
+            return positions
+
+        # Same endpoint, different positive-only order: 4d + 2p.
+        dir_lane = build_lane(((cur_dir, 4), (perp, 2)))
+        perp_lane = build_lane(((perp, 2), (cur_dir, 4)))
+        if wave:
+            # Deterministic by wave parity (not random) — reproducible across runs/
+            # replays; the player already sees which item is on which side via HUD.
+            dir_correct = wave_index % 2 == 0
+            placements = (
+                (dir_lane[1], dir_side, wave.correct_item if dir_correct else wave.wrong_item),
+                (perp_lane[1], perp_side, wave.wrong_item if dir_correct else wave.correct_item),
+            )
+            for pos, side, item_id in placements:
+                self.boss_items[pos] = BossItemPlacement(wave_no, item_id, side)
+
+        merge = dir_lane[-1]
+        self.merge_points.append(merge)
+        self.path.append(merge)
+        self._add_tile(*merge, is_safe=True)
+        self._last_pos = merge
 
     # ───────────────────────────────────────────
     #  Corner (เลี้ยว 90°)
@@ -404,6 +589,12 @@ class GridManager:
             self._add_tile(col, row, is_safe=is_safe)
             return is_safe
         return False
+
+    @staticmethod
+    def _scientific_item_spawn_chance():
+        difficulty = load_difficulty()
+        items = difficulty.get("items", {})
+        return float(items.get("spawn_chance", 0.0)) if isinstance(items, dict) else 0.0
 
     def _add_width(self, col, row, direction, is_safe=False):
         """ขยาย PATH_WIDTH ตั้งฉากกับ direction (ถ้ามากกว่า 1)"""
