@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "status": "review",
+  "assets": [
+    {
+      "id": "gameplay_background_v1",
+      "path": "assets/generated/background/gameplay_background_v1.png",
+      "role": "gameplay_background",
+      "size": [1672, 941],
+      "runtime": false,
+      "notes": "Quiet centre; no baked text; cool navy/cyan palette."
+    },
+    {
+      "id": "penguin_sheet_v1",
+      "path": "assets/generated/character/penguin_sheet_v1.png",
+      "role": "player_character_review_sheet",
+      "size": [1774, 887],
+      "runtime": false,
+      "frame_order": [
+        "idle",
+        "run_1",
+        "run_2",
+        "jump",
+        "fall",
+        "hit",
+        "victory",
+        "respawn"
+      ],
+      "notes": "Generated review sheet; slice and anchor-check before runtime use."
+    },
+    {
+      "id": "environment_tiles_v1",
+      "path": "assets/generated/tiles/environment_tiles_v1.png",
+      "role": "environment_tile_atlas_review_sheet",
+      "size": [1536, 1024],
+      "runtime": false,
+      "variants": [
+        "cool_moss_ice",
+        "frozen_ice",
+        "neon_pivot",
+        "amber_warning",
+        "thawed_smog",
+        "boss_safe"
+      ],
+      "notes": "Review atlas only; final runtime tiles must be sliced and anchor-checked against TILE_W/TILE_H."
+    },
+    {
+      "id": "carbon_baron_sheet_v1",
+      "path": "assets/generated/boss/carbon_baron_sheet_v1.png",
+      "role": "boss_character_review_sheet",
+      "size": [1536, 1024],
+      "runtime": false,
+      "frame_order": [
+        "idle_hover",
+        "warning_smoke",
+        "wave_1_red_pulse",
+        "wave_2_methane_heat",
+        "wave_3_overheat",
+        "defeated_shutdown"
+      ],
+      "notes": "Boss review sheet; final runtime extraction needs a fixed frame contract."
+    },
+    {
+      "id": "penguin_guide_drone_v1",
+      "path": "assets/generated/characters/penguin_guide_drone_v1.png",
+      "role": "support_character",
+      "size": [1254, 1254],
+      "runtime": true,
+      "frame_order": [
+        "idle_hover",
+        "point_forward",
+        "warning",
+        "report_celebration"
+      ],
+      "notes": "Small guide companion used for decision, warning, respawn, and report feedback."
+    }
+  ]
+}

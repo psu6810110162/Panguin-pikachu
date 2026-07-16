@@ -3,7 +3,7 @@
 <MenuScreen>:
     canvas.before:
         Rectangle:
-            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
+            source: 'assets/generated/background/gameplay_background_v1.png'
             pos: self.pos
             size: self.size
 
@@ -139,16 +139,19 @@
 <GamePlayScreen>:
     canvas.before:
         Rectangle:
-            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
+            source: 'assets/generated/background/gameplay_background_v1.png'
             pos: self.pos
             size: self.size
     # เนื้อหาเดิมของ Gameplay จะถูกย้ายมาที่นี่ในภายหลังถ้าย้ายออกจาก python
 
 <GameOverScreen>:
     canvas.before:
-        # Semi-transparent dark overlay for background
+        Rectangle:
+            source: 'assets/generated/background/gameplay_background_v1.png'
+            pos: self.pos
+            size: self.size
         Color:
-            rgba: 0, 0, 0, 0.7
+            rgba: 0.01, 0.03, 0.08, 0.78
         Rectangle:
             pos: self.pos
             size: self.size
@@ -251,6 +254,16 @@
                         border: (10, 10, 10, 10)
                         on_release: root.go_home()
 <HistoryScreen>:
+    canvas.before:
+        Rectangle:
+            source: 'assets/generated/background/gameplay_background_v1.png'
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.01, 0.03, 0.08, 0.72
+        Rectangle:
+            pos: self.pos
+            size: self.size
     BoxLayout:
         orientation: 'vertical'
         padding: 50
@@ -300,7 +313,7 @@
 <ShopScreen>:
     canvas.before:
         Rectangle:
-            source: 'assets/Background/Purple Pixelated Motivational Quote Instagram Post.png'
+            source: 'assets/generated/background/gameplay_background_v1.png'
             pos: self.pos
             size: self.size
     BoxLayout:

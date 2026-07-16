@@ -1,10 +1,12 @@
 from kivy.animation import Animation
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, Rectangle
+from kivy.graphics import Color, Line, Rectangle, RoundedRectangle
 from kivy.properties import BooleanProperty, ListProperty, NumericProperty
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.image import Image
+from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 
 
@@ -115,6 +117,162 @@ class MeterBar(Widget):
                 self._flash_anim.cancel(self._fill_color)
                 self._flash_anim = None
             self._fill_color.rgba = self.bar_color
+
+
+class HudRail(BoxLayout):
+    """Shared telemetry rail for distance, hearts, meters, and inventory."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(0.02, 0.05, 0.12, 0.88)
+            self._panel = RoundedRectangle(pos=self.pos, size=self.size, radius=[14])
+            Color(0.25, 0.75, 1.0, 0.6)
+            self._border = Line(
+                rounded_rectangle=(self.x, self.y, self.width, self.height, 14),
+                width=1.2,
+            )
+        self.bind(pos=self._redraw_panel, size=self._redraw_panel)
+
+    def _redraw_panel(self, instance, _value):
+        self._panel.pos = instance.pos
+        self._panel.size = instance.size
+        self._border.rounded_rectangle = (
+            instance.x,
+            instance.y,
+            instance.width,
+            instance.height,
+            14,
+        )
+
+
+class ChoiceCard(Label):
+    """A single left/right decision card; emits no gameplay side effects."""
+
+    accent = ListProperty([0.25, 0.85, 1.0, 1])
+
+    def __init__(self, accent=None, **kwargs):
+        if accent is not None:
+            self.accent = accent
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(0.03, 0.08, 0.16, 0.96)
+            self._panel = RoundedRectangle(pos=self.pos, size=self.size, radius=[18])
+            self._accent = Color(*self.accent, 0.9)
+            self._border = Line(
+                rounded_rectangle=(self.x, self.y, self.width, self.height, 18),
+                width=1.5,
+            )
+        self.bind(pos=self._redraw_panel, size=self._redraw_panel, accent=self._redraw_accent)
+
+    def _redraw_panel(self, instance, _value):
+        self._panel.pos = instance.pos
+        self._panel.size = instance.size
+        self._border.rounded_rectangle = (
+            instance.x,
+            instance.y,
+            instance.width,
+            instance.height,
+            18,
+        )
+
+    def _redraw_accent(self, _instance, value):
+        self._accent.rgba = (*value[:3], 0.9)
+
+
+class DecisionCard(Label):
+    """Centre card for one policy or boss question.
+
+    The component only renders supplied text; the screen controller owns
+    countdowns, input, and state transitions.
+    """
+
+    accent = ListProperty([0.35, 0.82, 1.0, 1])
+
+    def __init__(self, accent=None, **kwargs):
+        if accent is not None:
+            self.accent = accent
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(0.03, 0.08, 0.16, 0.96)
+            self._panel = RoundedRectangle(pos=self.pos, size=self.size, radius=[22])
+            self._accent = Color(*self.accent, 0.75)
+            self._border = Line(
+                rounded_rectangle=(self.x, self.y, self.width, self.height, 22),
+                width=1.5,
+            )
+        self.bind(pos=self._redraw_panel, size=self._redraw_panel, accent=self._redraw_accent)
+
+    def _redraw_panel(self, instance, _value):
+        self._panel.pos = instance.pos
+        self._panel.size = instance.size
+        self._border.rounded_rectangle = (
+            instance.x,
+            instance.y,
+            instance.width,
+            instance.height,
+            22,
+        )
+
+    def _redraw_accent(self, _instance, value):
+        self._accent.rgba = (*value[:3], 0.75)
+
+
+class FeedbackToast(Label):
+    """Short-lived post-choice explanation, visually distinct from telemetry."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(0.02, 0.08, 0.14, 0.92)
+            self._panel = RoundedRectangle(pos=self.pos, size=self.size, radius=[12])
+            Color(0.35, 0.9, 0.75, 0.7)
+            self._border = Line(
+                rounded_rectangle=(self.x, self.y, self.width, self.height, 12),
+                width=1.0,
+            )
+        self.bind(pos=self._redraw_panel, size=self._redraw_panel)
+
+    def _redraw_panel(self, instance, _value):
+        self._panel.pos = instance.pos
+        self._panel.size = instance.size
+        self._border.rounded_rectangle = (
+            instance.x,
+            instance.y,
+            instance.width,
+            instance.height,
+            12,
+        )
+
+
+class BossBanner(Label):
+    """Stateful Carbon Baron banner; wave color is set by the screen controller."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(0.06, 0.03, 0.10, 0.9)
+            self._panel = RoundedRectangle(pos=self.pos, size=self.size, radius=[10])
+        self.bind(pos=self._redraw_panel, size=self._redraw_panel)
+
+    def _redraw_panel(self, instance, _value):
+        self._panel.pos = instance.pos
+        self._panel.size = instance.size
+
+
+class StateOverlay(Label):
+    """Reusable full-screen state message (respawn/victory/game-over)."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(0.01, 0.03, 0.08, 0.78)
+            self._panel = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self._redraw_panel, size=self._redraw_panel)
+
+    def _redraw_panel(self, instance, _value):
+        self._panel.pos = instance.pos
+        self._panel.size = instance.size
 
 
 class AnimatedSkin(Image):
