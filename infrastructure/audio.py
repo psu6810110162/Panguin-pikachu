@@ -28,6 +28,8 @@ class AudioManager:
         self.bgm_volume = 0.5
         self.sfx_volume = 0.8
         self.bgm_muted = False
+        self.audio_available = True
+        self._backend_warning_shown = False
         filenames = {
             "click": "click-b.ogg",
             "tab": "tap-a.ogg",
@@ -56,11 +58,24 @@ class AudioManager:
             )
             for name, filename in filenames.items()
         }
-        self.sounds = {
-            name: sound
-            for name, path in self.sfx_paths.items()
-            if (sound := SoundLoader.load(path)) is not None
-        }
+        self.sounds = {}
+        for name, path in self.sfx_paths.items():
+            if (sound := self._safe_load(path)) is not None:
+                self.sounds[name] = sound
+
+    def _safe_load(self, path: str) -> Any | None:
+        """Load an optional sound without making the gameplay loop depend on audio."""
+        try:
+            sound = SoundLoader.load(path)
+        except Exception as error:
+            self.audio_available = False
+            if not self._backend_warning_shown:
+                logger.warning("Audio backend unavailable; continuing silently: %s", error)
+                self._backend_warning_shown = True
+            return None
+        if sound is None:
+            self.audio_available = False
+        return sound
 
     def toggle_mute(self) -> bool:
         self.bgm_muted = not self.bgm_muted
@@ -71,13 +86,14 @@ class AudioManager:
     def play_bgm(self, filename: str, loop: bool = True) -> None:
         self.stop_bgm()
         path = str(resource_path("assets", "Component_UI", "Sounds", filename))
-        self.bgm = SoundLoader.load(path)
+        self.bgm = self._safe_load(path)
         if self.bgm:
             self.bgm.volume = 0 if self.bgm_muted else self.bgm_volume
             self.bgm.loop = loop
             self.bgm.play()
         else:
-            logger.warning("Optional BGM could not be loaded: %s", filename)
+            if self.audio_available:
+                logger.warning("Optional BGM could not be loaded: %s", filename)
 
     def stop_bgm(self) -> None:
         if self.bgm:
@@ -92,7 +108,8 @@ class AudioManager:
             sound.volume = self.sfx_volume
             sound.play()
         else:
-            logger.warning("Optional SFX could not be loaded: %s", name)
+            if self.audio_available:
+                logger.warning("Optional SFX could not be loaded: %s", name)
 
     def set_bgm_volume(self, volume: float) -> None:
         self.bgm_volume = volume

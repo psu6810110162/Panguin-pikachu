@@ -23,3 +23,22 @@ def test_generated_gameplay_sfx_are_small_mono_wav_files():
             assert audio.getsampwidth() == 2
             assert audio.getframerate() == 44_100
             assert 0 < audio.getnframes() < 44_100 * 2
+
+
+def test_audio_manager_falls_back_when_backend_is_unavailable(monkeypatch):
+    from infrastructure.audio import AudioManager, SoundLoader
+
+    AudioManager._instance = None
+
+    def unavailable(_path):
+        raise RuntimeError("no audio device")
+
+    monkeypatch.setattr(SoundLoader, "load", unavailable)
+    manager = AudioManager()
+
+    assert manager.audio_available is False
+    assert manager.sounds == {}
+    manager.play_sfx("step")
+    manager.play_bgm("Bgm.gameplay.mp3")
+
+    AudioManager._instance = None

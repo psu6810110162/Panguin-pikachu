@@ -275,6 +275,34 @@ class StateOverlay(Label):
         self._panel.size = instance.size
 
 
+class ProgressRing(Widget):
+    """Small code-native progress ring for protected recovery states."""
+
+    progress = NumericProperty(0.0)
+    ring_color = ListProperty([0.35, 0.9, 1.0, 1.0])
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas:
+            self._track_color = Color(0.15, 0.25, 0.35, 0.8)
+            self._track = Line(width=3.0)
+            self._progress_color = Color(*self.ring_color)
+            self._progress = Line(width=5.0)
+        self.bind(pos=self._redraw, size=self._redraw, progress=self._redraw)
+        self.bind(ring_color=self._redraw_color)
+        self._redraw()
+
+    def _redraw_color(self, _instance, value):
+        self._progress_color.rgba = value
+
+    def _redraw(self, *_args):
+        radius = max(1.0, min(self.width, self.height) * 0.42)
+        center = (self.center_x, self.center_y)
+        self._track.circle = (*center, radius, 0.0, 360.0)
+        end_angle = -90.0 + max(0.0, min(1.0, self.progress)) * 360.0
+        self._progress.circle = (*center, radius, -90.0, end_angle)
+
+
 class AnimatedSkin(Image):
     """
     Widget แสดงผล Skin ตัวละครแบบแอนิเมชัน (Idle)

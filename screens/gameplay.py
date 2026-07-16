@@ -50,6 +50,7 @@ from ui.components import (
     HoverButton,
     HudRail,
     MeterBar,
+    ProgressRing,
     StateOverlay,
 )
 
@@ -635,6 +636,7 @@ class GamePlayScreen(Screen):
         self.respawn_count = 0
         self.decision_grace_active = False
         self._respawn_event = None
+        self._respawn_remaining = 0.0
         self._nav_event = None
         self._boss_warning_shown = False
         self.grid.reset()
@@ -856,7 +858,7 @@ class GamePlayScreen(Screen):
         self.checkpoint_label.bind(texture_size=self.checkpoint_label.setter("size"))
         self.add_widget(self.checkpoint_label)
         self.respawn_overlay = StateOverlay(
-            text="RESPAWNING...",
+            text="RESPAWNING...\nกำลังสร้างเส้นทางปลอดภัย",
             font_size="30sp",
             color=(0.65, 0.9, 1.0, 1),
             size_hint=(1, 1),
@@ -868,6 +870,26 @@ class GamePlayScreen(Screen):
             disabled=True,
         )
         self.add_widget(self.respawn_overlay)
+        self.respawn_ring = ProgressRing(
+            size_hint=(None, None),
+            size=(96, 96),
+            pos_hint={"center_x": 0.5, "center_y": 0.42},
+            opacity=0,
+        )
+        self.add_widget(self.respawn_ring)
+        self.respawn_grace_label = Label(
+            text="",
+            font_size="18sp",
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+            color=(0.55, 0.95, 1.0, 1),
+            size_hint=(None, None),
+            size=(520, 36),
+            pos_hint={"center_x": 0.5, "center_y": 0.32},
+            halign="center",
+            valign="middle",
+            opacity=0,
+        )
+        self.add_widget(self.respawn_grace_label)
 
         # Boss UI
         self.boss_wall_label = Label(
@@ -922,8 +944,8 @@ class GamePlayScreen(Screen):
                 BOSS_REVIEW_SHEET.frame_height,
             ),
             size_hint=(None, None),
-            size=(176, 176),
-            pos_hint={"center_x": 0.5, "center_y": 0.80},
+            size=(224, 190),
+            pos_hint={"right": 0.95, "top": 0.60},
             allow_stretch=True,
             keep_ratio=True,
             opacity=0,
@@ -993,6 +1015,11 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.decision_countdown)
 
+        # Keep the boss portrait above the decision dimmer so the character is
+        # readable during every wave instead of becoming a dark silhouette.
+        self.remove_widget(self.boss_portrait)
+        self.add_widget(self.boss_portrait)
+
     def _build_decision_choice(self, title, pos_hint, accent):
         """Create one keyboard-mapped choice card without owning game logic."""
         card = ChoiceCard(
@@ -1043,8 +1070,8 @@ class GamePlayScreen(Screen):
         self._set_drone_pose("point_forward")
         self.decision_zone = zone_id
         self.decision_ready = False
-        self.decision_intro_remaining = float(cfg.get("intro_seconds", 0.8))
-        self.decision_remaining = float(cfg.get("policy_seconds", 8.0))
+        self.decision_intro_remaining = float(cfg.get("intro_seconds", 1.5))
+        self.decision_remaining = float(cfg.get("policy_seconds", 15.0))
         self.decision_card.text = f"ZONE {zone_id}\n{junction.situation}"
         self.decision_left.text = f"←  {junction.left.label}"
         self.decision_right.text = f"{junction.right.label}  →"
@@ -1068,8 +1095,8 @@ class GamePlayScreen(Screen):
         self._set_drone_pose("warning")
         self.decision_zone = wave_no
         self.decision_ready = False
-        self.decision_intro_remaining = float(cfg.get("intro_seconds", 0.8))
-        self.decision_remaining = float(cfg.get("boss_seconds", 6.0))
+        self.decision_intro_remaining = float(cfg.get("intro_seconds", 1.5))
+        self.decision_remaining = float(cfg.get("boss_seconds", 12.0))
         self.decision_card.text = f"BOSS WAVE {wave_no}\nเลือกหลักฐานที่หักล้างกำแพงนี้"
         self.decision_left.text = f"←  {sides.get('left', '?')}"
         self.decision_right.text = f"{sides.get('right', '?')}  →"
@@ -1197,6 +1224,8 @@ class GamePlayScreen(Screen):
         self.junction_banner.text = ""
         self.respawn_overlay.opacity = 0
         self.respawn_overlay.disabled = True
+        self.respawn_ring.opacity = 0
+        self.respawn_grace_label.opacity = 1
         self._close_decision()
         # RESPAWNING → RUNNING ตาม state machine (ADR-010 / state-machines.md §3)
         self.controller.resume_after_respawn()
@@ -1232,6 +1261,10 @@ class GamePlayScreen(Screen):
             self.checkpoint_label.opacity = 0
             self.respawn_overlay.opacity = 1
             self.respawn_overlay.disabled = False
+            self._respawn_remaining = self.metrics.respawn_seconds
+            self.respawn_ring.progress = 0.0
+            self.respawn_ring.opacity = 1
+            self.respawn_grace_label.opacity = 0
             AudioManager().play_sfx("respawn")
             self._respawn_event = Clock.schedule_once(
                 self._respawn_penguin, self.metrics.respawn_seconds
@@ -1260,6 +1293,8 @@ class GamePlayScreen(Screen):
         self.junction_banner.text = ""
         self.respawn_overlay.opacity = 0
         self.respawn_overlay.disabled = True
+        self.respawn_ring.opacity = 0
+        self.respawn_grace_label.opacity = 0
         self.checkpoint_label.opacity = 0
         start = self.grid.path[0]
         self.last_checkpoint_col, self.last_checkpoint_row = start
@@ -1344,10 +1379,13 @@ class GamePlayScreen(Screen):
         self.score_label.text = f"SCORE: {dist_str}"
         self.gem_label.text = f"GEMS {snapshot.gems}"
 
-        self.grid.update_obstacles(
-            dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row)
-        )
-        self.grid.cleanup_behind(self.path_index)
+        # Decision and respawn states pause the simulation clock. Presentation
+        # animation still advances below, but obstacles and cleanup do not.
+        if self.decision_phase is None and not self.is_respawning:
+            self.grid.update_obstacles(
+                dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row)
+            )
+            self.grid.cleanup_behind(self.path_index)
 
         # Physics update
         if self.penguin.is_dead:
@@ -1368,8 +1406,21 @@ class GamePlayScreen(Screen):
 
         self.particle_system.update(dt)
         self.renderer.advance_visual(dt)
-        self.controller.tick(dt)
+        if self.decision_phase is None:
+            self.controller.tick(dt)
         self._update_decision(dt)
+
+        if self.is_respawning:
+            duration = max(0.001, self.metrics.respawn_seconds)
+            self._respawn_remaining = max(0.0, self._respawn_remaining - dt)
+            self.respawn_ring.progress = min(1.0, 1.0 - (self._respawn_remaining / duration))
+        elif self.metrics.grace_active:
+            self.respawn_grace_label.text = (
+                f"ปลอดภัยชั่วคราว · ขยับต่อได้ ({self.metrics.grace_remaining:.1f}s)"
+            )
+            self.respawn_grace_label.opacity = 1
+        else:
+            self.respawn_grace_label.opacity = 0
 
         if self.decision_phase is not None:
             self.renderer.draw(self.grid, self.penguin, self.path_index)
@@ -1745,6 +1796,9 @@ class GamePlayScreen(Screen):
             f"CARBON BARON  //  WAVE {wave_no}/3  //  ARMOR {max(0, self.boss_hp)}"
         )
         self.boss_status_label.opacity = 1
+        Animation.cancel_all(self.boss_portrait)
+        self.boss_portrait.opacity = 0
+        Animation(opacity=1, duration=0.25, t="out_quad").start(self.boss_portrait)
 
         sides = {
             placement.side: placement.item_id

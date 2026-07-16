@@ -65,6 +65,7 @@ def test_grace_starts_only_on_complete_respawn_not_on_death():
     metrics.complete_respawn()
     assert not metrics.needs_respawn
     assert metrics.grace_active
+    assert metrics.grace_remaining == metrics.invincible_seconds
     assert metrics.is_invincible
 
 

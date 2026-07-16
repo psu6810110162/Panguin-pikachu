@@ -195,6 +195,11 @@ class RunMetrics:
         return self._grace_remaining > 0.0
 
     @property
+    def grace_remaining(self) -> float:
+        """Seconds of post-respawn protection remaining for the HUD."""
+        return self._grace_remaining
+
+    @property
     def is_invincible(self) -> bool:
         """Derived protection state; callers must use the lifecycle methods.
 
