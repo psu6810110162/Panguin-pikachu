@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "description": "Shop character-skin catalog. skin id ต้องตรงกับ game/penguin.py Penguin.SKIN_ASSETS keys เป๊ะ (ใช้เป็น players.equipped_skin และ StateManager.selected_skin โดยตรง) ห้ามเปลี่ยนโดยไม่แก้ทั้งสองที่พร้อมกัน. มี is_default ได้เพียงตัวเดียว = สกินเริ่มต้นที่ผู้เล่นใหม่ทุกคนเป็นเจ้าของฟรีตั้งแต่แรก.",
+  "skins": [
+    {
+      "id": "Ninja Frog",
+      "display_name": "NINJA FROG",
+      "price": 0,
+      "is_default": true,
+      "preview_sheet": "assets/pixelAdventure/Free/Main Characters/Ninja Frog/Idle (32x32).png"
+    },
+    {
+      "id": "Mask Dude",
+      "display_name": "MASK DUDE",
+      "price": 10,
+      "is_default": false,
+      "preview_sheet": "assets/pixelAdventure/Free/Main Characters/Mask Dude/Idle (32x32).png"
+    },
+    {
+      "id": "Pink Man",
+      "display_name": "PINK MAN",
+      "price": 10,
+      "is_default": false,
+      "preview_sheet": "assets/pixelAdventure/Free/Main Characters/Pink Man/Idle (32x32).png"
+    },
+    {
+      "id": "Virtual Guy",
+      "display_name": "VIRTUAL GUY",
+      "price": 10,
+      "is_default": false,
+      "preview_sheet": "assets/pixelAdventure/Free/Main Characters/Virtual Guy/Idle (32x32).png"
+    }
+  ]
+}

@@ -275,6 +275,73 @@ class DatabaseManager:
         )
         self.conn.commit()
 
+    def ensure_default_skin(self, player_name: str, skin_id: str) -> None:
+        """Seed the shop's default skin as owned — idempotent (INSERT OR IGNORE
+        via add_owned_skin), so a player is never shown BUY/LOCKED on the one
+        skin every run starts with."""
+        self.add_owned_skin(player_name, skin_id)
+
+    def get_equipped_skin(self, player_name: str) -> str | None:
+        """ผิวที่กำลังสวมใส่ตามที่บันทึกไว้ใน players.equipped_skin"""
+        self.connect()
+        assert self.conn is not None
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT equipped_skin FROM players WHERE name = ?", (player_name,))
+        row = cursor.fetchone()
+        return row["equipped_skin"] if row else None
+
+    def set_equipped_skin(self, player_name: str, skin_id: str) -> bool:
+        """สวมใส่ skin_id ให้ player_name — ปฏิเสธ (คืน False) ถ้ายังไม่ได้เป็นเจ้าของ."""
+        if not self.is_skin_owned(player_name, skin_id):
+            return False
+        player_id = self.get_or_create_player(player_name)
+        assert self.conn is not None
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE players SET equipped_skin = ? WHERE id = ?", (skin_id, player_id))
+        self.conn.commit()
+        return True
+
+    def purchase_skin(self, player_name: str, skin_id: str, price: int) -> bool:
+        """ซื้อสกินแบบ atomic transaction เดียว — recheck ownership/balance ที่ต้นเหตุ
+        ไม่ใช่ check-then-deduct-then-insert คนละ transaction เหมือนเดิม จึงกัน
+        double-tap หักเงินซ้ำและกัน balance ติดลบได้จริง แม้ถูกเรียกซ้อนกันเร็วมาก.
+
+        คืน True ถ้าเป็นเจ้าของอยู่แล้ว (no-op, idempotent) หรือซื้อสำเร็จ; False
+        ถ้า gem_balance ไม่พอ (rollback ทั้งหมด ไม่แก้อะไรเลย).
+        """
+        player_id = self.get_or_create_player(player_name)
+        self.connect()
+        assert self.conn is not None
+        cursor = self.conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            cursor.execute(
+                "SELECT 1 FROM player_skins WHERE player_id = ? AND skin_id = ?",
+                (player_id, skin_id),
+            )
+            if cursor.fetchone() is not None:
+                self.conn.commit()
+                return True
+
+            cursor.execute(
+                "UPDATE players SET gem_balance = gem_balance - ? "
+                "WHERE id = ? AND gem_balance >= ?",
+                (price, player_id, price),
+            )
+            if cursor.rowcount == 0:
+                self.conn.rollback()
+                return False
+
+            cursor.execute(
+                "INSERT OR IGNORE INTO player_skins (player_id, skin_id) VALUES (?, ?)",
+                (player_id, skin_id),
+            )
+            self.conn.commit()
+            return True
+        except Exception:
+            self.conn.rollback()
+            raise
+
 
 if __name__ == "__main__":
     db = DatabaseManager()
