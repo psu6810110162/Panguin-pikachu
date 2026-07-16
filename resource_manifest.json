@@ -423,6 +423,105 @@
       "format": "ogg",
       "license": "LicenseRef-PendingReview",
       "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-step",
+      "kind": "audio",
+      "source": "assets/generated/audio/step.wav",
+      "bundle_path": "assets/generated/audio/step.wav",
+      "required": true,
+      "sha256": "2adcb1e70b006ed8d6067a5c2bf21dcfec9f67c3087e7404ccf56adeb8224a05",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-quiz-open",
+      "kind": "audio",
+      "source": "assets/generated/audio/quiz_open.wav",
+      "bundle_path": "assets/generated/audio/quiz_open.wav",
+      "required": true,
+      "sha256": "1c0ba78f3f2309c32cde4a320eda22f17954e4318e8ad9684172897857a6fedf",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-choice-left",
+      "kind": "audio",
+      "source": "assets/generated/audio/choice_left.wav",
+      "bundle_path": "assets/generated/audio/choice_left.wav",
+      "required": true,
+      "sha256": "c99abce4410f15e843ff497b953a1e87baa0ddef4c94535230042ee1e518bdae",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-choice-right",
+      "kind": "audio",
+      "source": "assets/generated/audio/choice_right.wav",
+      "bundle_path": "assets/generated/audio/choice_right.wav",
+      "required": true,
+      "sha256": "eb705f53f4ce927b27c112b02ebcf290e3a7cc1f9aeff4359e952897f606f97a",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-correct",
+      "kind": "audio",
+      "source": "assets/generated/audio/correct.wav",
+      "bundle_path": "assets/generated/audio/correct.wav",
+      "required": true,
+      "sha256": "6f55dbd865bc9f08996e129e5f38072399f6c682a160a05d368aec7456a9b222",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-wrong",
+      "kind": "audio",
+      "source": "assets/generated/audio/wrong.wav",
+      "bundle_path": "assets/generated/audio/wrong.wav",
+      "required": true,
+      "sha256": "afffbeb6ce6c484a7dba1656214f002b3c089e94bb063b97c1127f7967250096",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-respawn",
+      "kind": "audio",
+      "source": "assets/generated/audio/respawn.wav",
+      "bundle_path": "assets/generated/audio/respawn.wav",
+      "required": true,
+      "sha256": "8109c4c4b890a735acb15136f21dd8d8ed11fe1ba131711f0e07dfd93330a285",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-boss-alert",
+      "kind": "audio",
+      "source": "assets/generated/audio/boss_alert.wav",
+      "bundle_path": "assets/generated/audio/boss_alert.wav",
+      "required": true,
+      "sha256": "beba19bb719c611182dbd4c432a1b5b0d9da4b45a95397158088028cabaf9069",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
+    },
+    {
+      "id": "generated-sfx-victory",
+      "kind": "audio",
+      "source": "assets/generated/audio/victory.wav",
+      "bundle_path": "assets/generated/audio/victory.wav",
+      "required": true,
+      "sha256": "eda36b9078a15ae569174f41c9505e0aa1d7bcacfa799f6948f4b0c79f42a220",
+      "format": "wav",
+      "license": "Project-Generated",
+      "credit_ref": "assets/CREDITS.md"
     }
   ]
 }

@@ -301,9 +301,9 @@ Release flow:
 |---|---|---|---|---|
 | 2026-07-16 | Team | — | Baseline ก่อน Game-First ผ่าน 261 tests | `pytest -q` |
 | 2026-07-16 | Team | — | Teacher Dashboard/Docker เป็น P2 และแยกจาก required CI | workflow + bundle exclude rules |
-| 2026-07-16 | Architecture/Platform | — | Game/core/infrastructure regression ผ่าน 286 tests | `pytest -q` |
+| 2026-07-16 | Architecture/Platform | — | Game/core/infrastructure regression ผ่าน 287 tests | `pytest -q` |
 | 2026-07-16 | Architecture/Platform | — | Lint/format และ typed core/server/infrastructure ผ่าน | scoped `ruff` + `mypy` |
-| 2026-07-16 | Architecture/Platform | — | Source-tree self-test และ resource validation ผ่าน 38 entries | `python main.py --self-test` |
+| 2026-07-16 | Architecture/Platform | — | Source-tree self-test และ resource validation ผ่าน 47 entries | `python main.py --self-test` |
 | 2026-07-16 | Architecture/Platform | — | Golden replay, controller p95 guard, 100-run retention, corruption recovery และ architecture gates ผ่าน | automated suite |
 
 ### Open release blockers (ไม่ใช่สถานะเสร็จ)

@@ -34,7 +34,7 @@ def test_atomic_json_replaces_complete_document(tmp_path):
 
 def test_resource_manifest_validates_and_pending_licenses_block_ga():
     report = validate_resources()
-    assert report.checked >= 38
+    assert report.checked >= 47
     assert {"bgm-gameplay", "sfx-jump", "ui-button-flat", "gem-strip"} <= set(
         report.pending_licenses
     )

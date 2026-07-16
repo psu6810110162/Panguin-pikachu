@@ -53,12 +53,14 @@ def _validate_font(path: Path) -> None:
 
 
 def _validate_audio(path: Path, expected: str) -> None:
-    header = path.read_bytes()[:4]
-    if expected == "ogg" and header != b"OggS":
+    header = path.read_bytes()[:12]
+    if expected == "ogg" and header[:4] != b"OggS":
         raise ResourceValidationError(f"invalid OGG header: {path}")
     valid_mp3 = header[:3] == b"ID3" or header[:2] in {b"\xff\xfb", b"\xff\xf3"}
     if expected == "mp3" and not valid_mp3:
         raise ResourceValidationError(f"invalid MP3 header: {path}")
+    if expected == "wav" and not (header[:4] == b"RIFF" and header[8:12] == b"WAVE"):
+        raise ResourceValidationError(f"invalid WAV header: {path}")
 
 
 def _validate_balance(path: Path, schema_source: str) -> None:
