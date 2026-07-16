@@ -64,6 +64,7 @@ class PolicyChoiceEvent:
     checkpoint_index: int
     policy_id: str
     meter_deltas: dict[str, float]
+    outcome: Literal["left", "right", "timeout"] = "left"
     event_type: Literal["policy_choice"] = "policy_choice"
 
 

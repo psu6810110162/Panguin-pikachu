@@ -20,6 +20,7 @@ that's read once at the end of a run.
 import math
 
 from kivy.clock import Clock
+from kivy.core.image import Image as CoreImage
 from kivy.core.text import Label as CoreLabel
 from kivy.graphics import Color, Ellipse, Line, Rectangle
 from kivy.uix.boxlayout import BoxLayout
@@ -117,6 +118,19 @@ class DAGGraphWidget(Widget):
 class ReportScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(1, 1, 1, 1)
+            self._background = Rectangle(
+                texture=CoreImage("assets/generated/background/gameplay_background_v1.png").texture,
+                pos=self.pos,
+                size=self.size,
+            )
+            Color(0.01, 0.03, 0.08, 0.74)
+            self._background_tint = Rectangle(pos=self.pos, size=self.size)
+        self.bind(
+            pos=self._update_background,
+            size=self._update_background,
+        )
         self._reveal_event = None
         self._revealed = 0
         self.projection = build_projection([])
@@ -203,6 +217,12 @@ class ReportScreen(Screen):
         button_row.add_widget(btn_again)
         button_row.add_widget(btn_home)
         self.add_widget(button_row)
+
+    def _update_background(self, instance, _value):
+        self._background.pos = instance.pos
+        self._background.size = instance.size
+        self._background_tint.pos = instance.pos
+        self._background_tint.size = instance.size
 
     def on_enter(self) -> None:
         logger.info("เข้าสู่หน้า Report Card")

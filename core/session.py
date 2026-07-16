@@ -171,6 +171,7 @@ class GameSession:
         policy_id: str,
         meter_deltas: dict[str, float],
         distance_m: int,
+        outcome: Literal["left", "right", "timeout"] = "left",
     ) -> None:
         self._record.record(
             PolicyChoiceEvent(
@@ -181,6 +182,7 @@ class GameSession:
                 # copy: caller's dict must not be able to mutate a recorded event
                 # after the fact (events are the source of truth — ADR-001)
                 meter_deltas=dict(meter_deltas),
+                outcome=outcome,
             )
         )
 

@@ -57,6 +57,13 @@ class RunState(Enum):
     SYNCED = auto()
 
 
+class DecisionPhase(Enum):
+    """Presentation decisions that pause gameplay simulation, not rendering."""
+
+    POLICY = auto()
+    BOSS = auto()
+
+
 class InvalidTransitionError(Exception):
     """เกิดขึ้นเมื่อพยายามเปลี่ยน RunState ไปยังสถานะที่ไม่อนุญาต หรือไม่ผ่านเงื่อนไข (guard)"""
 
@@ -143,6 +150,7 @@ class RunMetrics:
         self.hearts: int = hearts if hearts is not None else int(hearts_diff.get("start", 5))
         self.max_hearts: int = int(hearts_diff.get("cap", 5))
         self.respawn_seconds: float = float(hearts_diff.get("respawn_seconds", 3.0))
+        self.invincible_seconds: float = float(hearts_diff.get("invincible_seconds", 3.0))
 
         self.max_meter: float = float(meters_diff.get("max", 100.0))
         self.min_meter: float = float(meters_diff.get("min", 0.0))
