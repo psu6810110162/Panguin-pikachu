@@ -34,23 +34,44 @@ class Penguin:
             "Wall Jump": 5,
         }
 
-        # Mapping skin_id -> Folder Name ใน Pixel Adventure
-        self.SKIN_ASSETS = {
-            "Mask Dude": "Mask Dude",
-            "Ninja Frog": "Ninja Frog",
-            "Pink Man": "Pink Man",
-            "Virtual Guy": "Virtual Guy",
-        }
+        # Keep the menu's cosmetic selection contract, but no longer resolve
+        # it to a third-party sprite folder.  Runtime rendering uses the
+        # generated project sheet for every skin until dedicated variants exist.
+        self.SKIN_IDS = {"Mask Dude", "Ninja Frog", "Pink Man", "Virtual Guy"}
 
     def equip_skin(self, skin_id):
-        if skin_id in self.SKIN_ASSETS:
+        if skin_id in self.SKIN_IDS:
             self.skin = skin_id
 
     def get_skin_path(self, action=None):
-        if action is None:
-            action = self.action
-        folder = self.SKIN_ASSETS.get(self.skin, "Ninja Frog")
-        return f"assets/pixelAdventure/Free/Main Characters/{folder}/{action} (32x32).png"
+        """Compatibility accessor for callers that still ask for a skin path.
+
+        The old Pixel Adventure path was a runtime dependency and made the
+        visual language diverge.  All skins now resolve to the generated sheet;
+        frame selection belongs to :meth:`get_generated_frame_name`.
+        """
+        return "assets/generated/character/penguin_sheet_v2.png"
+
+    def get_generated_frame_name(self):
+        """Return the canonical frame name from the generated player sheet.
+
+        ``action`` remains the gameplay-facing vocabulary; the renderer owns
+        the sheet and uses this small pure mapping so no Kivy or texture logic
+        leaks into the entity.
+        """
+        if self.is_dead or self.action == "Fall":
+            return "fall"
+        if self.action == "Hit":
+            return "hit"
+        if self.action in {"Victory", "Report"}:
+            return "victory"
+        if self.action == "Respawn":
+            return "respawn"
+        if self.action == "Jump":
+            return "jump"
+        if self.action == "Run":
+            return "run_left" if self.facing_left else "run_right"
+        return "idle"
 
     def move_forward(self):
         """วิ่งตรงต่อไปข้างหน้า 1 หน่วยบนเส้นทางในเกม"""

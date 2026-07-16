@@ -17,7 +17,13 @@ from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 
-from core.asset_contract import BOSS_REVIEW_SHEET, DRONE_REVIEW_SHEET, ENVIRONMENT_TILE_ATLAS
+from core.asset_contract import (
+    BOSS_REVIEW_SHEET,
+    DRONE_REVIEW_SHEET,
+    ENVIRONMENT_TILE_ATLAS,
+    OBSTACLE_REVIEW_SHEET,
+    PLAYER_REVIEW_SHEET,
+)
 from core.audio import AudioManager
 from core.config import BOSS_DISTANCE_M, TARGET_FPS, TILE_H, TILE_IMG_H, TILE_W
 from core.interaction import YJunctionInteraction, junction_prompt_text
@@ -48,19 +54,6 @@ from ui.components import (
     StateOverlay,
 )
 
-GRASS_TILES = [
-    "assets/isometric-nature-pack/grass1.png",
-    "assets/isometric-nature-pack/grass2.png",
-    "assets/isometric-nature-pack/grass3.png",
-    "assets/isometric-nature-pack/grass4.png",
-    "assets/isometric-nature-pack/grass5.png",
-    "assets/isometric-nature-pack/grass6.png",
-    "assets/isometric-nature-pack/grass7.png",
-    "assets/isometric-nature-pack/grass8.png",
-    "assets/isometric-nature-pack/grass9.png",
-    "assets/isometric-nature-pack/grass10.png",
-]
-
 ARROW_RIGHT_IMG = "assets/Component_UI/Vector/arrow_right_normal.png"
 ARROW_LEFT_IMG = "assets/Component_UI/Vector/arrow_left_normal.png"
 
@@ -82,12 +75,12 @@ class KivyRenderer(Widget):
         super().__init__(**kwargs)
         self.tile_textures = {}
         self.anim_frame = 0
-        self._grass_textures = [CoreImage(p).texture for p in GRASS_TILES]
-        self.box_assets = {
-            "Idle": CoreImage("assets/pixelAdventure/Free/Items/Boxes/Box2/Idle.png").texture,
-            "Hit": CoreImage("assets/pixelAdventure/Free/Items/Boxes/Box2/Hit (28x24).png").texture,
-            "Break": CoreImage("assets/pixelAdventure/Free/Items/Boxes/Box2/Break.png").texture,
-        }
+        self.player_sheet_texture = CoreImage(
+            "assets/generated/character/penguin_sheet_v2.png"
+        ).texture
+        self.obstacle_sheet_texture = CoreImage(
+            "assets/generated/obstacles/obstacle_sheet_v1.png"
+        ).texture
         self.gem_texture = CoreImage("assets/Gem/Coin_Gems/spr_coin_strip4.png").texture
         self.background_texture = CoreImage(
             "assets/generated/background/gameplay_background_v1.png"
@@ -145,12 +138,6 @@ class KivyRenderer(Widget):
         # generated tile language visible throughout the run.
         variant = "cool" if (col * 7 + row * 11) % 4 else "frozen"
         return self._environment_textures[variant]
-
-    def _get_fallback_tile_texture(self, col, row):
-        key = (col, row)
-        if key not in self.tile_textures:
-            self.tile_textures[key] = random.choice(self._grass_textures)
-        return self.tile_textures[key]
 
     def grid_to_screen(self, col, row):
         return GridManager.to_isometric(col, row, TILE_W, TILE_H)
@@ -321,13 +308,12 @@ class KivyRenderer(Widget):
             if penguin.visual_x is not None:
                 px, py = penguin.visual_x, penguin.visual_y
 
-            skin_path = penguin.get_skin_path()
-            if skin_path not in self.tile_textures:
-                self.tile_textures[skin_path] = CoreImage(skin_path).texture
-            skin_tex = self.tile_textures[skin_path]
-            if penguin.facing_left:
-                skin_tex = skin_tex.get_region(32, 0, -32, 32)
-            pw, ph = 64, 64
+            skin_tex = self.player_sheet_texture.get_region(
+                *PLAYER_REVIEW_SHEET.cell_origin(penguin.get_generated_frame_name()),
+                PLAYER_REVIEW_SHEET.frame_width,
+                PLAYER_REVIEW_SHEET.frame_height,
+            )
+            pw, ph = 96, 128
             Color(1, 1, 1, 1)
             Rectangle(
                 texture=skin_tex,
@@ -346,25 +332,12 @@ class KivyRenderer(Widget):
 
             px, py = penguin.visual_x, penguin.visual_y
 
-            # Action frame cycling
-            frames_count = penguin.ACTION_FRAMES.get(penguin.action, 1)
-            self.anim_frame = (self.anim_frame + 0.3) % max(1, frames_count)
-            frame_idx = int(self.anim_frame) % max(1, frames_count)
-
-            skin_path = penguin.get_skin_path()
-            cache_key = f"{skin_path}_{frame_idx}_{'L' if penguin.facing_left else 'R'}"
-            if cache_key not in self.tile_textures:
-                if skin_path not in self.tile_textures:
-                    self.tile_textures[skin_path] = CoreImage(skin_path).texture
-                full_tex = self.tile_textures[skin_path]
-                if penguin.facing_left:
-                    self.tile_textures[cache_key] = full_tex.get_region(
-                        (frame_idx + 1) * 32, 0, -32, 32
-                    )
-                else:
-                    self.tile_textures[cache_key] = full_tex.get_region(frame_idx * 32, 0, 32, 32)
-            skin_tex = self.tile_textures[cache_key]
-            pw, ph = 64, 64
+            skin_tex = self.player_sheet_texture.get_region(
+                *PLAYER_REVIEW_SHEET.cell_origin(penguin.get_generated_frame_name()),
+                PLAYER_REVIEW_SHEET.frame_width,
+                PLAYER_REVIEW_SHEET.frame_height,
+            )
+            pw, ph = 96, 128
             Color(1, 1, 1, 1)
             Rectangle(
                 texture=skin_tex,
@@ -374,14 +347,26 @@ class KivyRenderer(Widget):
 
     def _draw_obstacle(self, obs, tx, ty, ox, oy):
         """
-        Draw stacked crate layers using stack_height for visual degradation.
-        When hit, the top layer is removed visually before the hit animation plays.
+        Draw stacked ice/carbon hazard layers using stack_height for degradation.
+        Gameplay still owns hit/deactivation; this method only selects the
+        matching generated visual state.
         """
-        state = obs.state
-        frame = int(obs.anim_frame)
-        full_tex = self.box_assets.get(state)
-        tex = full_tex.get_region(frame * 28, 0, 28, 24)
-        bw, bh = 56, 48
+        if obs.state == obs.STATE_HIT:
+            frame_name = "hit"
+        elif obs.state == obs.STATE_BREAK:
+            frame_name = "breaking"
+        elif obs.stack_height <= 1 and obs.size > 1:
+            frame_name = "almost_destroyed"
+        elif obs.stack_height < obs.size:
+            frame_name = "damaged"
+        else:
+            frame_name = "idle"
+        tex = self.obstacle_sheet_texture.get_region(
+            *OBSTACLE_REVIEW_SHEET.cell_origin(frame_name),
+            OBSTACLE_REVIEW_SHEET.frame_width,
+            OBSTACLE_REVIEW_SHEET.frame_height,
+        )
+        bw, bh = 100, 100
         Color(1, 1, 1, 1)
         # Use stack_height (not hp) for number of layers to render
         layers = max(1, obs.stack_height) if obs.active else max(1, obs.hp)

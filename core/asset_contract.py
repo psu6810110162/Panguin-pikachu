@@ -68,3 +68,40 @@ DRONE_REVIEW_SHEET = SpriteSheetContract(
     rows=2,
     frame_names=("idle_hover", "point_forward", "warning", "report_celebration"),
 )
+
+# PR2/PR3 runtime review sheets.  These are deliberately explicit contracts:
+# the generated PNGs are 4x2 atlases, and the renderer must never infer frame
+# geometry from whatever crop happens to look right on one machine.
+PLAYER_REVIEW_SHEET = SpriteSheetContract(
+    frame_width=384,
+    frame_height=512,
+    columns=4,
+    rows=2,
+    frame_names=(
+        "idle",
+        "run_left",
+        "run_right",
+        "jump",
+        "hit",
+        "fall",
+        "victory",
+        "respawn",
+    ),
+)
+
+OBSTACLE_REVIEW_SHEET = SpriteSheetContract(
+    frame_width=384,
+    frame_height=512,
+    columns=4,
+    rows=2,
+    frame_names=(
+        "idle",
+        "warning",
+        "hit",
+        "damaged",
+        "breaking",
+        "almost_destroyed",
+        "destroyed",
+        "repaired",
+    ),
+)
