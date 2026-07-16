@@ -5,8 +5,15 @@ from core.state import RunMetrics
 
 
 def junction_prompt_text(junction: Junction) -> str:
-    """Pure text for a pre-commit Y-junction banner."""
-    return f"{junction.situation}\n< LEFT: {junction.left.label} | RIGHT: {junction.right.label} >"
+    """Pure text for a pre-commit Y-junction banner.
+
+    เขียนบรรทัดคำสั่งให้ชัดว่า "เดินเข้าเลน" คือการเลือก ไม่ใช่มีปุ่มกดตอบ —
+    ผู้เล่นทดสอบสับสนว่าไม่รู้จะ "ตอบ" ยังไงตอนโชว์ป้ายนี้
+    """
+    return (
+        f"{junction.situation}\n"
+        f"เดินเข้าเลนซ้าย/ขวาเพื่อเลือก — ซ้าย: {junction.left.label}  |  ขวา: {junction.right.label}"
+    )
 
 
 class PolicyChoiceSink(Protocol):
