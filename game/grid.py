@@ -220,6 +220,29 @@ class GridManager:
         except ValueError:
             return -1
 
+    def repair_path_ahead_of_checkpoint(self, col, row, tiles_ahead=30):
+        """เรียกตอนกำลังจะ respawn ผู้เล่นที่ checkpoint (col,row)
+
+        `update_tiles` นับถอยหลัง trigger_timer ของทุก tile ที่เคยถูกเหยียบไปแล้ว
+        ต่อเนื่องไปเรื่อย ๆ ไม่สนใจว่าผู้เล่นยังอยู่ตรงนั้นไหม — ถ้าผู้เล่นตายแล้วรอ respawn
+        (3 วิ) ทางเดินที่เดินผ่านมาก่อนตายอาจละลาย/หายไปหมดแล้ว พอ respawn กลับมาที่
+        checkpoint แล้วเดินต่อจะตกทันที (tile ไม่มีอยู่ใน path_set) → ตาย → respawn → วนไม่จบ
+        ฟังก์ชันนี้ "แช่แข็ง" ทางเดินช่วงสั้น ๆ ข้างหน้า checkpoint กลับเป็น normal/สร้างใหม่
+        ถ้าหายไปแล้ว ให้ผู้เล่นมีทางเดินจริงให้เดินต่อได้เสมอหลัง respawn
+        """
+        idx = self.get_path_index(col, row)
+        if idx < 0:
+            return
+        for pos in self.path[idx : idx + tiles_ahead]:
+            tile = self.path_set.get(pos)
+            if tile is None:
+                self._add_tile(*pos)
+            else:
+                tile.state = "normal"
+                tile.trigger_timer = 1.2
+                tile.offset_y = 0.0
+                tile.fall_velocity = 0.0
+
     def get_correct_direction_at(self, path_index):
         """ทิศทาง centerline ณ index นี้"""
         if path_index + 1 < len(self.path):

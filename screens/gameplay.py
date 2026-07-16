@@ -606,7 +606,9 @@ class GamePlayScreen(Screen):
             font_size="20sp",
             bold=True,
             font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            size_hint_x=None,
         )
+        self.hearts_label.bind(texture_size=self.hearts_label.setter("size"))
         self.heat_bar = MeterBar(
             value=self.metrics.heat_meter,
             max_value=self.metrics.max_meter,
@@ -649,7 +651,9 @@ class GamePlayScreen(Screen):
             font_size="18sp",
             bold=True,
             font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            size_hint_x=None,
         )
+        self.inventory_label.bind(texture_size=self.inventory_label.setter("size"))
         self.hud_bg.add_widget(self.inventory_label)
 
         self.add_widget(self.hud_bg)
@@ -709,13 +713,17 @@ class GamePlayScreen(Screen):
             text="",
             font_size="24sp",
             bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",  # wall_text เป็นภาษาไทย
             color=(1, 0.2, 0.2, 1),
             size_hint=(None, None),
             pos_hint={"center_x": 0.5, "top": 0.85},
             outline_width=2,
             outline_color=(0, 0, 0, 1),
+            text_size=(700, None),
+            halign="center",
+            valign="middle",
         )
+        self.boss_wall_label.bind(texture_size=self.boss_wall_label.setter("size"))
         self.add_widget(self.boss_wall_label)
 
         self.boss_choices_label = Label(
@@ -735,13 +743,19 @@ class GamePlayScreen(Screen):
             text="",
             font_size="18sp",
             bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            # situation/left.label/right.label ใน junctions.json เป็นภาษาไทยทั้งหมด —
+            # Kenney Future เป็นฟอนต์ Latin-only ไม่มี glyph ไทย ต้องใช้ฟอนต์นี้แทน
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
             color=(0.7, 0.9, 1, 1),
             size_hint=(None, None),
             pos_hint={"center_x": 0.5, "top": 0.72},
             outline_width=2,
             outline_color=(0, 0, 0, 1),
+            text_size=(700, None),
+            halign="center",
+            valign="middle",
         )
+        self.junction_banner.bind(texture_size=self.junction_banner.setter("size"))
         self.add_widget(self.junction_banner)
 
     def show_checkpoint_message(self, message: str):
@@ -775,6 +789,11 @@ class GamePlayScreen(Screen):
         self.is_respawning = False
         self.penguin.col = self.last_checkpoint_col
         self.penguin.row = self.last_checkpoint_row
+        # ทางเดินช่วงที่เดินผ่านไปแล้วอาจละลาย/หายไปหมดระหว่างรอ respawn 3 วิ —
+        # แช่แข็งกลับให้เดินต่อได้จริง กัน respawn แล้วตกซ้ำวนไม่จบ
+        self.grid.repair_path_ahead_of_checkpoint(
+            self.last_checkpoint_col, self.last_checkpoint_row
+        )
         self.metrics.is_invincible = False
         self.renderer.trigger_shake(0)
         self.active_prompt_zone = None
