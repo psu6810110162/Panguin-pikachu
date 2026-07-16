@@ -11,8 +11,12 @@ from typing import Any
 
 from infrastructure.paths import RuntimePaths
 
-DATABASE_SCHEMA_VERSION = 1
-SAVE_VERSION = 1
+DATABASE_SCHEMA_VERSION = 2
+SAVE_VERSION = 2
+
+
+class UnsupportedSchemaVersionError(sqlite3.DatabaseError):
+    """A save from a newer game must remain untouched, not be recovered."""
 
 
 class DatabaseManager:
@@ -54,6 +58,12 @@ class DatabaseManager:
             self.conn = self._open_connection()
             self._verify_integrity()
             self._migrate_schema()
+        except UnsupportedSchemaVersionError as error:
+            if self.conn is not None:
+                self.conn.close()
+                self.conn = None
+            self.recovery_notice = str(error)
+            raise
         except sqlite3.DatabaseError as error:
             if self.conn is not None:
                 self.conn.close()
@@ -110,8 +120,9 @@ class DatabaseManager:
         assert self.conn is not None
         current = int(self.conn.execute("PRAGMA user_version").fetchone()[0])
         if current > DATABASE_SCHEMA_VERSION:
-            raise sqlite3.DatabaseError(
-                f"database schema {current} is newer than supported {DATABASE_SCHEMA_VERSION}"
+            raise UnsupportedSchemaVersionError(
+                f"Save schema {current} is newer than this game supports "
+                f"({DATABASE_SCHEMA_VERSION}); open it with a newer game version."
             )
         if current < DATABASE_SCHEMA_VERSION:
             self._backup_before_migration(current)
@@ -129,7 +140,9 @@ class DatabaseManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     player_id INTEGER REFERENCES players(id),
                     played_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    duration_s REAL DEFAULT 0.0
+                    duration_s REAL DEFAULT 0.0,
+                    run_state TEXT DEFAULT 'FINISHED',
+                    terminal_reason TEXT
                 );
                 CREATE TABLE IF NOT EXISTS scores (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,6 +163,14 @@ class DatabaseManager:
                 );
                 """
             )
+            if current < 2:
+                columns = {str(row[1]) for row in self.conn.execute("PRAGMA table_info(sessions)")}
+                if "run_state" not in columns:
+                    self.conn.execute(
+                        "ALTER TABLE sessions ADD COLUMN run_state TEXT DEFAULT 'FINISHED'"
+                    )
+                if "terminal_reason" not in columns:
+                    self.conn.execute("ALTER TABLE sessions ADD COLUMN terminal_reason TEXT")
             self.conn.execute(
                 "INSERT OR REPLACE INTO app_metadata(key, value) VALUES ('save_version', ?)",
                 (str(SAVE_VERSION),),
@@ -189,7 +210,13 @@ class DatabaseManager:
         return int(cursor.lastrowid)
 
     def save_game_session(
-        self, player_name: str, distance: int, gems: int, duration: float = 0.0
+        self,
+        player_name: str,
+        distance: int,
+        gems: int,
+        duration: float = 0.0,
+        run_state: str = "FINISHED",
+        terminal_reason: str | None = None,
     ) -> None:
         player_id = self.get_or_create_player(player_name)
         assert self.conn is not None
@@ -199,8 +226,9 @@ class DatabaseManager:
                 (gems, player_id),
             )
             cursor = self.conn.execute(
-                "INSERT INTO sessions (player_id, duration_s) VALUES (?, ?)",
-                (player_id, duration),
+                "INSERT INTO sessions "
+                "(player_id, duration_s, run_state, terminal_reason) VALUES (?, ?, ?, ?)",
+                (player_id, duration, run_state, terminal_reason),
             )
             self.conn.execute(
                 "INSERT INTO scores (session_id, distance_m, gems_collected) VALUES (?, ?, ?)",
@@ -244,7 +272,9 @@ class DatabaseManager:
         assert self.conn is not None
         rows = self.conn.execute(
             """
-            SELECT ss.played_at, s.distance_m, s.gems_collected FROM scores s
+            SELECT ss.played_at, s.distance_m, s.gems_collected,
+                   ss.run_state, ss.terminal_reason
+            FROM scores s
             JOIN sessions ss ON s.session_id = ss.id
             JOIN players p ON ss.player_id = p.id WHERE p.name = ?
             ORDER BY s.distance_m DESC, ss.played_at DESC LIMIT ?

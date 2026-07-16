@@ -88,8 +88,10 @@ class InvalidTransitionError(Exception):
 
 _ALLOWED_TRANSITIONS: dict[RunState, set[RunState]] = {
     RunState.LOBBY: {RunState.RUNNING},
-    RunState.RUNNING: {RunState.RESPAWNING, RunState.BOSS},
-    RunState.RESPAWNING: {RunState.RUNNING},
+    # FINISHED is also legal for a normal game-over (hearts/heat/anger), not
+    # only for a boss victory.  A terminal result must never retain RUNNING.
+    RunState.RUNNING: {RunState.RESPAWNING, RunState.BOSS, RunState.FINISHED},
+    RunState.RESPAWNING: {RunState.RUNNING, RunState.FINISHED},
     RunState.BOSS: {RunState.FINISHED},
     RunState.FINISHED: {RunState.SYNCED},
     RunState.SYNCED: set(),

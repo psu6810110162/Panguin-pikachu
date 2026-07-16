@@ -90,7 +90,7 @@ class GameSession:
         self._record.advance_state(RunState.BOSS, distance_m=distance_m)
 
     def finish(self) -> None:
-        """BOSS → FINISHED (จบรอบ ไปหน้า report)"""
+        """Close a run after victory or a normal game-over."""
         self._record.advance_state(RunState.FINISHED)
 
     def mark_synced(self) -> None:

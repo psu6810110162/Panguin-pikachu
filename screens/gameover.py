@@ -12,14 +12,15 @@ from infrastructure.version import APP_VERSION
 class GameOverScreen(Screen):
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ GameOver")
-        repository = LocalCompletedRunRepository()
+        gameplay = None
+        reason = None
+        self.terminal_result = None
+        self._save_enabled = False
+        self.distance = 0
+        self.gems = 0
+        self.reason = "ไม่ทราบสาเหตุ"
 
-        # 1. พรีฟิลชื่อล่าสุด
-        last_name = repository.last_player_name()
-        if "name_input" in self.ids:
-            self.ids.name_input.text = last_name
-
-        # 2. ดึงข้อมูลจากหน้า gameplay
+        # Read the terminal snapshot independently from optional profile I/O.
         try:
             gameplay = self.manager.get_screen("gameplay")
             snapshot = gameplay.controller.view_state()
@@ -30,20 +31,29 @@ class GameOverScreen(Screen):
             self.gems = self.terminal_result.gems
             reason = self.terminal_result.reason
             self.reason = game_over_reason_text(reason) if reason is not None else "ไม่ทราบสาเหตุ"
-        except Exception as e:
-            logger.error(f"Error getting gameplay data: {e}")
-            self.distance = 0
-            self.gems = 0
-            self.reason = "ไม่ทราบสาเหตุ"
-
-        try:
-            TelemetryRecorder().record(
-                build_version=APP_VERSION,
-                play_duration_s=round(gameplay.session.elapsed(), 3),
-                terminal_reason=reason.value if reason is not None else "unknown",
-            )
+            self._save_enabled = True
         except Exception as error:
-            logger.exception("Optional telemetry could not be recorded: %s", error)
+            logger.exception("Error getting terminal gameplay data: %s", error)
+            if gameplay is not None:
+                gameplay.controller.set_recoverable_error("ไม่พบผลลัพธ์จบรอบ จึงยังบันทึกคะแนนไม่ได้")
+
+        # Prefill is optional; failure here must not hide the terminal result.
+        try:
+            last_name = LocalCompletedRunRepository().last_player_name()
+            if "name_input" in self.ids:
+                self.ids.name_input.text = last_name
+        except Exception as error:
+            logger.exception("Could not load last player name: %s", error)
+
+        if gameplay is not None and self.terminal_result is not None and reason is not None:
+            try:
+                TelemetryRecorder().record(
+                    build_version=APP_VERSION,
+                    play_duration_s=round(self.terminal_result.duration_s, 3),
+                    terminal_reason=reason.value,
+                )
+            except Exception as error:
+                logger.exception("Optional telemetry could not be recorded: %s", error)
 
         # แสดงผลคะแนน
         if "score_label" in self.ids:
@@ -54,6 +64,9 @@ class GameOverScreen(Screen):
 
     def _save_data(self):
         if hasattr(self, "_saved") and self._saved:
+            return
+        if not self._save_enabled or self.terminal_result is None:
+            logger.warning("Save skipped: terminal result is unavailable")
             return
         name = self.ids.name_input.text.strip() if "name_input" in self.ids else "Penguin"
         if not name:

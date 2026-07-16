@@ -17,4 +17,6 @@ class LocalCompletedRunRepository:
             distance=result.distance_m,
             gems=result.gems,
             duration=result.duration_s,
+            run_state=result.state.name,
+            terminal_reason=result.reason.value if result.reason is not None else None,
         )

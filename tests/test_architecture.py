@@ -31,6 +31,27 @@ def test_ui_components_do_not_import_mutable_domain_objects():
         assert not (_imports(path) & forbidden), path
 
 
+def test_gameplay_screen_does_not_rebind_controller_owned_run_objects():
+    source = (ROOT / "screens" / "gameplay.py").read_text(encoding="utf-8")
+    for attribute in ("session", "metrics", "junction_interaction", "inventory"):
+        assert f"self.{attribute} =" not in source
+    for mutation in (
+        "session.collect(",
+        "session.enter_boss(",
+        "session.obstacle_hit(",
+        "session.respawn(",
+        "session.boss_phase(",
+        "session.boss_victory(",
+        "metrics.request_death(",
+        "metrics.trigger_game_over(",
+        "junction_interaction.handle_choice(",
+        "junction_interaction.handle_timeout(",
+        "inventory.add_item(",
+        "inventory.use_item(",
+    ):
+        assert f"self.{mutation}" not in source
+
+
 def test_run_record_event_list_has_one_production_append_site():
     offenders = []
     for folder in ("core", "game", "screens", "ui"):

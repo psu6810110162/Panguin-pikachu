@@ -8,6 +8,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from core.items import ItemType
+from core.state import GameOverReason, RunState
 from game.controller import GameplayController
 
 
@@ -34,6 +35,14 @@ def test_controller_contract_pause_restart_and_terminal_take_once():
     assert controller.take_terminal_result() is result
     assert controller.take_terminal_result() is None
     assert controller.restart().distance_m == 0
+
+
+def test_game_over_from_running_produces_finished_terminal_result():
+    controller = GameplayController()
+    result = controller.finish(GameOverReason.HEARTS)
+
+    assert result.state is RunState.FINISHED
+    assert result.reason is GameOverReason.HEARTS
 
 
 def test_eco_seed_mutates_domain_through_controller():

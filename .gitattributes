@@ -3,3 +3,14 @@
 *.jpeg binary
 *.docx binary
 *.db binary
+
+# Resource hashes are computed from the checked-in bytes.  Keep text assets
+# byte-identical on Windows so checkout does not turn LF into CRLF and make
+# resource_manifest.json reject an otherwise valid bundle.
+*.py text eol=lf
+*.json text eol=lf
+*.kv text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

@@ -588,6 +588,26 @@ class ArrowButton(ButtonBehavior, Image):
 
 
 class GamePlayScreen(Screen):
+    @property
+    def session(self):
+        """Read-only view of the current run session owned by the controller."""
+        return self.controller.session
+
+    @property
+    def metrics(self):
+        """Read-only view of the current run metrics owned by the controller."""
+        return self.controller.metrics
+
+    @property
+    def junction_interaction(self):
+        """Read-only view of the current interaction service."""
+        return self.controller.interaction
+
+    @property
+    def inventory(self):
+        """Read-only view of the current run inventory."""
+        return self.controller.inventory
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.controller = GameplayController(
@@ -611,10 +631,6 @@ class GamePlayScreen(Screen):
         self.pending_policy_zone: int | None = None
         self.handled_policy_zones: set[int] = set()
 
-        self.session = self.controller.session
-        self.metrics = self.controller.metrics
-        self.junction_interaction = self.controller.interaction
-        self.inventory = self.controller.inventory
         self.is_respawning = False
         self.respawn_count = 0
         self.decision_grace_active = False
@@ -1096,7 +1112,7 @@ class GamePlayScreen(Screen):
             self.handled_policy_zones.add(zone_id)
             penalty = float(load_difficulty().get("decision", {}).get("timeout_meter_penalty", 5.0))
             try:
-                self.junction_interaction.handle_timeout(
+                self.controller.resolve_timeout(
                     get_junction(zone_id), self.grid.get_distance_m(), penalty
                 )
             except KeyError:
@@ -1142,7 +1158,6 @@ class GamePlayScreen(Screen):
 
     def _trigger_gameover_from_metrics(self):
         self.penguin.is_dead = True
-        self.controller.finish(self.metrics.game_over_reason)
         if self._nav_event is None:
             self._nav_event = Clock.schedule_once(self._go_gameover, 0.8)
 
@@ -1172,7 +1187,7 @@ class GamePlayScreen(Screen):
             self.last_checkpoint_row,
             tiles_ahead=VISIBLE_BUFFER,
         )
-        self.metrics.complete_respawn()
+        self.controller.complete_respawn()
         if self.metrics.last_death_cause is not None:
             self.show_checkpoint_message(death_cause_text(self.metrics.last_death_cause))
         self.renderer.trigger_shake(0)
@@ -1184,13 +1199,12 @@ class GamePlayScreen(Screen):
         self.respawn_overlay.disabled = True
         self._close_decision()
         # RESPAWNING → RUNNING ตาม state machine (ADR-010 / state-machines.md §3)
-        if self.session.state == RunState.RESPAWNING:
-            self.session.resume_after_respawn()
+        self.controller.resume_after_respawn()
 
     def _handle_fall(self, cause: DeathCause) -> bool:
         if self.is_respawning or self.penguin.is_dead:
             return False
-        if not self.metrics.request_death(cause):
+        if not self.controller.request_death(cause):
             current_tile = self.grid.path_set.get((self.penguin.col, self.penguin.row))
             if current_tile and current_tile.state == "falling":
                 current_tile.state = "normal"
@@ -1205,15 +1219,13 @@ class GamePlayScreen(Screen):
             self.respawn_count += 1
             # ADR-002/010: RUNNING → RESPAWNING + RespawnEvent (respawn_count,
             # score_penalty 10%) — การหักคะแนนจริงเป็นหน้าที่ scoring ฝั่ง server
-            if self.session.state == RunState.RUNNING:
-                self.session.begin_respawn()
-                self.session.respawn(
-                    checkpoint_col=self.last_checkpoint_col,
-                    checkpoint_row=self.last_checkpoint_row,
-                    respawn_count=self.respawn_count,
-                    score_penalty=0.1,
-                    distance_m=self.grid.get_distance_m(),
-                )
+            self.controller.begin_respawn()
+            self.controller.record_respawn(
+                checkpoint_col=self.last_checkpoint_col,
+                checkpoint_row=self.last_checkpoint_row,
+                respawn_count=self.respawn_count,
+                distance_m=self.grid.get_distance_m(),
+            )
             # The full-screen StateOverlay is the single respawn composition;
             # do not show a second toast carrying the same message underneath.
             Animation.cancel_all(self.checkpoint_label)
@@ -1238,10 +1250,6 @@ class GamePlayScreen(Screen):
         """
         self.controller.start_run()
         self.grid = self.controller.grid
-        self.session = self.controller.session
-        self.metrics = self.controller.metrics
-        self.junction_interaction = self.controller.interaction
-        self.inventory = self.controller.inventory
         self._cancel_pending_events()
         self.is_respawning = False
         self.respawn_count = 0
@@ -1267,8 +1275,9 @@ class GamePlayScreen(Screen):
 
     def _view_state(self) -> GameplayViewState:
         """Create a fresh immutable presentation snapshot for this update cycle."""
-        self.controller.gems = self.gems_collected
-        self.controller.decision_phase = self.decision_phase
+        self.controller.set_view_context(
+            gems=self.gems_collected, decision_phase=self.decision_phase
+        )
         return self.controller.view_state()
 
     def _update_inventory_hud(self):
@@ -1442,7 +1451,7 @@ class GamePlayScreen(Screen):
                 try:
                     junction = get_junction(zone_id)
                     before = (self.metrics.heat_meter, self.metrics.capitalist_anger)
-                    self.junction_interaction.handle_choice(
+                    self.controller.choose_policy(
                         junction, selected_side, self.grid.get_distance_m()
                     )
                     self._refresh_status_hud()
@@ -1478,7 +1487,7 @@ class GamePlayScreen(Screen):
             AudioManager().play_sfx("Hit")
             self.idle_timer = 0
             self.game_started = True
-            self.session.obstacle_hit(
+            self.controller.record_obstacle_hit(
                 col=new_col,
                 row=new_row,
                 damage=1,
@@ -1516,7 +1525,7 @@ class GamePlayScreen(Screen):
                 f"[COLLECT] Gem ที่ ({new_col}, {new_row}) ชนิด {tile_type} | รวม: {self.gems_collected}"
             )
             self.grid.gems.pop((new_col, new_row), None)
-            self.session.collect(
+            self.controller.collect(
                 item_type="gem",
                 col=new_col,
                 row=new_row,
@@ -1527,8 +1536,8 @@ class GamePlayScreen(Screen):
         item = self.grid.get_scientific_item_at(new_col, new_row)
         if item:
             self.grid.scientific_items.pop((new_col, new_row), None)
-            if self.inventory.add_item(item):
-                self.session.collect(
+            if self.controller.add_inventory_item(item):
+                self.controller.collect(
                     item_type="scientific_item",
                     col=new_col,
                     row=new_row,
@@ -1552,7 +1561,7 @@ class GamePlayScreen(Screen):
                 AudioManager().play_sfx("correct")
                 if wave_data:
                     self.boss_hp += wave_data.on_correct.get("boss_armor", -1)
-                self.session.boss_phase(
+                self.controller.record_boss_phase(
                     phase=placement.wave,
                     outcome="damage_dealt",
                     distance_m=self.grid.get_distance_m(),
@@ -1563,8 +1572,8 @@ class GamePlayScreen(Screen):
                 hearts_delta = wave_data.on_wrong.get("hearts", -1) if wave_data else -1
                 # ในบอสไม่มี fall-respawn (state-machines.md §3) — เสียหัวใจตรง ๆ
                 for _ in range(-hearts_delta):
-                    self.metrics.request_death(None, allow_respawn=False)
-                self.session.boss_phase(
+                    self.controller.request_death(None, allow_respawn=False)
+                self.controller.record_boss_phase(
                     phase=placement.wave,
                     outcome="damaged",
                     distance_m=self.grid.get_distance_m(),
@@ -1578,7 +1587,7 @@ class GamePlayScreen(Screen):
 
             if self.boss_hp <= 0:
                 self._set_drone_pose("report_celebration")
-                self.session.boss_victory(
+                self.controller.record_boss_victory(
                     total_time_s=self.session.elapsed() - self.boss_start_time,
                     distance_m=self.grid.get_distance_m(),
                 )
@@ -1600,7 +1609,7 @@ class GamePlayScreen(Screen):
                 self.boss_status_label.opacity = 0
                 self.boss_portrait.opacity = 0
                 # trigger_game_over → callback ปิด record (BOSS → FINISHED) ให้เอง
-                self.metrics.trigger_game_over(GameOverReason.BOSS)
+                self.controller.trigger_game_over(GameOverReason.BOSS)
                 return
             else:
                 self._update_boss_ui(self.boss_wave_index)
@@ -1634,7 +1643,7 @@ class GamePlayScreen(Screen):
             if zone_id not in self.handled_policy_zones:
                 try:
                     junction = get_junction(zone_id)
-                    self.junction_interaction.handle_choice(
+                    self.controller.choose_policy(
                         junction, side, distance_m=self.grid.get_distance_m()
                     )
                     self._refresh_status_hud()
@@ -1663,7 +1672,7 @@ class GamePlayScreen(Screen):
                     self.show_checkpoint_message(f"{dist_m}M REACHED!")
                     self.last_checkpoint_col = self.penguin.col
                     self.last_checkpoint_row = self.penguin.row
-                    self.session.checkpoint_reached(
+                    self.controller.record_checkpoint(
                         checkpoint_index=self.grid.forward_tiles // 100,
                         distance_m=dist_m,
                     )
@@ -1675,7 +1684,7 @@ class GamePlayScreen(Screen):
                     self._boss_warning_shown = True
 
             if dist_m >= BOSS_DISTANCE_M and self.session.run_record.state == RunState.RUNNING:
-                self.session.enter_boss(distance_m=dist_m)
+                self.controller.enter_boss(distance_m=dist_m)
                 self.show_checkpoint_message("BOSS PHASE STARTED!")
                 self.boss_wave_index = 1
                 from core.boss_data import load_boss_data
@@ -1824,11 +1833,8 @@ class GamePlayScreen(Screen):
             self.btn_right.handle_press()
             return True
         elif keycode[1] == "spacebar" and self.inventory.has_item(ItemType.ECO_SEED):
-            if self.inventory.use_item(ItemType.ECO_SEED):
+            if self.controller.use_eco_seed():
                 eco_seed = load_difficulty().get("eco_seed", {})
-                self.metrics.update_meters(
-                    heat_delta=float(eco_seed.get("heat_reduction", 0.0)), anger_delta=0
-                )
                 if eco_seed.get("repairs_blocks", False):
                     for (col, row), tile in self.grid.path_set.items():
                         if abs(col - self.penguin.col) <= 1 and abs(row - self.penguin.row) <= 1:

@@ -13,8 +13,9 @@ from typing import Any, Literal, Protocol
 
 from core.interaction import YJunctionInteraction
 from core.items import Inventory, ItemType
+from core.junction_data import Junction
 from core.session import GameSession
-from core.state import DecisionPhase, GameOverReason, RunMetrics, RunState
+from core.state import DeathCause, DecisionPhase, GameOverReason, RunMetrics, RunState
 from game.ports import TerminalResult
 
 Side = Literal["left", "right"]
@@ -90,7 +91,7 @@ class GameplayController:
         self._difficulty = difficulty or DEFAULT_DIFFICULTY
         self.grid: GridPort = grid or _HeadlessGrid()
         self.session = GameSession()
-        self.metrics = RunMetrics(on_game_over=on_game_over, difficulty=self._difficulty)
+        self.metrics = RunMetrics(on_game_over=self._handle_game_over, difficulty=self._difficulty)
         self.inventory = Inventory()
         self.interaction = YJunctionInteraction(self.metrics, self.session)
         self.gems = 0
@@ -103,10 +104,7 @@ class GameplayController:
     def start_run(self) -> GameplayViewState:
         self.grid.reset()
         self.session = GameSession()
-        self.metrics = RunMetrics(
-            on_game_over=self._on_game_over,
-            difficulty=self._difficulty,
-        )
+        self.metrics = RunMetrics(on_game_over=self._handle_game_over, difficulty=self._difficulty)
         self.inventory = Inventory()
         self.interaction = YJunctionInteraction(self.metrics, self.session)
         self.gems = 0
@@ -132,6 +130,117 @@ class GameplayController:
             raise ValueError(f"unsupported side: {side}")
         return side
 
+    def choose_policy(self, junction: Junction, side: Side, distance_m: int) -> tuple[float, float]:
+        """Apply and record one policy choice; the screen only renders the delta."""
+        before = (self.metrics.heat_meter, self.metrics.capitalist_anger)
+        self.interaction.handle_choice(junction, side, distance_m)
+        return (
+            self.metrics.heat_meter - before[0],
+            self.metrics.capitalist_anger - before[1],
+        )
+
+    def resolve_timeout(self, junction: Junction, distance_m: int, penalty: float) -> None:
+        self.interaction.handle_timeout(junction, distance_m, penalty)
+
+    def request_death(self, cause: DeathCause | None, *, allow_respawn: bool = True) -> bool:
+        return self.metrics.request_death(cause, allow_respawn=allow_respawn)
+
+    def trigger_game_over(self, reason: GameOverReason) -> None:
+        """Record a terminal game-over reason through the controller boundary."""
+        self.metrics.trigger_game_over(reason)
+
+    def complete_respawn(self) -> None:
+        self.metrics.complete_respawn()
+
+    def begin_respawn(self) -> None:
+        """Move the run into its protected respawn phase."""
+        if self.session.state is RunState.RUNNING:
+            self.session.begin_respawn()
+
+    def resume_after_respawn(self) -> None:
+        """Return a respawned run to movement."""
+        if self.session.state is RunState.RESPAWNING:
+            self.session.resume_after_respawn()
+
+    def record_respawn(
+        self,
+        *,
+        checkpoint_col: int,
+        checkpoint_row: int,
+        respawn_count: int,
+        distance_m: int,
+    ) -> None:
+        self.session.respawn(
+            checkpoint_col=checkpoint_col,
+            checkpoint_row=checkpoint_row,
+            respawn_count=respawn_count,
+            score_penalty=0.1,
+            distance_m=distance_m,
+        )
+
+    def record_checkpoint(self, checkpoint_index: int, distance_m: int) -> None:
+        self.session.checkpoint_reached(
+            checkpoint_index=checkpoint_index,
+            distance_m=distance_m,
+        )
+
+    def record_obstacle_hit(
+        self, *, col: int, row: int, damage: int, destroyed: bool, distance_m: int
+    ) -> None:
+        self.session.obstacle_hit(
+            col=col,
+            row=row,
+            damage=damage,
+            destroyed=destroyed,
+            distance_m=distance_m,
+        )
+
+    def collect(
+        self,
+        *,
+        item_type: Literal["gem", "scientific_item"],
+        col: int,
+        row: int,
+        value: int,
+        distance_m: int,
+    ) -> None:
+        self.session.collect(
+            item_type=item_type,
+            col=col,
+            row=row,
+            value=value,
+            distance_m=distance_m,
+        )
+
+    def add_inventory_item(self, item: ItemType) -> bool:
+        """Try to add an item and report whether a collect event is warranted."""
+        return self.inventory.add_item(item)
+
+    def enter_boss(self, distance_m: int) -> None:
+        self.session.enter_boss(distance_m=distance_m)
+
+    def record_boss_phase(
+        self,
+        *,
+        phase: int,
+        outcome: Literal["damage_dealt", "damaged", "phase_complete"],
+        distance_m: int,
+    ) -> None:
+        self.session.boss_phase(phase=phase, outcome=outcome, distance_m=distance_m)
+
+    def record_boss_victory(self, total_time_s: float, distance_m: int) -> None:
+        self.session.boss_victory(total_time_s=total_time_s, distance_m=distance_m)
+
+    def set_view_context(self, *, gems: int, decision_phase: DecisionPhase | None) -> None:
+        """Accept presentation intent while keeping snapshot construction pure."""
+        self.gems = gems
+        self.decision_phase = decision_phase
+
+    def _handle_game_over(self) -> None:
+        self.finish(self.metrics.game_over_reason)
+        if self._on_game_over:
+            self._on_game_over()
+
     def use_eco_seed(self) -> bool:
         if not self.inventory.use_item(ItemType.ECO_SEED):
             return False
@@ -148,7 +257,7 @@ class GameplayController:
         return self.view_state()
 
     def finish(self, reason: GameOverReason | None = None) -> TerminalResult:
-        if self.session.state is RunState.BOSS:
+        if self.session.state in {RunState.RUNNING, RunState.RESPAWNING, RunState.BOSS}:
             self.session.finish()
         self._terminal = TerminalResult(
             run_id=self.session.run_record.run_id,
