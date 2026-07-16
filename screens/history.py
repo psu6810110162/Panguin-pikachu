@@ -1,10 +1,15 @@
 from kivy.clock import Clock
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 
 from core.audio import AudioManager
 from core.database import DatabaseManager
 from core.logger import logger
+
+KENNEY_FONT = "assets/Component_UI/Font/Kenney Future.ttf"
+TROPHY_ICON = "assets/Component_UI/history/trophy_normal.png"
 
 
 class HistoryScreen(Screen):
@@ -24,7 +29,7 @@ class HistoryScreen(Screen):
             self.ids.history_list.add_widget(
                 Label(
                     text="NO HISTORY YET",
-                    font_name="assets/Component_UI/Font/Kenney Future.ttf",
+                    font_name=KENNEY_FONT,
                     size_hint_y=None,
                     height=50,
                 )
@@ -35,20 +40,31 @@ class HistoryScreen(Screen):
             dist = row["distance_m"]
             gems = row["gems_collected"]
 
-            award = " 🏆" if i == 1 else ""
+            label_text = f"{i}. {dist} m ({gems} Gems)"
 
-            label_text = f"{i}. {dist} m ({gems} Gems){award}"
-
-            self.ids.history_list.add_widget(
+            row_box = BoxLayout(orientation="horizontal", size_hint_y=None, height=50, spacing=8)
+            row_box.add_widget(
                 Label(
                     text=label_text,
-                    font_name="assets/Component_UI/Font/Kenney Future.ttf",
+                    font_name=KENNEY_FONT,
                     font_size="18sp",
-                    size_hint_y=None,
-                    height=50,
                     color=(1, 1, 1, 0.9),
                 )
             )
+            if i == 1:
+                # Personal-best marker as an image, not a "🏆" glyph: Kenney
+                # Future has no emoji glyphs, so embedding one in Label text
+                # renders a square/tofu box instead of a trophy.
+                row_box.add_widget(
+                    Image(
+                        source=TROPHY_ICON,
+                        size_hint=(None, None),
+                        size=(32, 32),
+                        allow_stretch=True,
+                        keep_ratio=True,
+                    )
+                )
+            self.ids.history_list.add_widget(row_box)
 
     def go_back(self):
         AudioManager().play_sfx("click")

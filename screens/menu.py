@@ -1,4 +1,5 @@
 from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.uix.screenmanager import Screen
 
 from core.audio import AudioManager
@@ -9,6 +10,7 @@ from ui.how_to_play_overlay import HowToPlayOverlay
 class MenuScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._keyboard = None
         self.how_to_play_overlay = HowToPlayOverlay()
         self.add_widget(self.how_to_play_overlay)
 
@@ -16,6 +18,33 @@ class MenuScreen(Screen):
         logger.info("เข้าสู่หน้าจอ MenuScreen")
         Clock.schedule_once(lambda dt: AudioManager().play_bgm("Bgm.gameplay.mp3"), 0.5)
         Clock.schedule_once(lambda dt: self._sync_sound_button(), 0.1)
+        if not self._keyboard:
+            self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+            self._keyboard.bind(on_key_down=self._on_keyboard_down)
+
+    def on_leave(self):
+        if self._keyboard:
+            self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+            self._keyboard = None
+
+    def _keyboard_closed(self):
+        if self._keyboard:
+            self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+            self._keyboard = None
+
+    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+        if not self.how_to_play_overlay.is_open:
+            return False
+        if keycode[1] == "left":
+            self.how_to_play_overlay.previous_page()
+            return True
+        if keycode[1] == "right":
+            self.how_to_play_overlay.next_page()
+            return True
+        if keycode[1] == "escape":
+            self.how_to_play_overlay.close()
+            return True
+        return True
 
     def start_game(self):
         AudioManager().play_sfx("click")

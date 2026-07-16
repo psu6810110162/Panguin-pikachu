@@ -260,9 +260,9 @@ def _rows_for_page(raw: dict[str, Any], kind: PageKind) -> tuple[HelpRow, ...]:
             HelpRow(
                 title=f"Wave {wave.wave}: {wave.wall_text}",
                 body=(
-                    f"ถูก: {wave.correct_item.replace('_', ' ').title()} → เกราะ "
+                    f"ถูก: {wave.correct_item.replace('_', ' ').title()} -> เกราะ "
                     f"{_signed(wave.on_correct.get('boss_armor', 0))}\n"
-                    f"ผิด: {wave.wrong_item.replace('_', ' ').title()} → หัวใจ "
+                    f"ผิด: {wave.wrong_item.replace('_', ' ').title()} -> หัวใจ "
                     f"{_signed(wave.on_wrong.get('hearts', 0))}"
                 ),
                 detail=wave.science,

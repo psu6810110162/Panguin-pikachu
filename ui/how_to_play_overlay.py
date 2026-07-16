@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color, Line, Rectangle, RoundedRectangle
 from kivy.properties import BooleanProperty
@@ -14,11 +15,21 @@ from kivy.uix.scrollview import ScrollView
 
 from core.how_to_play import HelpRow, HowToPlayModel, HowToPlayPager, load_how_to_play
 from ui.components import HoverButton
+from ui.responsive import Breakpoint, compute_layout, is_compact
 
 KENNEY_FONT = "assets/Component_UI/Font/Kenney Future.ttf"
 THAI_FONT = "assets/Component_UI/Font/NotoSansThai-Regular.ttf"
 BUTTON_NORMAL = "assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png"
 BUTTON_DOWN = "assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png"
+
+# Panel padding/spacing shrink on compact breakpoints so more of the small
+# viewport goes to actual content instead of margins.
+_PANEL_PADDING_WIDE = [28, 22, 28, 20]
+_PANEL_PADDING_COMPACT = [16, 14, 16, 12]
+_PANEL_SPACING_WIDE = 12
+_PANEL_SPACING_COMPACT = 8
+_MIN_PANEL_HEIGHT = 320.0
+_MAX_PANEL_WIDTH = 1020.0
 
 
 class HowToPlayOverlay(FloatLayout):
@@ -51,8 +62,8 @@ class HowToPlayOverlay(FloatLayout):
 
         self.panel = BoxLayout(
             orientation="vertical",
-            spacing=12,
-            padding=[28, 22, 28, 20],
+            spacing=_PANEL_SPACING_WIDE,
+            padding=list(_PANEL_PADDING_WIDE),
             size_hint=(None, None),
             pos_hint={"center_x": 0.5, "center_y": 0.5},
         )
@@ -73,8 +84,12 @@ class HowToPlayOverlay(FloatLayout):
         self.panel.bind(pos=self._redraw_panel, size=self._redraw_panel)
 
         self.title_label = Label(
+            # model.title is Thai + "Penguin Dash" (see balance/v1/how_to_play.json)
+            # — Kenney Future is Latin-only, so Thai glyphs before "PENGUIN DASH"
+            # rendered as tofu boxes. Must use the Thai font, not the ASCII
+            # chrome font used for footer buttons in this same overlay.
             text=self.model.title.upper(),
-            font_name=KENNEY_FONT,
+            font_name=THAI_FONT,
             font_size="25sp",
             bold=True,
             color=(0.65, 0.9, 1.0, 1),
@@ -107,7 +122,23 @@ class HowToPlayOverlay(FloatLayout):
         self.scroll.add_widget(self.body)
         self.panel.add_widget(self.scroll)
 
-        footer = BoxLayout(orientation="horizontal", size_hint_y=None, height=48, spacing=12)
+        # Footer is a vertical container of up to two rows so Close can be
+        # docked either at the end of the single row (desktop/tablet/mobile
+        # landscape) or on its own second row (mobile portrait) without ever
+        # existing in two places at once — same reparent-don't-duplicate
+        # pattern as the gameplay HUD's compact reflow.
+        self.footer_container = BoxLayout(
+            orientation="vertical", size_hint_y=None, spacing=8, height=48
+        )
+        self.footer_row1 = BoxLayout(
+            orientation="horizontal", size_hint_y=None, height=48, spacing=12
+        )
+        self.footer_row2 = BoxLayout(
+            orientation="horizontal", size_hint_y=None, height=0, spacing=12
+        )
+        self.footer_container.add_widget(self.footer_row1)
+        self.footer_container.add_widget(self.footer_row2)
+
         self.previous_button = self._button("PREV")
         self.previous_button.bind(on_release=lambda _: self.previous_page())
         self.indicator_label = Label(
@@ -122,15 +153,16 @@ class HowToPlayOverlay(FloatLayout):
         self.next_button.bind(on_release=lambda _: self.next_page())
         self.close_button = self._button("CLOSE")
         self.close_button.bind(on_release=lambda _: self.close())
-        footer.add_widget(self.previous_button)
-        footer.add_widget(self.indicator_label)
-        footer.add_widget(self.next_button)
-        footer.add_widget(self.close_button)
-        self.panel.add_widget(footer)
+        self.footer_row1.add_widget(self.previous_button)
+        self.footer_row1.add_widget(self.indicator_label)
+        self.footer_row1.add_widget(self.next_button)
+        self.footer_row1.add_widget(self.close_button)
+        self._close_docked_in_row1 = True
+        self.panel.add_widget(self.footer_container)
 
         self.add_widget(self.panel)
-        Window.bind(size=self._resize)
-        self._resize()
+        Window.bind(size=self._apply_responsive_layout)
+        self._apply_responsive_layout()
         self._render_page()
 
     def _button(self, text: str) -> HoverButton:
@@ -143,15 +175,73 @@ class HowToPlayOverlay(FloatLayout):
             border=(10, 10, 10, 10),
         )
 
-    def _resize(self, *_args: object) -> None:
-        self.panel.size = (
-            min(Window.width * 0.90, 1020),
-            min(Window.height * 0.86, 780),
+    def _apply_responsive_layout(self, *_args: object) -> None:
+        """Recompute panel width/footer rows/padding for the breakpoint.
+
+        Height is intentionally *not* set here: it depends on the rendered
+        body's ``minimum_height``, which Kivy only finalizes on the next
+        layout pass, so it is computed by ``_finalize_panel_height`` once
+        this frame's layout has settled (scheduled at the end of this
+        method). This avoids the old fixed-86%-of-viewport height, which is
+        the root cause of the oversized modal with excess empty space.
+        """
+        layout = compute_layout(Window.width, Window.height)
+        compact = is_compact(layout.breakpoint)
+
+        width_fraction = 0.94 if compact else 0.90
+        insets = layout.safe_area
+        available_width = max(Window.width - insets.left - insets.right, 1.0)
+        self.panel.width = min(available_width * width_fraction, _MAX_PANEL_WIDTH)
+
+        padding = _PANEL_PADDING_COMPACT if compact else _PANEL_PADDING_WIDE
+        self.panel.padding = list(padding)
+        self.panel.spacing = _PANEL_SPACING_COMPACT if compact else _PANEL_SPACING_WIDE
+
+        want_two_row_footer = layout.breakpoint is Breakpoint.MOBILE_PORTRAIT
+        if want_two_row_footer and self._close_docked_in_row1:
+            self.footer_row1.remove_widget(self.close_button)
+            self.footer_row2.add_widget(self.close_button)
+            self.footer_row2.height = 48
+            self._close_docked_in_row1 = False
+        elif not want_two_row_footer and not self._close_docked_in_row1:
+            self.footer_row2.remove_widget(self.close_button)
+            self.footer_row1.add_widget(self.close_button)
+            self.footer_row2.height = 0
+            self._close_docked_in_row1 = True
+        self.footer_container.height = (
+            self.footer_row1.height + self.footer_row2.height + self.footer_container.spacing
+            if want_two_row_footer
+            else self.footer_row1.height
         )
-        content_width = max(self.panel.width - 66, 1)
+
+        content_width = max(self.panel.width - (padding[0] + padding[2] + 10), 1)
         self.title_label.text_size = (content_width, None)
         self.page_title_label.text_size = (content_width, None)
         self._render_page()
+        # Body labels/cards were just rebuilt with the new content width;
+        # `body.minimum_height` only reflects their new texture sizes after
+        # Kivy processes this frame's layout triggers, so height must be
+        # finalized on the next frame rather than read synchronously here.
+        Clock.schedule_once(self._finalize_panel_height, 0)
+
+    def _finalize_panel_height(self, *_args: object) -> None:
+        layout = compute_layout(Window.width, Window.height)
+        insets = layout.safe_area
+        viewport_max = max(Window.height - insets.top - insets.bottom - 24, _MIN_PANEL_HEIGHT)
+
+        # panel children are [title, page_title, scroll, footer_container] —
+        # a vertical BoxLayout inserts spacing between every one of the 3
+        # consecutive pairs, not just 2.
+        chrome_height = (
+            self.title_label.height
+            + self.page_title_label.height
+            + self.footer_container.height
+            + 3 * self.panel.spacing
+            + self.panel.padding[1]
+            + self.panel.padding[3]
+        )
+        desired_height = chrome_height + self.body.height
+        self.panel.height = max(_MIN_PANEL_HEIGHT, min(desired_height, viewport_max))
 
     def _redraw_dim(self, *_args: object) -> None:
         self._dim.pos = self.pos
@@ -169,6 +259,14 @@ class HowToPlayOverlay(FloatLayout):
         )
 
     def open(self, page_index: int = 0) -> None:
+        """Show the modal, starting at ``page_index``.
+
+        Idempotent: if the overlay is already open (e.g. a stray duplicate
+        call from a second entry point), this is a no-op instead of
+        re-stacking or resetting the reader back to ``page_index``.
+        """
+        if self.is_open:
+            return
         self.pager.go_to(page_index)
         self.is_open = True
         self.opacity = 1

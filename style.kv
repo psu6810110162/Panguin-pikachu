@@ -309,21 +309,9 @@
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-
-                # Placeholder for History Rows
-                Label:
-                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                    text: '1. 24/02/2569: 120 m (5 Gems) 🏆'
-                    font_size: '20sp'
-                    size_hint_y: None
-                    height: 50
-
-                Label:
-                    font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                    text: '2. 24/02/2569: 80 m (3 Gems)'
-                    font_size: '20sp'
-                    size_hint_y: None
-                    height: 50
+                # Rows are populated at runtime by HistoryScreen.load_history()
+                # (called from on_enter) — no static placeholder rows here,
+                # so there is nothing stale/emoji-bearing to flash before then.
 
         HoverButton:
             font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
@@ -337,177 +325,12 @@
             on_release: root.go_back()
 
 <ShopScreen>:
+    # Header/grid/cards/back-button are built responsively in screens/shop.py
+    # from balance/v1/shop.json (core.shop_catalog) — a catalog change (add,
+    # remove, reprice a skin) never touches this file. Only the static
+    # full-screen background stays declarative here.
     canvas.before:
         Rectangle:
             source: 'assets/generated/background/gameplay_background_v1.png'
             pos: self.pos
             size: self.size
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 50
-        spacing: 20
-
-        BoxLayout:
-            size_hint_y: 0.2
-            Label:
-                text: 'SHOP'
-                font_size: '36sp'
-                bold: True
-                size_hint_x: 0.7
-            Label:
-                id: gem_label
-                text: 'Gems: 💎 --'
-                font_size: '24sp'
-                color: 0.2, 0.8, 1, 1
-                size_hint_x: 0.3
-
-        ScrollView:
-            size_hint_y: 0.6
-            GridLayout:
-                cols: 2
-                spacing: 20
-                size_hint_y: None
-                height: self.minimum_height
-
-                # ─── Skin 1: Ninja Frog ───
-                BoxLayout:
-                    orientation: 'vertical'
-                    size_hint_y: None
-                    height: 220
-                    padding: 15
-                    spacing: 12
-                    canvas.before:
-                        Color:
-                            rgba: 0.2, 0.2, 0.3, 0.9
-                        RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [15,]
-                    AnimatedSkin:
-                        source: 'assets/pixelAdventure/Free/Main Characters/Ninja Frog/Idle (32x32).png'
-                        size_hint_y: 0.5
-                    Label:
-                        text: 'NINJA FROG'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '14sp'
-                        size_hint_y: 0.2
-                    HoverButton:
-                        id: ninja_frog_btn
-                        text: 'EQUIP'
-                        font_size: '14sp'
-                        size_hint: (0.9, 0.25)
-                        pos_hint: {'center_x': 0.5}
-                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
-                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
-                        border: (10, 10, 10, 10)
-                        on_release: root.buy_item('Ninja Frog')
-
-                # ─── Skin 2: Mask Dude ───
-                BoxLayout:
-                    orientation: 'vertical'
-                    size_hint_y: None
-                    height: 220
-                    padding: 15
-                    spacing: 12
-                    canvas.before:
-                        Color:
-                            rgba: 0.2, 0.2, 0.3, 0.9
-                        RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [15,]
-                    AnimatedSkin:
-                        source: 'assets/pixelAdventure/Free/Main Characters/Mask Dude/Idle (32x32).png'
-                        size_hint_y: 0.5
-                    Label:
-                        text: 'MASK DUDE'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '14sp'
-                        size_hint_y: 0.2
-                    HoverButton:
-                        id: mask_dude_btn
-                        text: 'EQUIP'
-                        font_size: '14sp'
-                        size_hint: (0.9, 0.25)
-                        pos_hint: {'center_x': 0.5}
-                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
-                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
-                        border: (10, 10, 10, 10)
-                        on_release: root.buy_item('Mask Dude')
-
-                # ─── Skin 3: Pink Man ───
-                BoxLayout:
-                    orientation: 'vertical'
-                    size_hint_y: None
-                    height: 220
-                    padding: 15
-                    spacing: 12
-                    canvas.before:
-                        Color:
-                            rgba: 0.2, 0.2, 0.3, 0.9
-                        RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [15,]
-                    AnimatedSkin:
-                        source: 'assets/pixelAdventure/Free/Main Characters/Pink Man/Idle (32x32).png'
-                        size_hint_y: 0.5
-                    Label:
-                        text: 'PINK MAN'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '14sp'
-                        size_hint_y: 0.2
-                    HoverButton:
-                        id: pink_man_btn
-                        text: 'EQUIP'
-                        font_size: '14sp'
-                        size_hint: (0.9, 0.25)
-                        pos_hint: {'center_x': 0.5}
-                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
-                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
-                        border: (10, 10, 10, 10)
-                        on_release: root.buy_item('Pink Man')
-
-                # ─── Skin 4: Virtual Guy ───
-                BoxLayout:
-                    orientation: 'vertical'
-                    size_hint_y: None
-                    height: 220
-                    padding: 15
-                    spacing: 12
-                    canvas.before:
-                        Color:
-                            rgba: 0.2, 0.2, 0.3, 0.9
-                        RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [15,]
-                    AnimatedSkin:
-                        source: 'assets/pixelAdventure/Free/Main Characters/Virtual Guy/Idle (32x32).png'
-                        size_hint_y: 0.5
-                    Label:
-                        text: 'VIRTUAL GUY'
-                        font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-                        font_size: '14sp'
-                        size_hint_y: 0.2
-                    HoverButton:
-                        id: virtual_guy_btn
-                        text: 'EQUIP'
-                        font_size: '14sp'
-                        size_hint: (0.9, 0.25)
-                        pos_hint: {'center_x': 0.5}
-                        background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png'
-                        background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png'
-                        border: (10, 10, 10, 10)
-                        on_release: root.buy_item('Virtual Guy')
-
-        HoverButton:
-            text: 'BACK'
-            font_name: 'assets/Component_UI/Font/Kenney Future.ttf'
-            font_size: '20sp'
-            size_hint: (0.6, 0.12)
-            pos_hint: {'center_x': 0.5}
-            background_normal: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png'
-            background_down: 'assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png'
-            border: (10, 10, 10, 10)
-            on_release: root.go_back()

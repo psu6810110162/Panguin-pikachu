@@ -35,6 +35,12 @@ from core.scoring import stealth
 from core.scoring.dag import GraphProjection, build_projection
 from ui.components import HoverButton
 
+KENNEY_FONT = "assets/Component_UI/Font/Kenney Future.ttf"
+# node.label / edge.tooltip in balance/v1/dag.json are Thai — Kenney Future is
+# Latin-only and Kivy's default font has no Thai glyphs either, so both need
+# this font explicitly or every Thai string renders as square glyphs.
+THAI_FONT = "assets/Component_UI/Font/NotoSansThai-Regular.ttf"
+
 _STATUS_COLORS = {
     "correct": (0.25, 0.85, 0.4, 1),
     "incorrect": (0.95, 0.3, 0.3, 1),
@@ -71,7 +77,7 @@ class DAGGraphWidget(Widget):
     def _label_texture(self, text: str, color: tuple[float, float, float, float]):
         key = (text, color)
         if key not in self._label_cache:
-            core_label = CoreLabel(text=text, font_size=13, color=color)
+            core_label = CoreLabel(text=text, font_size=13, color=color, font_name=THAI_FONT)
             core_label.refresh()
             self._label_cache[key] = core_label.texture
         return self._label_cache[key]
@@ -150,17 +156,20 @@ class ReportScreen(Screen):
             text="SYSTEMIC REPORT CARD",
             font_size="30sp",
             bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name=KENNEY_FONT,
             color=(0.6, 0.9, 1.0, 1),
             outline_width=2,
             outline_color=(0, 0, 0, 1),
             size_hint_y=None,
             height=44,
         )
+        # summary/edge_count render Thai copy (see on_enter) — Kenney Future
+        # has no Thai glyphs, so both must use the Thai font, not the ASCII
+        # chrome font used for the (English) title above.
         self.summary_label = Label(
             text="",
             font_size="20sp",
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name=THAI_FONT,
             color=(1, 1, 1, 0.95),
             size_hint_y=None,
             height=34,
@@ -168,7 +177,7 @@ class ReportScreen(Screen):
         self.edge_count_label = Label(
             text="",
             font_size="15sp",
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name=THAI_FONT,
             color=(1, 1, 1, 0.75),
             size_hint_y=None,
             height=26,
@@ -198,7 +207,7 @@ class ReportScreen(Screen):
         )
         btn_again = HoverButton(
             text="RUN AGAIN",
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name=KENNEY_FONT,
             font_size="20sp",
             background_normal="assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_gradient.png",
             background_down="assets/Component_UI/PNG/Blue/Default/button_rectangle_gradient.png",
@@ -207,7 +216,7 @@ class ReportScreen(Screen):
         btn_again.bind(on_release=lambda _: self.run_again())
         btn_home = HoverButton(
             text="HOME",
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name=KENNEY_FONT,
             font_size="20sp",
             background_normal="assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png",
             background_down="assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png",
@@ -271,6 +280,7 @@ class ReportScreen(Screen):
             label = Label(
                 text=f"[b]Decision {edge.decision}:[/b] {edge.tooltip}",
                 markup=True,
+                font_name=THAI_FONT,
                 font_size="14sp",
                 color=(1, 0.85, 0.85, 1),
                 size_hint_y=None,
