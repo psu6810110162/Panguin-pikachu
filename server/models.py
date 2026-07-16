@@ -66,6 +66,15 @@ class RunModel(Base):
     hake_gain: Mapped[float | None] = mapped_column(default=None)
     heat_controlled_pct: Mapped[float | None] = mapped_column(default=None)
 
+    # Stealth Assessment (docs/adr/011, docs/adr/012) — nullable เสมอ: run เก่าไม่มีค่า
+    # ไม่พัง, และ server/config.py::STEALTH_ASSESSMENT_ENABLED ปิดอยู่ก็ยังเว้นว่างได้
+    # (evaluator derive เสมอ แต่ flag คุมว่า _apply_result จะเขียนลง column พวกนี้ไหม)
+    net_impact_score: Mapped[float | None] = mapped_column(default=None)
+    cognitive_score: Mapped[float | None] = mapped_column(default=None)
+    rank: Mapped[str | None] = mapped_column(default=None)
+    # balance content version ที่ run นี้อ้างอิง (core/schema.py::RunRecord.balance_version)
+    balance_version: Mapped[str | None] = mapped_column(default=None)
+
     events_json: Mapped[str] = mapped_column(
         default="{}"
     )  # RunRecord.to_dict(), เก็บไว้เผื่อ debug/replay ทีหลัง

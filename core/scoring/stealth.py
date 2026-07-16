@@ -27,7 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from core.events import BossPhaseEvent, GameEvent, PolicyChoiceEvent
-from core.junction_data import option_for_policy_id
+from core.junction_data import option_for_policy_id_or_none
 
 BALANCE_DIR = Path(__file__).resolve().parent.parent.parent / "balance" / "v1"
 
@@ -67,15 +67,17 @@ def load_config() -> ScoringConfig:
 
 
 def systemic_choice_count(events: list[GameEvent]) -> int:
-    """จำนวน Y-Junction ที่ผู้เล่นเลือกตัวเลือก systemic (แก้ที่ต้นเหตุ)"""
+    """จำนวน Y-Junction ที่ผู้เล่นเลือกตัวเลือก systemic (แก้ที่ต้นเหตุ)
+
+    policy_id ที่ผิดรูป/ไม่รู้จัก (ดู option_for_policy_id_or_none) นับเป็น non-systemic
+    ไม่ทำให้ scoring crash — server-authoritative ประมวลผล event จาก client ที่เชื่อไม่ได้
+    """
     return sum(
         1
         for e in events
-        if (
-            isinstance(e, PolicyChoiceEvent)
-            and e.outcome != "timeout"
-            and option_for_policy_id(e.policy_id).systemic
-        )
+        if isinstance(e, PolicyChoiceEvent)
+        and (opt := option_for_policy_id_or_none(e.policy_id)) is not None
+        and opt.systemic
     )
 
 
