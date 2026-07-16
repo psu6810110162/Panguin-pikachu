@@ -174,11 +174,16 @@ class GridManager:
             ):
                 gem.update(dt)
 
-    def update_tiles(self, dt, penguin_pos):
+    def update_tiles(self, dt, penguin_pos, suppress_current_tile_trigger=False):
         p_col, p_row = penguin_pos
 
         current_tile = self.path_set.get((p_col, p_row))
-        if current_tile and current_tile.state == "normal" and not current_tile.is_safe:
+        if (
+            current_tile
+            and current_tile.state == "normal"
+            and not current_tile.is_safe
+            and not suppress_current_tile_trigger
+        ):
             current_tile.state = "triggered"
             score = self.get_distance_m()
             current_tile.trigger_timer = self.trigger_seconds_for_distance(score)

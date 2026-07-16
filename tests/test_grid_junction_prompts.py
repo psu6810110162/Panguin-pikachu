@@ -42,4 +42,6 @@ def test_prompt_reset_and_text_are_pure_policy_presentation():
         assert junction.situation in text
         assert junction.left.label in text
         assert junction.right.label in text
+        assert "Heat" in text
+        assert "Anger" in text
         assert "systemic" not in text

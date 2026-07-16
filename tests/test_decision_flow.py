@@ -2,7 +2,7 @@ from core.events import PolicyChoiceEvent
 from core.interaction import YJunctionInteraction
 from core.junction_data import get_junction
 from core.session import GameSession
-from core.state import RunMetrics
+from core.state import DeathCause, RunMetrics
 
 
 def test_timeout_is_recorded_without_faking_a_side_choice():
@@ -25,9 +25,9 @@ def test_timeout_is_recorded_without_faking_a_side_choice():
 def test_respawn_grace_ignores_fall_damage_without_consuming_a_heart():
     """A protected checkpoint cannot leave the player in a dead-but-running state."""
     metrics = RunMetrics(hearts=2)
-    metrics.is_invincible = True
+    metrics.complete_respawn()
 
-    metrics.decrease_heart()
+    assert not metrics.request_death(DeathCause.FALL)
 
     assert metrics.hearts == 2
     assert metrics.needs_respawn is False

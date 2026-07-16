@@ -4,6 +4,7 @@ from kivy.uix.screenmanager import Screen
 from core.audio import AudioManager
 from core.database import DatabaseManager
 from core.logger import logger
+from core.messages import game_over_reason_text
 
 
 class GameOverScreen(Screen):
@@ -21,14 +22,19 @@ class GameOverScreen(Screen):
             gameplay = self.manager.get_screen("gameplay")
             self.distance = int(gameplay.grid.get_distance_m())
             self.gems = gameplay.gems_collected
+            reason = gameplay.metrics.game_over_reason
+            self.reason = game_over_reason_text(reason) if reason is not None else "ไม่ทราบสาเหตุ"
         except Exception as e:
             logger.error(f"Error getting gameplay data: {e}")
             self.distance = 0
             self.gems = 0
+            self.reason = "ไม่ทราบสาเหตุ"
 
         # แสดงผลคะแนน
         if "score_label" in self.ids:
             self.ids.score_label.text = f"DISTANCE: {self.distance} M"
+        if "reason_label" in self.ids:
+            self.ids.reason_label.text = self.reason
         self._saved = False
 
     def _save_data(self):

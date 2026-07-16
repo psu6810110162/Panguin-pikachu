@@ -10,9 +10,17 @@ def junction_prompt_text(junction: Junction) -> str:
     เขียนบรรทัดคำสั่งให้ชัดว่า "เดินเข้าเลน" คือการเลือก ไม่ใช่มีปุ่มกดตอบ —
     ผู้เล่นทดสอบสับสนว่าไม่รู้จะ "ตอบ" ยังไงตอนโชว์ป้ายนี้
     """
+
+    def option_text(label: str, deltas: dict[str, float]) -> str:
+        heat = deltas.get("heat", 0.0)
+        anger = deltas.get("capitalist_anger", 0.0)
+        return f"{label} (Heat {heat:+g} · Anger {anger:+g})"
+
     return (
         f"{junction.situation}\n"
-        f"เดินเข้าเลนซ้าย/ขวาเพื่อเลือก — ซ้าย: {junction.left.label}  |  ขวา: {junction.right.label}"
+        f"ซ้าย: {option_text(junction.left.label, junction.left.meter_deltas)}\n"
+        f"ขวา: {option_text(junction.right.label, junction.right.meter_deltas)}\n"
+        "เดินเข้าเลนซ้าย/ขวาเพื่อเลือก"
     )
 
 

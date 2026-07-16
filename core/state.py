@@ -1,6 +1,6 @@
 import json
 from collections.abc import Callable
-from enum import Enum, auto
+from enum import Enum, StrEnum, auto
 from typing import Any
 
 from core.config import BOSS_DISTANCE_M
@@ -62,6 +62,23 @@ class DecisionPhase(Enum):
 
     POLICY = auto()
     BOSS = auto()
+
+
+class DeathCause(StrEnum):
+    """เหตุที่ผู้เล่นเสียหัวใจระหว่างการวิ่ง."""
+
+    FALL = "fall"
+    IDLE = "idle"
+    MELT = "melt"
+
+
+class GameOverReason(StrEnum):
+    """เหตุผลแรกที่ทำให้รอบเล่นเข้าสู่ game over."""
+
+    HEARTS = "hearts"
+    HEAT = "heat"
+    ANGER = "anger"
+    BOSS = "boss"
 
 
 class InvalidTransitionError(Exception):
@@ -157,14 +174,39 @@ class RunMetrics:
         self.game_over_at: float = float(meters_diff.get("game_over_at", 100.0))
 
         self.is_game_over: bool = False
-        self.needs_respawn: bool = False
-        self.is_invincible: bool = False
+        self._awaiting_respawn: bool = False
+        self._grace_remaining: float = 0.0
+        self.game_over_reason: GameOverReason | None = None
+        self.last_death_cause: DeathCause | None = None
+
+    @property
+    def needs_respawn(self) -> bool:
+        """True while the player is waiting for checkpoint recovery."""
+        return self._awaiting_respawn
+
+    @property
+    def grace_active(self) -> bool:
+        """True while the post-respawn protection window is still running."""
+        return self._grace_remaining > 0.0
+
+    @property
+    def is_invincible(self) -> bool:
+        """Derived protection state; callers must use the lifecycle methods.
+
+        The old view layer cleared this flag on the first movement input, which
+        made a respawn look fast and allowed the checkpoint tile to melt again
+        immediately.  No setter is intentional: divergent owners now fail at
+        the call site instead of silently changing the run state.
+        """
+        return self._awaiting_respawn or self.grace_active
 
     def update_meters(self, heat_delta: float, anger_delta: float) -> None:
         """D1-A1: รับค่า Delta เพื่ออัปเดตหลอดวัด (Dual-Meter)"""
         if self.is_game_over:
             return
 
+        raw_heat = self.heat_meter + float(heat_delta)
+        raw_anger = self.capitalist_anger + float(anger_delta)
         self.heat_meter = max(
             self.min_meter, min(self.max_meter, self.heat_meter + float(heat_delta))
         )
@@ -172,30 +214,46 @@ class RunMetrics:
             self.min_meter, min(self.max_meter, self.capitalist_anger + float(anger_delta))
         )
 
-        if self.heat_meter >= self.game_over_at or self.capitalist_anger >= self.game_over_at:
-            self.trigger_game_over()
+        if raw_heat >= self.game_over_at or raw_anger >= self.game_over_at:
+            over_heat = raw_heat - self.game_over_at
+            over_anger = raw_anger - self.game_over_at
+            reason = GameOverReason.ANGER if over_anger > over_heat else GameOverReason.HEAT
+            self.trigger_game_over(reason)
 
-    def decrease_heart(self, allow_respawn: bool = True) -> None:
-        """D1-A4: ลดหัวใจเมื่อตกเหว
+    def request_death(self, cause: DeathCause | None, *, allow_respawn: bool = True) -> bool:
+        """Accept one damage transition and record its cause exactly once.
 
-        Args:
-            allow_respawn: True (default) = ตกเหวระหว่างวิ่ง ตั้ง needs_respawn +
-                invincible frame ตาม state-machines.md §3 / False = เสียหัวใจตรง ๆ
-                (เช่น ตอบผิดในบอส — ไม่มี fall-respawn ใน RunState.BOSS)
+        Returns ``True`` only when this call consumed a heart.  Repeated fall or
+        idle checks during the same frame are rejected while awaiting respawn or
+        during grace, so a later check cannot overwrite the original cause.
         """
         if self.is_game_over or self.is_invincible:
-            return
+            return False
 
-        self.hearts -= 1
-        if self.hearts <= 0:
-            self.hearts = 0
-            self.trigger_game_over()
+        if cause is not None:
+            self.last_death_cause = cause
+        self.hearts = max(0, self.hearts - 1)
+        if self.hearts == 0:
+            self.trigger_game_over(GameOverReason.HEARTS)
         elif allow_respawn:
-            self.needs_respawn = True
-            self.is_invincible = True
+            self._awaiting_respawn = True
+        return True
 
-    def trigger_game_over(self) -> None:
-        """เปลี่ยนสถานะภายในเป็น Game Over และเรียก Callback เพื่อให้ระบบนอก (เช่น RunState) รับทราบ"""
+    def complete_respawn(self) -> None:
+        """Finish checkpoint recovery and start grace; movement cannot cancel it."""
+        self._awaiting_respawn = False
+        self._grace_remaining = self.invincible_seconds
+
+    def tick_grace(self, dt: float) -> None:
+        """Advance grace by time only, clamping at zero."""
+        if self._grace_remaining > 0.0:
+            self._grace_remaining = max(0.0, self._grace_remaining - max(0.0, dt))
+
+    def trigger_game_over(self, reason: GameOverReason) -> None:
+        """Record the first terminal reason and notify the screen once."""
+        if self.is_game_over:
+            return
+        self.game_over_reason = reason
         self.is_game_over = True
         if self.on_game_over:
             self.on_game_over()
