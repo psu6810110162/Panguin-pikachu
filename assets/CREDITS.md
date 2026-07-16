@@ -25,3 +25,10 @@ Reason: runtime player character for the PR2 visual contract. The magenta key ba
 
 Source: generated for this project with the Codex image generation tool; no external source asset.
 Reason: runtime obstacle replacement for the PR3 visual contract. The green key background was removed; the 4x2 frame order is locked in `core/asset_contract.py`.
+
+## Generated audio
+
+**Gameplay SFX v1** — `assets/generated/audio/`
+
+Source: deterministic procedural synthesis in `scripts/generate_game_audio.py`; no external audio source.
+Reason: state-readable cues for movement, quiz open, left/right choice, correct/wrong boss answers, respawn, boss alert, and victory. The files are loaded by `infrastructure/audio.py`.

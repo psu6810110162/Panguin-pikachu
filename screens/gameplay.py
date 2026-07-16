@@ -1022,6 +1022,7 @@ class GamePlayScreen(Screen):
     def _open_policy_decision(self, zone_id: int):
         junction = get_junction(zone_id)
         cfg = load_difficulty().get("decision", {})
+        AudioManager().play_sfx("quiz_open")
         self.decision_phase = DecisionPhase.POLICY
         self._set_drone_pose("point_forward")
         self.decision_zone = zone_id
@@ -1041,6 +1042,7 @@ class GamePlayScreen(Screen):
 
     def _open_boss_decision(self, wave_no: int):
         cfg = load_difficulty().get("decision", {})
+        AudioManager().play_sfx("boss_alert")
         sides = {
             placement.side: placement.item_id
             for placement in self.grid.boss_items.values()
@@ -1102,6 +1104,7 @@ class GamePlayScreen(Screen):
             self.pending_policy_zone = None
             self.show_checkpoint_message("TIMEOUT — ไม่มีการเลือก")
         elif self.decision_phase is DecisionPhase.BOSS:
+            AudioManager().play_sfx("wrong")
             self.show_checkpoint_message("TIMEOUT — เลือกเลนขวาอัตโนมัติ")
             self._close_decision()
             self._move(DIR_RIGHT)
@@ -1217,6 +1220,7 @@ class GamePlayScreen(Screen):
             self.checkpoint_label.opacity = 0
             self.respawn_overlay.opacity = 1
             self.respawn_overlay.disabled = False
+            AudioManager().play_sfx("respawn")
             self._respawn_event = Clock.schedule_once(
                 self._respawn_penguin, self.metrics.respawn_seconds
             )
@@ -1427,6 +1431,7 @@ class GamePlayScreen(Screen):
                 return
             decision_phase = self.decision_phase
             selected_side = "left" if direction == DIR_LEFT else "right"
+            AudioManager().play_sfx(f"choice_{selected_side}")
             if decision_phase is DecisionPhase.POLICY and self.decision_zone is not None:
                 zone_id = self.decision_zone
                 # A quiz answer is a semantic choice, not a movement command.
@@ -1544,7 +1549,7 @@ class GamePlayScreen(Screen):
             # ผลของแต่ละเวฟอ่านจาก balance/v1/boss.json (on_correct/on_wrong ใช้
             # key "boss_armor"/"hearts") — ไม่ hardcode เพื่อให้ balance pass แก้ data ได้
             if is_correct:
-                AudioManager().play_sfx("Coin")
+                AudioManager().play_sfx("correct")
                 if wave_data:
                     self.boss_hp += wave_data.on_correct.get("boss_armor", -1)
                 self.session.boss_phase(
@@ -1554,7 +1559,7 @@ class GamePlayScreen(Screen):
                 )
                 self.show_checkpoint_message("CORRECT!")
             else:
-                AudioManager().play_sfx("Down")
+                AudioManager().play_sfx("wrong")
                 hearts_delta = wave_data.on_wrong.get("hearts", -1) if wave_data else -1
                 # ในบอสไม่มี fall-respawn (state-machines.md §3) — เสียหัวใจตรง ๆ
                 for _ in range(-hearts_delta):
@@ -1578,6 +1583,7 @@ class GamePlayScreen(Screen):
                     distance_m=self.grid.get_distance_m(),
                 )
                 self.show_checkpoint_message("BOSS DEFEATED!")
+                AudioManager().play_sfx("victory")
                 self.boss_wall_label.text = ""
                 self.boss_choices_label.text = ""
                 self.boss_status_label.text = ""
@@ -1646,7 +1652,7 @@ class GamePlayScreen(Screen):
             if idx >= 0:
                 self.path_index = idx
                 self.grid.extend_if_needed(self.path_index)
-                AudioManager().play_sfx("Jump")
+                AudioManager().play_sfx("step")
                 # Normal movement is intentionally stable; camera shake is
                 # reserved for collisions/falls so the first run does not feel
                 # like the player sprite is vibrating continuously.

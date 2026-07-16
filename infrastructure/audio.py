@@ -37,9 +37,23 @@ class AudioManager:
             "jump2": "Jump 2.ogg",
             "down": "Down.ogg",
             "coin": "tap-a.ogg",
+            # Generated, project-owned gameplay palette.
+            "step": "step.wav",
+            "quiz_open": "quiz_open.wav",
+            "choice_left": "choice_left.wav",
+            "choice_right": "choice_right.wav",
+            "correct": "correct.wav",
+            "wrong": "wrong.wav",
+            "respawn": "respawn.wav",
+            "boss_alert": "boss_alert.wav",
+            "victory": "victory.wav",
         }
         self.sfx_paths = {
-            name: str(resource_path("assets", "Component_UI", "Sounds", filename))
+            name: str(
+                resource_path("assets", "generated", "audio", filename)
+                if filename.endswith(".wav")
+                else resource_path("assets", "Component_UI", "Sounds", filename)
+            )
             for name, filename in filenames.items()
         }
         self.sounds = {
