@@ -74,11 +74,18 @@ class DatabaseManager:
 
     def _open_connection(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA synchronous=FULL")
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("PRAGMA synchronous=FULL")
+            connection.execute("PRAGMA foreign_keys=ON")
+            return connection
+        except Exception:
+            # On Windows, a failed PRAGMA can still leave the SQLite handle
+            # holding the file. Close it before recovery attempts to rename a
+            # corrupt save, otherwise WinError 32 masks the original error.
+            connection.close()
+            raise
 
     def _verify_integrity(self) -> None:
         assert self.conn is not None
