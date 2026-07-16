@@ -57,10 +57,20 @@ class GridManager:
         self.obstacles = {}  # (col, row) -> Obstacle
         self.gems = {}  # (col, row) -> Gem
         self.scientific_items = {}  # (col, row) -> ItemType
+        self.heart_pickups: set[tuple[int, int]] = set()
         self.boss_items = {}  # (col, row) -> BossItemPlacement
         self.fork_tiles = set()  # tile ที่เป็นส่วน fork (ใช้ render สีต่าง)
         self.merge_points = []  # จุดบรรจบของแต่ละ fork
         self.junction_prompts = {}
+        # Post-policy atmosphere (ADR plan Task 4): systemic choices make the
+        # next straight segments friendlier (fewer crates); non-systemic do
+        # the opposite. Reset at each new junction spawn.
+        self.environment_bias = "neutral"
+        self.obstacle_spawn_multiplier = 1.0
+        env = load_difficulty().get("environment", {})
+        self._env_friendly_mult = float(env.get("friendly_obstacle_multiplier", 0.4))
+        self._env_hostile_mult = float(env.get("hostile_obstacle_multiplier", 1.8))
+        self._base_obstacle_chance = float(env.get("base_obstacle_chance", 0.2))
 
         self._last_pos = (0, 0)
         self._last_dir = self.DIR_A
@@ -97,10 +107,12 @@ class GridManager:
         self.obstacles.clear()
         self.gems.clear()
         self.scientific_items.clear()
+        self.heart_pickups.clear()
         self.boss_items.clear()
         self.fork_tiles.clear()
         self.merge_points.clear()
         self.junction_prompts.clear()
+        self.reset_environment_bias()
         self._last_pos = (0, 0)
         self._last_dir = self.DIR_A
         self._seg_count = 0
@@ -205,6 +217,7 @@ class GridManager:
             self.obstacles.pop(pos, None)
             self.gems.pop(pos, None)
             self.scientific_items.pop(pos, None)
+            self.heart_pickups.discard(pos)
             self.boss_items.pop(pos, None)
             self.junction_prompts.pop(pos, None)
 
@@ -228,6 +241,22 @@ class GridManager:
 
     def get_scientific_item_at(self, col, row):
         return self.scientific_items.get((col, row))
+
+    def get_heart_at(self, col: int, row: int) -> bool:
+        return (col, row) in self.heart_pickups
+
+    def apply_policy_environment(self, *, systemic: bool) -> None:
+        """Bias obstacle density after a Y-junction policy choice."""
+        if systemic:
+            self.environment_bias = "friendly"
+            self.obstacle_spawn_multiplier = self._env_friendly_mult
+        else:
+            self.environment_bias = "hostile"
+            self.obstacle_spawn_multiplier = self._env_hostile_mult
+
+    def reset_environment_bias(self) -> None:
+        self.environment_bias = "neutral"
+        self.obstacle_spawn_multiplier = 1.0
 
     def pop_boss_wave(self, wave_no):
         """Remove both alternatives for a resolved boss wave."""
@@ -292,6 +321,7 @@ class GridManager:
         self.obstacles.pop(pos, None)
         self.gems.pop(pos, None)
         self.scientific_items.pop(pos, None)
+        self.heart_pickups.discard(pos)
         self.boss_items.pop(pos, None)
         # Note: ไม่ลบจาก self.path เพื่อไม่ให้ลำดับพิกัดเสีย (แต่ renderer จะไม่วาดเพราะไม่อยู่ใน path_set)
 
@@ -309,6 +339,7 @@ class GridManager:
             self.obstacles.pop(pos, None)
             self.gems.pop(pos, None)
             self.scientific_items.pop(pos, None)
+            self.heart_pickups.discard(pos)
             self.boss_items.pop(pos, None)
 
         self._last_cleaned_idx = target_idx
@@ -376,6 +407,8 @@ class GridManager:
 
         if should_spawn_fork and self._seg_count >= 2:
             # ─── Diamond Fork ───
+            # New junction = new atmosphere cycle; clear prior policy bias.
+            self.reset_environment_bias()
             self._build_diamond_fork(self.next_zone)
             logger.info(
                 f"[SPAWN] Y-Junction โซน {self.next_zone} ที่ระยะ ~{current_distance_m}m "
@@ -407,8 +440,9 @@ class GridManager:
                 self.fork_tiles.add((col, row))
 
             # สุ่มวาง Obstacle บน centerline (ยกเว้นช่วงแรกๆ)
-            # ปรับโอกาสเหลือ 0.2 เพื่อไม่ให้รกเกินไปเมื่อซิกแซกถี่ขึ้น
-            if self._seg_count > 0 and random.random() < 0.2 and not mark_fork:
+            # ปรับโอกาสด้วย environment_bias หลังเลือกนโยบายที่ทางแยก
+            obstacle_chance = min(1.0, self._base_obstacle_chance * self.obstacle_spawn_multiplier)
+            if self._seg_count > 0 and random.random() < obstacle_chance and not mark_fork:
                 # เช็คไม่ให้วางทับพิกัดเดิมที่มีกล่องอยู่แล้ว (กันการเจนซ้ำซ้อน)
                 if (col, row) not in self.obstacles:
                     dist = self.get_distance_m()
@@ -432,9 +466,21 @@ class GridManager:
                 and not mark_fork
                 and (col, row) not in self.obstacles
                 and (col, row) not in self.gems
+                and (col, row) not in self.scientific_items
+                and (col, row) not in self.heart_pickups
                 and random.random() < self._scientific_item_spawn_chance()
             ):
                 self.scientific_items[(col, row)] = random.choice(list(ItemType))
+            elif (
+                self._seg_count > 0
+                and not mark_fork
+                and (col, row) not in self.obstacles
+                and (col, row) not in self.gems
+                and (col, row) not in self.scientific_items
+                and (col, row) not in self.heart_pickups
+                and random.random() < self._heart_pickup_spawn_chance()
+            ):
+                self.heart_pickups.add((col, row))
 
         self._last_pos = (col, row)
 
@@ -616,6 +662,12 @@ class GridManager:
         difficulty = load_difficulty()
         items = difficulty.get("items", {})
         return float(items.get("spawn_chance", 0.0)) if isinstance(items, dict) else 0.0
+
+    @staticmethod
+    def _heart_pickup_spawn_chance() -> float:
+        difficulty = load_difficulty()
+        hearts = difficulty.get("hearts", {})
+        return float(hearts.get("pickup_chance", 0.0)) if isinstance(hearts, dict) else 0.0
 
     def _add_width(self, col, row, direction, is_safe=False):
         """ขยาย PATH_WIDTH ตั้งฉากกับ direction (ถ้ามากกว่า 1)"""

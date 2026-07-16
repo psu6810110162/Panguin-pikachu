@@ -10,7 +10,6 @@ from kivy.graphics import Color as GColor
 from kivy.graphics import Rectangle as GRect
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.image import Image
 from kivy.uix.label import Label
@@ -24,6 +23,7 @@ from core.interaction import YJunctionInteraction, junction_prompt_text
 from core.items import Inventory, ItemType
 from core.junction_data import get_junction
 from core.logger import logger
+from core.pause_state import PauseState
 from core.session import GameSession
 from core.state import DecisionPhase, RunMetrics, RunState, load_difficulty
 from game.grid import VISIBLE_BUFFER, GridManager
@@ -34,12 +34,15 @@ from ui.components import (
     ChoiceCard,
     DecisionCard,
     FeedbackToast,
+    FocusableIconButton,
     HoverButton,
     HudRail,
     MeterBar,
+    PassiveOverlay,
     StateOverlay,
 )
 from ui.how_to_play_overlay import HowToPlayOverlay
+from ui.responsive import compute_layout, is_compact
 
 GRASS_TILES = [
     "assets/isometric-nature-pack/grass1.png",
@@ -59,6 +62,21 @@ ARROW_LEFT_IMG = "assets/Component_UI/Vector/arrow_left_normal.png"
 
 DIR_LEFT = (0, 1)
 DIR_RIGHT = (1, 0)
+
+
+class _PendingCall:
+    """One pause-aware delayed callback, ticked from ``GamePlayScreen.update``.
+
+    ``Clock.schedule_once`` keeps running while the simulation is paused —
+    the pause only cancels the main per-frame ``game_event``. Any delayed
+    game-state transition (respawn, game over, boss report) must instead be
+    ticked from inside ``update`` so it freezes exactly when ``update`` stops
+    being called, with no separate pause bookkeeping to keep in sync.
+    """
+
+    def __init__(self, remaining: float, callback):
+        self.remaining = remaining
+        self.callback = callback
 
 
 class KivyRenderer(Widget):
@@ -246,6 +264,31 @@ class KivyRenderer(Widget):
                             }
                         )
 
+                    scientific = grid_manager.get_scientific_item_at(col, row)
+                    if scientific is not None:
+                        render_queue.append(
+                            {
+                                "col": col,
+                                "row": row,
+                                "z_index": -(col + row),
+                                "sub_layer": 1,
+                                "type": "scientific",
+                                "obj": scientific,
+                            }
+                        )
+
+                    if grid_manager.get_heart_at(col, row):
+                        render_queue.append(
+                            {
+                                "col": col,
+                                "row": row,
+                                "z_index": -(col + row),
+                                "sub_layer": 1,
+                                "type": "heart",
+                                "obj": None,
+                            }
+                        )
+
             render_queue.append(
                 {
                     "col": penguin.col,
@@ -271,6 +314,10 @@ class KivyRenderer(Widget):
                         Color(1, 0.6, 0.1, 1)  # chevron warning lead-in
                     elif obj.is_fork:
                         Color(1, 0.9, 0.4, 1)
+                    elif getattr(grid_manager, "environment_bias", "neutral") == "friendly":
+                        Color(0.75, 1.0, 0.85, 1)  # cooler / greener after systemic
+                    elif getattr(grid_manager, "environment_bias", "neutral") == "hostile":
+                        Color(1.0, 0.82, 0.72, 1)  # warmer after non-systemic
                     else:
                         Color(1, 1, 1, 1)
                     tex = self._get_tile_texture(col, row, grid_manager)
@@ -290,6 +337,16 @@ class KivyRenderer(Widget):
                     draw_x = sx + ox - (TILE_W // 2)
                     draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2) + y_off
                     self._draw_gem(obj, draw_x, draw_y + (TILE_IMG_H // 2), ox, oy)
+                elif itype == "scientific":
+                    sx, sy = self.grid_to_screen(col, row)
+                    draw_x = sx + ox - (TILE_W // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2) + y_off
+                    self._draw_scientific_item(obj, draw_x, draw_y + (TILE_IMG_H // 2))
+                elif itype == "heart":
+                    sx, sy = self.grid_to_screen(col, row)
+                    draw_x = sx + ox - (TILE_W // 2)
+                    draw_y = sy + oy - (TILE_IMG_H - TILE_H // 2) + y_off
+                    self._draw_heart_pickup(draw_x, draw_y + (TILE_IMG_H // 2))
                 elif itype == "penguin":
                     Color(1, 1, 1, 1)
                     p_ox, p_oy = ox, oy
@@ -389,6 +446,23 @@ class KivyRenderer(Widget):
         gw, gh = 32, 32
         Color(1, 1, 1, 1)
         Rectangle(texture=tex, pos=(tx + (TILE_W - gw) // 2, ty + float_offset), size=(gw, gh))
+
+    def _draw_scientific_item(self, item_type, tx, ty):
+        """Tinted gem-frame marker — no dedicated spritesheet in the asset pack."""
+        colors = {
+            ItemType.ALBEDO_DATA: (0.35, 0.75, 1.0, 1),
+            ItemType.METHANE_CORE: (0.75, 0.35, 0.95, 1),
+            ItemType.ECO_SEED: (0.35, 0.95, 0.45, 1),
+        }
+        Color(*colors.get(item_type, (1, 1, 1, 1)))
+        tex = self.gem_texture.get_region(0, 0, 16, 16)
+        gw, gh = 36, 36
+        Rectangle(texture=tex, pos=(tx + (TILE_W - gw) // 2, ty + 14), size=(gw, gh))
+
+    def _draw_heart_pickup(self, tx, ty):
+        Color(1.0, 0.25, 0.4, 1)
+        size = 28
+        Rectangle(pos=(tx + (TILE_W - size) // 2, ty + 16), size=(size, size))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -621,7 +695,12 @@ class GamePlayScreen(Screen):
         self.game_over = False
         self.game_event = None
         self._keyboard = None
+        self._keyboard_wanted = False
         self.path_index = 0
+        self.pause_state = PauseState(
+            on_pause=self._on_pause_transition, on_resume=self._on_resume_transition
+        )
+        self._pending_calls: list[_PendingCall] = []
         self.active_prompt_zone = None
         self.decision_phase: DecisionPhase | None = None
         self.decision_zone: int | None = None
@@ -646,6 +725,11 @@ class GamePlayScreen(Screen):
         self.grid.reset()
         self.last_checkpoint_col = self.grid.path[0][0]
         self.last_checkpoint_row = self.grid.path[0][1]
+        # Fall-point respawn (ADR-016): where the player actually fell — not
+        # the 100m milestone toast checkpoint, which used to leave early falls
+        # stuck teleporting back to path[0].
+        self.fall_col = self.last_checkpoint_col
+        self.fall_row = self.last_checkpoint_row
         start = self.grid.path[0]
         self.penguin.col = start[0]
         self.penguin.row = start[1]
@@ -657,14 +741,35 @@ class GamePlayScreen(Screen):
         self.renderer = KivyRenderer()
         self.add_widget(self.renderer)
 
-        self.hud_bg = HudRail(
-            orientation="horizontal",
+        # HUD is two independently-styled rail panels stacked in a passive
+        # (non-touch-consuming) vertical container: on wide breakpoints both
+        # panels sit side by side on one visual row (`hud_row_secondary`
+        # borrows `hud_row_primary`'s row via size_hint_y=None height=0 when
+        # empty is avoided — instead both panels are always visible but
+        # `_apply_responsive_layout` decides whether the secondary panel is
+        # a second row (compact) or docked next to the primary one (wide).
+        self.hud_bg = BoxLayout(
+            orientation="vertical",
             size_hint=(0.80, None),
+            spacing=6,
+            pos_hint={"center_x": 0.60, "top": 0.975},
+        )
+        self.hud_row_primary = HudRail(
+            orientation="horizontal",
+            size_hint=(1, None),
             height=68,
             spacing=16,
             padding=[18, 10, 18, 10],
-            pos_hint={"center_x": 0.60, "top": 0.975},
         )
+        self.hud_row_secondary = HudRail(
+            orientation="horizontal",
+            size_hint=(1, None),
+            height=68,
+            spacing=16,
+            padding=[18, 10, 18, 10],
+        )
+        self.hud_bg.add_widget(self.hud_row_primary)
+        self.hud_bg.add_widget(self.hud_row_secondary)
 
         self.score_label = Label(
             text="SCORE: 0",
@@ -683,7 +788,8 @@ class GamePlayScreen(Screen):
         gem_tex = CoreImage("assets/Gem/Coin_Gems/spr_coin_strip4.png").texture.get_region(
             0, 0, 16, 16
         )
-        gem_icon = Image(texture=gem_tex, size_hint=(None, None), size=(40, 40))
+        self.gem_icon = Image(texture=gem_tex, size_hint=(None, None), size=(40, 40))
+        gem_icon = self.gem_icon
 
         self.gem_label = Label(
             text="x 0",
@@ -698,9 +804,10 @@ class GamePlayScreen(Screen):
 
         gem_box.add_widget(gem_icon)
         gem_box.add_widget(self.gem_label)
+        self.gem_box = gem_box
 
-        self.hud_bg.add_widget(self.score_label)
-        self.hud_bg.add_widget(gem_box)
+        self.hud_row_primary.add_widget(self.score_label)
+        self.hud_row_primary.add_widget(gem_box)
         self.hearts_label = Label(
             text=f"Hearts: {self.metrics.hearts}",
             font_size="18sp",
@@ -743,9 +850,8 @@ class GamePlayScreen(Screen):
             column.add_widget(bar)
             return column
 
-        self.hud_bg.add_widget(self.hearts_label)
-        self.hud_bg.add_widget(_meter_column("HEAT", self.heat_bar))
-        self.hud_bg.add_widget(_meter_column("ANGER", self.anger_bar))
+        self.heat_column = _meter_column("HEAT", self.heat_bar)
+        self.anger_column = _meter_column("ANGER", self.anger_bar)
         self.inventory_label = Label(
             text="Items: -",
             font_size="16sp",
@@ -754,7 +860,19 @@ class GamePlayScreen(Screen):
             size_hint_x=None,
         )
         self.inventory_label.bind(texture_size=self.inventory_label.setter("size"))
-        self.hud_bg.add_widget(self.inventory_label)
+
+        # Secondary-row widgets, in HUD reading order. `_apply_responsive_layout`
+        # reparents these between `hud_row_primary` (wide) and
+        # `hud_row_secondary` (compact) — never duplicated, never orphaned.
+        self._hud_secondary_widgets = [
+            self.hearts_label,
+            self.heat_column,
+            self.anger_column,
+            self.inventory_label,
+        ]
+        for widget in self._hud_secondary_widgets:
+            self.hud_row_primary.add_widget(widget)
+        self._hud_secondary_docked_in_primary = True
 
         self.add_widget(self.hud_bg)
 
@@ -774,89 +892,12 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.guide_drone)
 
-        OFFSET = 0.2
-        self.btn_left = ArrowButton(
-            move_callback=lambda: self._move(DIR_LEFT),
-            source=ARROW_LEFT_IMG,
-            size_hint=(None, None),
-            size=(120, 120),
-            allow_stretch=True,
-            keep_ratio=True,
-            pos_hint={"center_x": 0.5 - OFFSET, "center_y": 0.08},
-        )
-        self.add_widget(self.btn_left)
-
-        self.btn_right = ArrowButton(
-            move_callback=lambda: self._move(DIR_RIGHT),
-            source=ARROW_RIGHT_IMG,
-            size_hint=(None, None),
-            size=(120, 120),
-            allow_stretch=True,
-            keep_ratio=True,
-            pos_hint={"center_x": 0.5 + OFFSET, "center_y": 0.08},
-        )
-        self.add_widget(self.btn_right)
-
-        # ── Pause button at top-left corner ──
-        self.pause_btn = Button(
-            size_hint=(None, None),
-            size=(80, 80),
-            pos_hint={"x": 0.02, "top": 0.98},
-            background_normal="assets/Component_UI/Stop/pause_on.png",
-            background_down="assets/Component_UI/Stop/pause_down.png",
-            background_color=(1, 1, 1, 1),
-            border=(0, 0, 0, 0),
-        )
-        self.pause_btn.bind(on_release=lambda _: self.pause_game())
-        self.add_widget(self.pause_btn)
-
-        self.help_btn = Button(
-            text="?",
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
-            font_size="32sp",
-            bold=True,
-            size_hint=(None, None),
-            size=(54, 54),
-            pos_hint={"x": 0.105, "top": 0.97},
-            background_normal="assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png",
-            background_down="assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png",
-            border=(10, 10, 10, 10),
-        )
-        self.help_btn.bind(on_release=lambda _: self.open_how_to_play())
-        self.add_widget(self.help_btn)
-
-        # ── Pause overlay modal ──
-        self.pause_overlay = PauseOverlay(game_screen=self, opacity=0, disabled=True)
-        self.add_widget(self.pause_overlay)
-
-        # Checkpoint popup label
-        self.checkpoint_label = FeedbackToast(
-            text="",
-            font_size="30sp",
-            color=(1, 1, 1, 1),
-            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
-            size_hint=(None, None),
-            pos_hint={"center_x": 0.5, "center_y": 0.75},
-            text_size=(min(Window.width * 0.58, 900), None),
-            halign="center",
-            valign="middle",
-            opacity=0,
-        )
-        self.checkpoint_label.bind(texture_size=self.checkpoint_label.setter("size"))
-        self.add_widget(self.checkpoint_label)
-        self.respawn_overlay = StateOverlay(
-            text="RESPAWNING...",
-            font_size="30sp",
-            color=(0.65, 0.9, 1.0, 1),
-            size_hint=(1, 1),
-            pos_hint={"x": 0, "y": 0},
-            text_size=(Window.width, Window.height),
-            halign="center",
-            valign="middle",
-            opacity=0,
-            disabled=True,
-        )
-        self.add_widget(self.respawn_overlay)
+        # ═══════════════════════════════════════════════════════════
+        # Layer 2 — passive presentation: boss telemetry, junction banner,
+        # decision dim/cards and checkpoint toast never gate touch dispatch,
+        # so they may be added before the interactive controls without ever
+        # blocking them (see ui.components.PassiveOverlay / StateOverlay).
+        # ═══════════════════════════════════════════════════════════
 
         # Boss UI
         self.boss_wall_label = Label(
@@ -938,7 +979,10 @@ class GamePlayScreen(Screen):
         self.junction_banner.bind(texture_size=self.junction_banner.setter("size"))
         self.add_widget(self.junction_banner)
 
-        self.decision_dim = Widget(size_hint=(1, 1), opacity=0, disabled=True)
+        # Passive dim backdrop for the decision phase. Left/Right choices are
+        # made via the arrow buttons (layer 3, added below) while this is
+        # showing, so it must never consume touch — see PassiveOverlay.
+        self.decision_dim = PassiveOverlay(size_hint=(1, 1), opacity=0)
         with self.decision_dim.canvas:
             GColor(0.02, 0.04, 0.10, 0.72)
             self._decision_dim_rect = GRect(pos=self.decision_dim.pos, size=self.decision_dim.size)
@@ -982,9 +1026,107 @@ class GamePlayScreen(Screen):
         )
         self.add_widget(self.decision_countdown)
 
-        # Must remain the final child: help takes precedence over decisions,
-        # respawn state, and the regular pause overlay.
-        self.how_to_play_overlay = HowToPlayOverlay()
+        # Checkpoint popup label
+        self.checkpoint_label = FeedbackToast(
+            text="",
+            font_size="30sp",
+            color=(1, 1, 1, 1),
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+            size_hint=(None, None),
+            pos_hint={"center_x": 0.5, "center_y": 0.75},
+            text_size=(min(Window.width * 0.58, 900), None),
+            halign="center",
+            valign="middle",
+            opacity=0,
+        )
+        self.checkpoint_label.bind(texture_size=self.checkpoint_label.setter("size"))
+        self.add_widget(self.checkpoint_label)
+
+        # ═══════════════════════════════════════════════════════════
+        # Layer 3 — interactive controls. Added after every passive/HUD
+        # element above so they are topmost (dispatched first) among
+        # non-modal widgets and can never be shadowed by a full-screen
+        # decorative widget added later in the same layer.
+        # ═══════════════════════════════════════════════════════════
+
+        OFFSET = 0.2
+        self.btn_left = ArrowButton(
+            move_callback=lambda: self._move(DIR_LEFT),
+            source=ARROW_LEFT_IMG,
+            size_hint=(None, None),
+            size=(120, 120),
+            allow_stretch=True,
+            keep_ratio=True,
+            pos_hint={"center_x": 0.5 - OFFSET, "center_y": 0.08},
+        )
+        self.add_widget(self.btn_left)
+
+        self.btn_right = ArrowButton(
+            move_callback=lambda: self._move(DIR_RIGHT),
+            source=ARROW_RIGHT_IMG,
+            size_hint=(None, None),
+            size=(120, 120),
+            allow_stretch=True,
+            keep_ratio=True,
+            pos_hint={"center_x": 0.5 + OFFSET, "center_y": 0.08},
+        )
+        self.add_widget(self.btn_right)
+
+        # ── Pause button at top-left corner ──
+        self.pause_btn = FocusableIconButton(
+            accessibility_label="Pause",
+            size_hint=(None, None),
+            size=(80, 80),
+            pos_hint={"x": 0.02, "top": 0.98},
+            background_normal="assets/Component_UI/Stop/pause_on.png",
+            background_down="assets/Component_UI/Stop/pause_down.png",
+            background_color=(1, 1, 1, 1),
+            border=(0, 0, 0, 0),
+        )
+        self.pause_btn.bind(on_release=lambda _: self.pause_game())
+        self.add_widget(self.pause_btn)
+
+        self.help_btn = FocusableIconButton(
+            accessibility_label="How to Play",
+            text="?",
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_size="32sp",
+            bold=True,
+            size_hint=(None, None),
+            size=(54, 54),
+            pos_hint={"x": 0.105, "top": 0.97},
+            background_normal="assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png",
+            background_down="assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png",
+            border=(10, 10, 10, 10),
+        )
+        self.help_btn.bind(on_release=lambda _: self.open_how_to_play())
+        self.add_widget(self.help_btn)
+
+        # ═══════════════════════════════════════════════════════════
+        # Layer 4 — modal layer. Each of these gates touch consumption on an
+        # explicit active flag (opacity / is_open), never on `disabled`, so a
+        # hidden modal never blocks layer 3. how_to_play_overlay must remain
+        # the final child: help takes precedence over decisions, respawn
+        # state, and the regular pause overlay.
+        # ═══════════════════════════════════════════════════════════
+
+        self.respawn_overlay = StateOverlay(
+            text="RESPAWNING...",
+            font_size="30sp",
+            color=(0.65, 0.9, 1.0, 1),
+            size_hint=(1, 1),
+            pos_hint={"x": 0, "y": 0},
+            text_size=(Window.width, Window.height),
+            halign="center",
+            valign="middle",
+            opacity=0,
+        )
+        self.add_widget(self.respawn_overlay)
+
+        self.pause_overlay = PauseOverlay(game_screen=self, opacity=0, disabled=True)
+        self.add_widget(self.pause_overlay)
+
+        self.how_to_play_overlay = HowToPlayOverlay(on_close=self._on_help_closed)
         self.add_widget(self.how_to_play_overlay)
 
     def _build_decision_choice(self, title, pos_hint, accent):
@@ -1039,8 +1181,10 @@ class GamePlayScreen(Screen):
         self.decision_intro_remaining = float(cfg.get("intro_seconds", 0.8))
         self.decision_remaining = float(cfg.get("policy_seconds", 8.0))
         self.decision_card.text = f"ZONE {zone_id}\n{junction.situation}"
-        self.decision_left.text = f"←  {junction.left.label}"
-        self.decision_right.text = f"{junction.right.label}  →"
+        # ASCII "<<"/">>" instead of Unicode arrows — NotoSansThai isn't
+        # guaranteed to carry U+2190/U+2192 glyphs; ASCII always renders.
+        self.decision_left.text = f"<<  {junction.left.label}"
+        self.decision_right.text = f"{junction.right.label}  >>"
         self.decision_card.opacity = 1
         self.decision_left.opacity = 1
         self.decision_right.opacity = 1
@@ -1063,8 +1207,8 @@ class GamePlayScreen(Screen):
         self.decision_intro_remaining = float(cfg.get("intro_seconds", 0.8))
         self.decision_remaining = float(cfg.get("boss_seconds", 6.0))
         self.decision_card.text = f"BOSS WAVE {wave_no}\nเลือกหลักฐานที่หักล้างกำแพงนี้"
-        self.decision_left.text = f"←  {sides.get('left', '?')}"
-        self.decision_right.text = f"{sides.get('right', '?')}  →"
+        self.decision_left.text = f"<<  {sides.get('left', '?')}"
+        self.decision_right.text = f"{sides.get('right', '?')}  >>"
         self.decision_card.opacity = 1
         self.decision_left.opacity = 1
         self.decision_right.opacity = 1
@@ -1166,13 +1310,15 @@ class GamePlayScreen(Screen):
         # state machine เดิม flag ไว้คุยกับ Dev B แล้ว ห้ามแก้ฝั่งเดียว)
         if self.session.run_record.state == RunState.BOSS:
             self.session.finish()
-        Clock.schedule_once(lambda dt: self._go_gameover(), 0.8)
+        self._schedule_paused_aware(0.8, self._go_gameover)
 
     def _respawn_penguin(self, dt=None):
         self.penguin.is_dead = False
         self.is_respawning = False
-        self.penguin.col = self.last_checkpoint_col
-        self.penguin.row = self.last_checkpoint_row
+        # ADR-016: resume at the fall tile so hearts buy progress, not a
+        # free ride back to the start platform.
+        self.penguin.col = self.fall_col
+        self.penguin.row = self.fall_row
         self.penguin.visual_x = None
         self.penguin.visual_y = None
         self.penguin.anim_offset_y = 0.0
@@ -1182,18 +1328,32 @@ class GamePlayScreen(Screen):
         self.decision_grace_active = False
         self.pending_policy_zone = None
         self.pending_policy_side = None
-        checkpoint_index = self.grid.get_path_index(
-            self.last_checkpoint_col, self.last_checkpoint_row
-        )
-        if checkpoint_index >= 0:
-            self.path_index = checkpoint_index
+        fall_index = self.grid.get_path_index(self.fall_col, self.fall_row)
+        if fall_index < 0 and 0 <= self.path_index < len(self.grid.path):
+            # Stepped off-path: restore from the last known centreline cell.
+            self.fall_col, self.fall_row = self.grid.path[self.path_index]
+            self.penguin.col = self.fall_col
+            self.penguin.row = self.fall_row
+            fall_index = self.path_index
+        if fall_index >= 0:
+            self.path_index = fall_index
         # ทางเดินช่วงที่เดินผ่านไปแล้วอาจละลาย/หายไปหมดระหว่างรอ respawn 3 วิ —
         # แช่แข็งกลับให้เดินต่อได้จริง กัน respawn แล้วตกซ้ำวนไม่จบ
         self.grid.repair_path_ahead_of_checkpoint(
-            self.last_checkpoint_col,
-            self.last_checkpoint_row,
+            self.fall_col,
+            self.fall_row,
             tiles_ahead=VISIBLE_BUFFER,
         )
+        # If the fall tile itself was destroyed (off-path or culled), ensure
+        # it exists as a walkable tile before the player lands on it.
+        if (self.fall_col, self.fall_row) not in self.grid.path_set:
+            self.grid._add_tile(self.fall_col, self.fall_row)
+        else:
+            tile = self.grid.path_set[(self.fall_col, self.fall_row)]
+            tile.state = "normal"
+            tile.trigger_timer = self.grid.trigger_seconds_for_distance()
+            tile.offset_y = 0.0
+            tile.fall_velocity = 0.0
         self.respawn_grace_active = True
         self.respawn_grace_remaining = self.metrics.invincible_seconds
         self.metrics.is_invincible = True
@@ -1203,7 +1363,6 @@ class GamePlayScreen(Screen):
         self.active_prompt_zone = None
         self.junction_banner.text = ""
         self.respawn_overlay.opacity = 0
-        self.respawn_overlay.disabled = True
         self._close_decision()
         # RESPAWNING → RUNNING ตาม state machine (ADR-010 / state-machines.md §3)
         if self.session.state == RunState.RESPAWNING:
@@ -1213,7 +1372,7 @@ class GamePlayScreen(Screen):
         if self.is_respawning or self.penguin.is_dead:
             return
         # A respawn grace window protects the player from the same collapsing
-        # tile while the checkpoint is being restored.  Do not mark the sprite
+        # tile while the fall point is being restored.  Do not mark the sprite
         # dead before ``decrease_heart``: that method intentionally ignores
         # damage while invincible, and doing so would otherwise leave the
         # penguin falling forever with no respawn scheduled.
@@ -1225,6 +1384,10 @@ class GamePlayScreen(Screen):
                 current_tile.fall_velocity = 0.0
             self.idle_timer = 0.0
             return
+        # Capture fall coordinates *before* marking dead — this is where the
+        # player will resume (ADR-016), not last_checkpoint (100m toast).
+        self.fall_col = self.penguin.col
+        self.fall_row = self.penguin.row
         self.penguin.is_dead = True
         self.metrics.decrease_heart()
         self._refresh_status_hud()
@@ -1232,13 +1395,14 @@ class GamePlayScreen(Screen):
             self.metrics.needs_respawn = False
             self.is_respawning = True
             self.respawn_count += 1
-            # ADR-002/010: RUNNING → RESPAWNING + RespawnEvent (respawn_count,
-            # score_penalty 10%) — การหักคะแนนจริงเป็นหน้าที่ scoring ฝั่ง server
+            # ADR-002/010/016: RUNNING → RESPAWNING + RespawnEvent. The event
+            # fields are still named checkpoint_* for schema compat; values
+            # are the fall-point coordinates the player resumes at.
             if self.session.state == RunState.RUNNING:
                 self.session.begin_respawn()
                 self.session.respawn(
-                    checkpoint_col=self.last_checkpoint_col,
-                    checkpoint_row=self.last_checkpoint_row,
+                    checkpoint_col=self.fall_col,
+                    checkpoint_row=self.fall_row,
                     respawn_count=self.respawn_count,
                     score_penalty=0.1,
                     distance_m=self.grid.get_distance_m(),
@@ -1248,8 +1412,7 @@ class GamePlayScreen(Screen):
             Animation.cancel_all(self.checkpoint_label)
             self.checkpoint_label.opacity = 0
             self.respawn_overlay.opacity = 1
-            self.respawn_overlay.disabled = False
-            Clock.schedule_once(self._respawn_penguin, self.metrics.respawn_seconds)
+            self._schedule_paused_aware(self.metrics.respawn_seconds, self._respawn_penguin)
 
     def _start_new_session(self):
         """Create the session, metrics, and junction interaction as one run unit.
@@ -1277,10 +1440,10 @@ class GamePlayScreen(Screen):
         self.handled_policy_zones.clear()
         self.junction_banner.text = ""
         self.respawn_overlay.opacity = 0
-        self.respawn_overlay.disabled = True
         self.checkpoint_label.opacity = 0
         start = self.grid.path[0]
         self.last_checkpoint_col, self.last_checkpoint_row = start
+        self.fall_col, self.fall_row = start
         self._refresh_status_hud()
         self._update_inventory_hud()
 
@@ -1308,14 +1471,28 @@ class GamePlayScreen(Screen):
 
         logger.info("เข้าสู่หน้า GamePlay")
 
-        if not self._keyboard:
-            self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
-            self._keyboard.bind(on_key_down=self._on_keyboard_down)
-            self._keyboard.bind(on_key_up=self._on_keyboard_up)
+        self._keyboard_wanted = True
+        self._bind_gameplay_keyboard()
+
+        # Fresh run: drop any pause reasons/overlays/pending transitions left
+        # over from a previous visit to this screen instance before
+        # (re)scheduling the loop explicitly below.
+        if self.how_to_play_overlay.is_open:
+            self.how_to_play_overlay.close()
+        self.pause_state.clear()
+        self._pending_calls.clear()
+        self.pause_overlay.opacity = 0
+        self.pause_overlay.disabled = True
 
         self.penguin.equip_skin(StateManager().selected_skin)
         self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
         AudioManager().play_bgm("Bgm.gameplay.mp3")
+
+        # Bound exactly once per screen visit (unbound in on_leave below) —
+        # multiple on_enter/on_leave cycles on the same Screen instance must
+        # never accumulate duplicate resize listeners.
+        Window.bind(size=self._apply_responsive_layout)
+        self._apply_responsive_layout()
 
         self.grid.reset()
         start = self.grid.path[0]
@@ -1329,7 +1506,6 @@ class GamePlayScreen(Screen):
         self.renderer.cam_x = None
         self._start_new_session()
         self.respawn_overlay.opacity = 0
-        self.respawn_overlay.disabled = True
         self.boss_wall_label.text = ""
         self.boss_choices_label.text = ""
         self.boss_status_label.text = ""
@@ -1342,12 +1518,130 @@ class GamePlayScreen(Screen):
             self.game_event.cancel()
             self.game_event = None  # ✅ fix
 
+        self._keyboard_wanted = False
         if self._keyboard:
             self._keyboard.unbind(on_key_down=self._on_keyboard_down)
             self._keyboard.unbind(on_key_up=self._on_keyboard_up)
             self._keyboard = None
 
+        Window.unbind(size=self._apply_responsive_layout)
+
+    def _apply_responsive_layout(self, *_args: object) -> None:
+        """Reflow HUD/controls for the current breakpoint + safe area.
+
+        Pure metrics come from ``ui.responsive.compute_layout`` (unit-tested
+        independently); this method only applies them to the concrete
+        widgets. Safe area insets are converted from dp to a fraction of the
+        current window so they compose with the existing ``pos_hint``-based
+        layout instead of replacing it.
+        """
+        layout = compute_layout(Window.width, Window.height)
+        scale = layout.scale
+        insets = layout.safe_area
+        inset_left = (insets.left / Window.width) if Window.width else 0.0
+        inset_right = (insets.right / Window.width) if Window.width else 0.0
+        inset_top = (insets.top / Window.height) if Window.height else 0.0
+
+        # On compact breakpoints the secondary telemetry (hearts/meters/
+        # inventory) drops to its own row underneath score/gems — a single
+        # row that wide has to squeeze past the pause/help cluster and
+        # overflows narrow phones. Reparenting is idempotent: widgets never
+        # move if they're already docked where they should be.
+        want_two_rows = is_compact(layout.breakpoint)
+        if want_two_rows and self._hud_secondary_docked_in_primary:
+            for widget in self._hud_secondary_widgets:
+                self.hud_row_primary.remove_widget(widget)
+                self.hud_row_secondary.add_widget(widget)
+            self._hud_secondary_docked_in_primary = False
+        elif not want_two_rows and not self._hud_secondary_docked_in_primary:
+            for widget in self._hud_secondary_widgets:
+                self.hud_row_secondary.remove_widget(widget)
+                self.hud_row_primary.add_widget(widget)
+            self._hud_secondary_docked_in_primary = True
+
+        row_height = 68 * scale
+        self.hud_row_primary.height = row_height
+        # Collapse the secondary row's height to zero (not just opacity) when
+        # docked into the primary row — otherwise the vertical BoxLayout
+        # would still reserve its space and leave a dead gap under the HUD.
+        self.hud_row_secondary.height = row_height if want_two_rows else 0
+        self.hud_row_secondary.opacity = 1 if want_two_rows else 0
+        self.hud_bg.height = row_height * 2 + self.hud_bg.spacing if want_two_rows else row_height
+
+        # Pause/Help live in their own safe-area cluster, top-left. Computed
+        # *before* the HUD rail so the HUD can shrink to whatever space is
+        # actually left of the cluster instead of guessing a fixed margin —
+        # the two can then never collide regardless of breakpoint.
+        icon_button_size = max(44.0, 80 * scale)
+        self.pause_btn.size = (icon_button_size, icon_button_size)
+        self.pause_btn.pos_hint = {"x": 0.02 + inset_left, "top": 0.98 - inset_top}
+
+        help_button_size = max(44.0, 54 * scale)
+        self.help_btn.size = (help_button_size, help_button_size)
+        gap_fraction = 12 / Window.width if Window.width else 0.0
+        help_x = 0.02 + inset_left + (icon_button_size / Window.width) + gap_fraction
+        self.help_btn.pos_hint = {
+            "x": help_x,
+            "top": 0.98 - inset_top - (icon_button_size - help_button_size) / (2 * Window.height),
+        }
+        cluster_right_edge = help_x + help_button_size / Window.width
+        hud_safety_gap = 12 / Window.width if Window.width else 0.0
+
+        # Right-align the whole rail against the (safe-area-inset) right
+        # edge — matches the original fixed desktop placement exactly
+        # (center_x=0.60, width_fraction=0.80 => right edge == 1.0) — but
+        # clamp its width so its left edge never crosses into the pause/help
+        # cluster on breakpoints too narrow to fit both side by side.
+        available_hud_fraction = max(0.0, 1.0 - inset_right - cluster_right_edge - hud_safety_gap)
+        hud_width_fraction = min(layout.hud_width_fraction, available_hud_fraction)
+        self.hud_bg.size_hint = (hud_width_fraction, None)
+        self.hud_bg.pos_hint = {
+            "center_x": 1.0 - inset_right - hud_width_fraction / 2,
+            "top": 0.975 - inset_top,
+        }
+
+        # Each label keeps its own baseline font size relative to the others
+        # (score/gem 22sp, hearts 18sp, inventory 16sp) — only the scale
+        # factor changes per breakpoint, not their relative proportions.
+        for label, base_sp in (
+            (self.score_label, 22),
+            (self.gem_label, 22),
+            (self.hearts_label, 18),
+            (self.inventory_label, 16),
+        ):
+            label.font_size = f"{base_sp * scale:.0f}sp"
+        self.gem_icon.size = (max(24, 40 * scale), max(24, 40 * scale))
+        bar_width = max(70.0, 110 * scale)
+        for bar in (self.heat_bar, self.anger_bar):
+            bar.size = (bar_width, max(10, 16 * scale))
+
+        control_size = layout.control_size_dp
+        self.btn_left.size = (control_size, control_size)
+        self.btn_right.size = (control_size, control_size)
+
+    def _schedule_paused_aware(self, delay: float, callback):
+        """Queue a delayed call ticked from ``update`` instead of ``Clock``.
+
+        ``update`` only runs while ``game_event`` is scheduled, i.e. never
+        while ``pause_state.is_paused`` — so this delay freezes for exactly
+        as long as the simulation is paused, with no separate bookkeeping.
+        """
+        self._pending_calls.append(_PendingCall(delay, callback))
+
+    def _tick_pending_calls(self, dt):
+        if not self._pending_calls:
+            return
+        due = []
+        remaining = []
+        for call in self._pending_calls:
+            call.remaining -= dt
+            (due if call.remaining <= 0 else remaining).append(call)
+        self._pending_calls = remaining
+        for call in due:
+            call.callback()
+
     def update(self, dt):
+        self._tick_pending_calls(dt)
         dist = self.grid.get_distance_m()
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
         self.score_label.text = f"SCORE: {dist_str}"
@@ -1455,6 +1749,9 @@ class GamePlayScreen(Screen):
                     self.junction_interaction.handle_choice(
                         junction, selected_side, self.grid.get_distance_m()
                     )
+                    self.grid.apply_policy_environment(
+                        systemic=junction.option(selected_side).systemic
+                    )
                     self._refresh_status_hud()
                     self._show_policy_feedback(junction, selected_side, before)
                 except KeyError:
@@ -1462,6 +1759,12 @@ class GamePlayScreen(Screen):
                 self._stabilize_after_decision()
             self._close_decision()
             if decision_phase is DecisionPhase.POLICY:
+                # Walk into the chosen branch immediately so the physical Y
+                # matches the quiz answer (plan Task 4).
+                steered = self._apply_policy_route(
+                    DIR_LEFT if selected_side == "left" else DIR_RIGHT
+                )
+                self._move(steered)
                 return
             self._move(direction)
             return
@@ -1544,6 +1847,15 @@ class GamePlayScreen(Screen):
                     distance_m=self.grid.get_distance_m(),
                 )
                 self._update_inventory_hud()
+                AudioManager().play_sfx("Coin")
+
+        if self.grid.get_heart_at(new_col, new_row):
+            self.grid.heart_pickups.discard((new_col, new_row))
+            before = self.metrics.hearts
+            self.metrics.increase_heart()
+            if self.metrics.hearts > before:
+                AudioManager().play_sfx("Coin")
+                self._refresh_status_hud()
 
         # ── Boss item collection ──
         placement = self.grid.get_boss_item_at(new_col, new_row)
@@ -1598,7 +1910,7 @@ class GamePlayScreen(Screen):
                 self.boss_status_label.opacity = 0
                 self.boss_portrait.opacity = 0
                 self.session.finish()
-                Clock.schedule_once(lambda dt: self._go_report(), 2.0)
+                self._schedule_paused_aware(2.0, self._go_report)
             elif self.boss_wave_index > 3:
                 self.show_checkpoint_message("FAILED TO DEFEAT BOSS!")
                 self.boss_wall_label.text = ""
@@ -1616,8 +1928,8 @@ class GamePlayScreen(Screen):
         self.penguin.col = new_col
         self.penguin.row = new_row
         if self.respawn_grace_active and (new_col, new_row) != (
-            self.last_checkpoint_col,
-            self.last_checkpoint_row,
+            self.fall_col,
+            self.fall_row,
         ):
             self.respawn_grace_active = False
             self.metrics.is_invincible = False
@@ -1649,6 +1961,7 @@ class GamePlayScreen(Screen):
                     self.junction_interaction.handle_choice(
                         junction, side, distance_m=self.grid.get_distance_m()
                     )
+                    self.grid.apply_policy_environment(systemic=junction.option(side).systemic)
                     self._refresh_status_hud()
                 except KeyError:
                     logger.warning("No junction data for resolved zone %s", zone_id)
@@ -1757,37 +2070,68 @@ class GamePlayScreen(Screen):
             f"LEFT: {sides.get('left', '?')}  |  RIGHT: {sides.get('right', '?')}"
         )
 
-    def pause_game(self):
-        """Pause: unschedule game loop, show overlay, sync sound button."""
+    def _on_pause_transition(self):
+        """``PauseState`` 0 -> 1 callback: the *only* place the loop is cancelled.
+
+        Both ``pause_game`` and ``open_how_to_play`` request pause through
+        ``PauseState.pause(...)`` — this fires exactly once no matter which
+        reason(s) triggered it, so the loop can never be double-cancelled.
+        """
         if self.game_event:
             self.game_event.cancel()
             self.game_event = None
+        AudioManager().pause_bgm()
+
+    def _on_resume_transition(self):
+        """``PauseState`` 1 -> 0 callback: the *only* place the loop resumes."""
+        if not self.game_event:
+            self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
+        AudioManager().resume_bgm()
+
+    def pause_game(self):
+        """Manual pause: show the Pause menu and add the "manual" reason."""
+        self.pause_state.pause("manual")
         self.pause_overlay.opacity = 1
         self.pause_overlay.disabled = False
         self.pause_overlay.sync_sound_button()
         AudioManager().play_sfx("click")
 
     def open_how_to_play(self):
-        """Open help over a paused game; closing help intentionally stays paused."""
+        """Open Help, adding the "help" pause reason regardless of entry point.
+
+        - HUD ``?`` button while running: "help" is the only active reason,
+          so the Pause menu itself never shows; closing Help drops "help"
+          and the game resumes automatically (0 reasons left).
+        - Pause menu's "HOW TO PLAY" button: "manual" is already active, so
+          this is additive; closing Help only drops "help" and returns to
+          the still-open Pause menu instead of resuming (``_on_help_closed``).
+        """
         if self.penguin.is_dead:
             return
-        if self.game_event:
-            self.pause_game()
+        self.pause_state.pause("help")
         self.how_to_play_overlay.open()
 
+    def _on_help_closed(self):
+        """``HowToPlayOverlay`` close callback — releases only "help"."""
+        self.pause_state.resume("help")
+
     def resume_game(self):
-        """Resume: hide overlay, re-schedule game loop."""
+        """Resume: close a nested Help overlay, hide the Pause menu, drop "manual"."""
         if self.how_to_play_overlay.is_open:
             self.how_to_play_overlay.close()
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
-        if not self.game_event:
-            self.game_event = Clock.schedule_interval(self.update, 1.0 / TARGET_FPS)
+        self.pause_state.resume("manual")
         AudioManager().play_sfx("click")
 
     def restart_game(self):
         """Full restart: clear grid, reset scores/gems, generate fresh 4x4 platform."""
         AudioManager().play_sfx("click")
+        if self.how_to_play_overlay.is_open:
+            self.how_to_play_overlay.close()
+        self.pause_state.clear()
+        self._pending_calls.clear()
+        AudioManager().resume_bgm()
         self.grid.reset()
         self.penguin.is_dead = False
         self.penguin.action = "Idle"
@@ -1813,7 +2157,7 @@ class GamePlayScreen(Screen):
         self.boss_status_label.opacity = 0
         self.boss_portrait.opacity = 0
         self.checkpoint_label.opacity = 0
-        self.respawn_overlay.disabled = True
+        self.respawn_overlay.opacity = 0
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:
@@ -1826,11 +2170,29 @@ class GamePlayScreen(Screen):
             self.game_event = None
         Clock.schedule_once(lambda dt: setattr(self.manager, "current", "menu"), 0.2)
 
+    def _bind_gameplay_keyboard(self) -> None:
+        """Own the Window keyboard for left/right movement while on this screen.
+
+        Idempotent: if we already hold a keyboard, do nothing. Used from
+        ``on_enter`` and from the deferred rebind after another widget
+        (historically FocusBehavior on Pause/Help) released ours.
+        """
+        if self._keyboard is not None or not self._keyboard_wanted:
+            return
+        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+        self._keyboard.bind(on_key_down=self._on_keyboard_down)
+        self._keyboard.bind(on_key_up=self._on_keyboard_up)
+
     def _keyboard_closed(self):
         if self._keyboard:
             self._keyboard.unbind(on_key_down=self._on_keyboard_down)
             self._keyboard.unbind(on_key_up=self._on_keyboard_up)
             self._keyboard = None
+        # Another widget stole the exclusive keyboard (e.g. FocusBehavior in
+        # "auto" mode). If we still want gameplay keys, reclaim next frame —
+        # doing it synchronously can race with the release that triggered us.
+        if self._keyboard_wanted:
+            Clock.schedule_once(lambda _dt: self._bind_gameplay_keyboard(), 0)
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if self.how_to_play_overlay.is_open:

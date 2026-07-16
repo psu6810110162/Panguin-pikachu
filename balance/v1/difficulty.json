@@ -14,7 +14,8 @@
     "cap": 5,
     "fall_penalty": 1,
     "respawn_seconds": 3.0,
-    "invincible_seconds": 3.0
+    "invincible_seconds": 3.0,
+    "pickup_chance": 0.05
   },
   "eco_seed": {
     "heat_reduction": -20.0,
@@ -22,6 +23,11 @@
   },
   "items": {
     "spawn_chance": 0.08
+  },
+  "environment": {
+    "base_obstacle_chance": 0.2,
+    "friendly_obstacle_multiplier": 0.4,
+    "hostile_obstacle_multiplier": 1.8
   },
   "hazards": {
     "trigger_seconds_start": 2.5,
