@@ -3,9 +3,15 @@ from kivy.uix.screenmanager import Screen
 
 from core.audio import AudioManager
 from core.logger import logger
+from ui.how_to_play_overlay import HowToPlayOverlay
 
 
 class MenuScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.how_to_play_overlay = HowToPlayOverlay()
+        self.add_widget(self.how_to_play_overlay)
+
     def on_enter(self):
         logger.info("เข้าสู่หน้าจอ MenuScreen")
         Clock.schedule_once(lambda dt: AudioManager().play_bgm("Bgm.gameplay.mp3"), 0.5)
@@ -22,6 +28,10 @@ class MenuScreen(Screen):
     def go_to_history(self):
         AudioManager().play_sfx("click")
         Clock.schedule_once(lambda dt: self._go_history(), 0.2)
+
+    def show_how_to_play(self):
+        AudioManager().play_sfx("click")
+        self.how_to_play_overlay.open()
 
     def exit_game(self):
         AudioManager().play_sfx("click")

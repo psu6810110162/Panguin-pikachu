@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from core.items import ItemType
 from game.grid import GridManager
 
@@ -10,7 +12,10 @@ def test_scientific_items_spawn_on_centreline_and_reset_clears_them():
     # random obstacle/gem placements that otherwise occupy every new tile.
     grid.obstacles.clear()
     grid.gems.clear()
-    grid._build_straight(3)
+    # 0.99 blocks obstacle/gem rolls (< 0.2/< 0.4) but succeeds for the
+    # forced scientific-item chance (1.0).
+    with patch("game.grid.random.random", return_value=0.99):
+        grid._build_straight(3)
 
     assert grid.scientific_items
     assert set(grid.scientific_items) <= set(grid.path)

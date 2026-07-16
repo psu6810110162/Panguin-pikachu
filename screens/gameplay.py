@@ -39,6 +39,7 @@ from ui.components import (
     MeterBar,
     StateOverlay,
 )
+from ui.how_to_play_overlay import HowToPlayOverlay
 
 GRASS_TILES = [
     "assets/isometric-nature-pack/grass1.png",
@@ -419,7 +420,7 @@ class PauseOverlay(FloatLayout):
         self.container = BoxLayout(
             orientation="vertical",
             size_hint=(None, None),
-            size=(380, 480),
+            size=(380, 550),
             padding=[35, 35, 35, 35],
             spacing=22,
             pos_hint={"center_x": 0.5, "center_y": 0.5},
@@ -498,6 +499,23 @@ class PauseOverlay(FloatLayout):
             on_release=lambda x: self.game_screen.restart_game() if self.game_screen else None
         )
         self.container.add_widget(btn_restart)
+
+        btn_help = HoverButton(
+            text="HOW TO PLAY",
+            font_size="20sp",
+            bold=True,
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            background_normal="assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png",
+            background_down="assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png",
+            border=(20, 20, 20, 20),
+            size_hint_y=None,
+            height=52,
+            color=(1, 1, 1, 1),
+        )
+        btn_help.bind(
+            on_release=lambda x: self.game_screen.open_how_to_play() if self.game_screen else None
+        )
+        self.container.add_widget(btn_help)
 
         # ── Spacer before sound ──
         self.container.add_widget(SpacerWidget(size_hint_y=None, height=5))
@@ -792,6 +810,21 @@ class GamePlayScreen(Screen):
         self.pause_btn.bind(on_release=lambda _: self.pause_game())
         self.add_widget(self.pause_btn)
 
+        self.help_btn = Button(
+            text="?",
+            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_size="32sp",
+            bold=True,
+            size_hint=(None, None),
+            size=(54, 54),
+            pos_hint={"x": 0.105, "top": 0.97},
+            background_normal="assets/Component_UI/PNG/Blue/Default/button_rectangle_depth_flat.png",
+            background_down="assets/Component_UI/PNG/Blue/Default/button_rectangle_flat.png",
+            border=(10, 10, 10, 10),
+        )
+        self.help_btn.bind(on_release=lambda _: self.open_how_to_play())
+        self.add_widget(self.help_btn)
+
         # ── Pause overlay modal ──
         self.pause_overlay = PauseOverlay(game_screen=self, opacity=0, disabled=True)
         self.add_widget(self.pause_overlay)
@@ -948,6 +981,11 @@ class GamePlayScreen(Screen):
             opacity=0,
         )
         self.add_widget(self.decision_countdown)
+
+        # Must remain the final child: help takes precedence over decisions,
+        # respawn state, and the regular pause overlay.
+        self.how_to_play_overlay = HowToPlayOverlay()
+        self.add_widget(self.how_to_play_overlay)
 
     def _build_decision_choice(self, title, pos_hint, accent):
         """Create one keyboard-mapped choice card without owning game logic."""
@@ -1729,8 +1767,18 @@ class GamePlayScreen(Screen):
         self.pause_overlay.sync_sound_button()
         AudioManager().play_sfx("click")
 
+    def open_how_to_play(self):
+        """Open help over a paused game; closing help intentionally stays paused."""
+        if self.penguin.is_dead:
+            return
+        if self.game_event:
+            self.pause_game()
+        self.how_to_play_overlay.open()
+
     def resume_game(self):
         """Resume: hide overlay, re-schedule game loop."""
+        if self.how_to_play_overlay.is_open:
+            self.how_to_play_overlay.close()
         self.pause_overlay.opacity = 0
         self.pause_overlay.disabled = True
         if not self.game_event:
@@ -1785,6 +1833,17 @@ class GamePlayScreen(Screen):
             self._keyboard = None
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+        if self.how_to_play_overlay.is_open:
+            if keycode[1] == "left":
+                self.how_to_play_overlay.previous_page()
+                return True
+            if keycode[1] == "right":
+                self.how_to_play_overlay.next_page()
+                return True
+            if keycode[1] == "escape":
+                self.how_to_play_overlay.close()
+                return True
+            return True
         if self.penguin.is_dead:
             return False
         if not self.game_event:
