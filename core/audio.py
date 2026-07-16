@@ -31,6 +31,8 @@ class AudioManager:
         self.sfx_volume = 0.8
         self._sfx_ref = None
         self.bgm_muted = False
+        self._bgm_paused = False
+        self._bgm_pause_pos = 0.0
 
         self.sfx_paths = {
             "click": f"{SOUND_DIR}click-b.ogg",
@@ -72,6 +74,36 @@ class AudioManager:
         if self.bgm:
             self.bgm.stop()
             self.bgm = None
+        self._bgm_paused = False
+        self._bgm_pause_pos = 0.0
+
+    def pause_bgm(self) -> None:
+        """Pause BGM in place; idempotent — a second call while already
+        paused (e.g. opening Help from the Pause menu, which requests pause
+        again) is a no-op instead of losing the remembered position.
+        """
+        if not self.bgm or self._bgm_paused:
+            return
+        self._bgm_paused = True
+        get_pos = getattr(self.bgm, "get_pos", None)
+        self._bgm_pause_pos = get_pos() if get_pos else 0.0
+        self.bgm.stop()
+
+    def resume_bgm(self) -> None:
+        """Resume BGM from the position remembered by ``pause_bgm``.
+
+        Idempotent — calling this while not paused (e.g. no reasons were
+        ever active) is a no-op. Providers that don't expose ``seek`` simply
+        restart from 0, which is an accepted degradation, not a crash.
+        """
+        if not self.bgm or not self._bgm_paused:
+            return
+        self._bgm_paused = False
+        self.bgm.play()
+        seek = getattr(self.bgm, "seek", None)
+        if seek and self._bgm_pause_pos:
+            seek(self._bgm_pause_pos)
+        self._bgm_pause_pos = 0.0
 
     def play_sfx(self, name: str) -> None:
         if self.bgm_muted:
