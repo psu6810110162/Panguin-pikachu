@@ -132,3 +132,20 @@ def test_load_config_parses_real_balance_file():
     assert config.systemic_point_c == 0.1
     assert config.max_boss_reduction_c == 0.5
     assert {band.rank for band in config.ranks} == {"S", "A"}
+
+
+# ── Robustness: server-authoritative scoring ต้องไม่ crash จาก policy_id เสีย ──
+# (client เชื่อไม่ได้; producer ที่ยัง emit "left"/"right" แทน "zone{N}-{side}" ก็ต้องไม่ทำ
+#  ให้ evaluate()/ingest ล่ม — นับเป็น non-systemic แทน) ดู docs/adr/006
+
+
+@pytest.mark.parametrize("bad_id", ["left", "right", "", "zone-left", "zoneX-left", "zone99-left"])
+def test_systemic_choice_count_ignores_malformed_policy_id(bad_id: str) -> None:
+    # ไม่ raise และไม่ถูกนับเป็น systemic
+    assert stealth.systemic_choice_count([_policy(bad_id)]) == 0
+
+
+def test_malformed_policy_id_does_not_crash_net_impact() -> None:
+    events: list[GameEvent] = [_policy("right"), _policy("zone1-right")]
+    # "right" ถูกข้าม, "zone1-right" (systemic ใน balance/v1) นับ 1 -> 0.1°C
+    assert stealth.net_impact_score_c(events) == pytest.approx(0.1)

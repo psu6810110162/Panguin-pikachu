@@ -27,7 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from core.events import BossPhaseEvent, GameEvent, PolicyChoiceEvent
-from core.junction_data import option_for_policy_id, parse_policy_id
+from core.junction_data import option_for_policy_id_or_none, parse_policy_id_or_none
 
 BALANCE_DIR = Path(__file__).resolve().parent.parent.parent / "balance" / "v1"
 
@@ -73,17 +73,24 @@ def systemic_choice_count(events: list[GameEvent]) -> int:
     PolicyChoiceEvent มากกว่า 1 ตัวใน RunRecord เดียวกัน (เช่น ตายกลาง fork แล้ว respawn
     เดินผ่านซ้ำ — #46 ตั้งใจปล่อยให้เกิดเคสนี้ได้) ทุก consumer ที่อ่าน event log ต้องยึด
     **first-write-wins**: นับ/ใช้แค่ event แรกที่เจอต่อ zone เสมอ ไม่ใช่นับซ้ำทุกตัว
+
+    policy_id ที่ผิดรูป/ไม่รู้จัก (ดู *_or_none variants) นับเป็น non-systemic ไม่ทำให้
+    scoring crash — server-authoritative ประมวลผล event จาก client ที่เชื่อไม่ได้ (ADR-006)
     """
     seen_zones: set[int] = set()
     count = 0
     for e in events:
         if not isinstance(e, PolicyChoiceEvent):
             continue
-        zone, _side = parse_policy_id(e.policy_id)
+        parsed = parse_policy_id_or_none(e.policy_id)
+        if parsed is None:
+            continue
+        zone, _side = parsed
         if zone in seen_zones:
             continue
         seen_zones.add(zone)
-        if option_for_policy_id(e.policy_id).systemic:
+        opt = option_for_policy_id_or_none(e.policy_id)
+        if opt is not None and opt.systemic:
             count += 1
     return count
 

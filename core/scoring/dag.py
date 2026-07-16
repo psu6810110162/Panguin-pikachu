@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from core.events import BossPhaseEvent, GameEvent, PolicyChoiceEvent
-from core.junction_data import option_for_policy_id, parse_policy_id
+from core.junction_data import option_for_policy_id_or_none, parse_policy_id_or_none
 
 BALANCE_DIR = Path(__file__).resolve().parent.parent.parent / "balance" / "v1"
 
@@ -132,9 +132,11 @@ def _zone_choice_status(events: list[GameEvent], zone: int) -> EdgeStatus | None
     """
     for e in events:
         if isinstance(e, PolicyChoiceEvent):
-            event_zone, _ = parse_policy_id(e.policy_id)
-            if event_zone == zone:
-                return "correct" if option_for_policy_id(e.policy_id).systemic else "incorrect"
+            # policy_id ผิดรูป/ไม่รู้จัก -> ข้าม (ไม่ crash) — event จาก client เชื่อไม่ได้
+            parsed = parse_policy_id_or_none(e.policy_id)
+            if parsed is not None and parsed[0] == zone:
+                opt = option_for_policy_id_or_none(e.policy_id)
+                return "correct" if (opt is not None and opt.systemic) else "incorrect"
     return None
 
 
