@@ -23,6 +23,17 @@
   "items": {
     "spawn_chance": 0.08
   },
+  "hazards": {
+    "trigger_seconds_start": 2.5,
+    "trigger_seconds_min": 0.65,
+    "acceleration_exponent": 1.5
+  },
+  "decision": {
+    "policy_seconds": 15.0,
+    "boss_seconds": 12.0,
+    "intro_seconds": 1.5,
+    "timeout_meter_penalty": 5.0
+  },
   "scoring": {
     "initial_crisis_temp_c": 2.0,
     "systemic_point_c": 0.1,

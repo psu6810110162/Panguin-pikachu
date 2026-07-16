@@ -103,3 +103,10 @@ def test_difficulty_meter_bounds_are_consistent(difficulty: dict[str, Any]) -> N
 def test_difficulty_hearts_start_within_cap(difficulty: dict[str, Any]) -> None:
     hearts = difficulty["hearts"]
     assert 0 < hearts["start"] <= hearts["cap"]
+
+
+def test_decision_windows_leave_time_to_read_and_compare(difficulty: dict[str, Any]) -> None:
+    decision = difficulty["decision"]
+    assert decision["intro_seconds"] >= 1.5
+    assert decision["policy_seconds"] >= 15.0
+    assert decision["boss_seconds"] >= 12.0

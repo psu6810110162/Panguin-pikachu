@@ -70,6 +70,10 @@ class GridManager:
         self.checkpoints_generated = 0
         self._boss_wave = 0
         self.resolved_fork = None
+        hazards = load_difficulty().get("hazards", {})
+        self.trigger_seconds_start = float(hazards.get("trigger_seconds_start", 2.5))
+        self.trigger_seconds_min = float(hazards.get("trigger_seconds_min", 0.65))
+        self.trigger_acceleration_exponent = float(hazards.get("acceleration_exponent", 1.5))
         # Day 1: D1-A2 Zone-Based Spawning
         self.spawning_system = SpawningSystem()
         self.next_zone = 1
@@ -117,6 +121,23 @@ class GridManager:
     def get_distance_m(self):
         return self.forward_tiles * TILE_TO_METER
 
+    def trigger_seconds_for_distance(self, distance_m=None):
+        """Return the grace time for a tile at this distance.
+
+        The early run stays readable and forgiving; the hazard accelerates only
+        later through the curve exponent, reaching the configured minimum near
+        the boss threshold.  Keeping this calculation on the grid makes every
+        caller use the same balance rule.
+        """
+        if distance_m is None:
+            distance_m = self.get_distance_m()
+        progress = max(0.0, min(1.0, float(distance_m) / BOSS_DISTANCE_M))
+        eased_progress = progress**self.trigger_acceleration_exponent
+        return (
+            self.trigger_seconds_start
+            + (self.trigger_seconds_min - self.trigger_seconds_start) * eased_progress
+        )
+
     def check_fork_resolution(self, col, row):
         tile = self.path_set.get((col, row))
         if tile and tile.zone_id is not None and tile.side is not None:
@@ -160,7 +181,7 @@ class GridManager:
         if current_tile and current_tile.state == "normal" and not current_tile.is_safe:
             current_tile.state = "triggered"
             score = self.get_distance_m()
-            current_tile.trigger_timer = max(0.35, 1.2 - (score * 0.002))
+            current_tile.trigger_timer = self.trigger_seconds_for_distance(score)
 
         to_remove = []
         for pos, tile in self.path_set.items():
@@ -239,7 +260,7 @@ class GridManager:
                 self._add_tile(*pos)
             else:
                 tile.state = "normal"
-                tile.trigger_timer = 1.2
+                tile.trigger_timer = self.trigger_seconds_for_distance()
                 tile.offset_y = 0.0
                 tile.fall_velocity = 0.0
 

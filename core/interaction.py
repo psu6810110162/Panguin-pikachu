@@ -30,6 +30,7 @@ class PolicyChoiceSink(Protocol):
         policy_id: str,
         meter_deltas: dict[str, float],
         distance_m: int,
+        outcome: str = "left",
     ) -> None: ...
 
 
@@ -39,6 +40,35 @@ class YJunctionInteraction:
     def __init__(self, run_metrics: RunMetrics, game_session: PolicyChoiceSink) -> None:
         self.run_metrics = run_metrics
         self.game_session = game_session  # ใช้ GameSession เป็นตัวจัดการรวม
+
+    def _record_policy(
+        self,
+        *,
+        checkpoint_index: int,
+        policy_id: str,
+        meter_deltas: dict[str, float],
+        distance_m: int,
+        outcome: str,
+    ) -> None:
+        try:
+            self.game_session.policy_choice(
+                checkpoint_index=checkpoint_index,
+                policy_id=policy_id,
+                meter_deltas=meter_deltas,
+                distance_m=distance_m,
+                outcome=outcome,
+            )
+        except TypeError as exc:
+            # Keep lightweight test sinks/backwards-compatible adapters working;
+            # the real GameSession always records the outcome field.
+            if "outcome" not in str(exc):
+                raise
+            self.game_session.policy_choice(
+                checkpoint_index=checkpoint_index,
+                policy_id=policy_id,
+                meter_deltas=meter_deltas,
+                distance_m=distance_m,
+            )
 
     def handle_choice(self, junction: Junction, choice_side: str, distance_m: int) -> None:
         """
@@ -67,9 +97,21 @@ class YJunctionInteraction:
         # consumer (core/scoring/stealth.py, dag.py) parse ด้วย parse_policy_id/
         # option_for_policy_id ซึ่ง raise ValueError ถ้าได้ "left"/"right" ดิบ ๆ
         # ไม่ต้อง hasattr แล้ว — PolicyChoiceSink การันตีว่าเมธอดมีจริง (mypy บังคับ caller)
-        self.game_session.policy_choice(
+        self._record_policy(
             checkpoint_index=junction.zone,
             policy_id=junction.policy_id(side),
             meter_deltas=dict(selected_choice.meter_deltas),
             distance_m=distance_m,
+            outcome=choice_side,
+        )
+
+    def handle_timeout(self, junction: Junction, distance_m: int, meter_penalty: float) -> None:
+        """Record a missed decision without pretending the player chose a side."""
+        self.run_metrics.update_meters(heat_delta=meter_penalty, anger_delta=meter_penalty)
+        self._record_policy(
+            checkpoint_index=junction.zone,
+            policy_id=f"zone{junction.zone}-timeout",
+            meter_deltas={"heat": meter_penalty, "capitalist_anger": meter_penalty},
+            distance_m=distance_m,
+            outcome="timeout",
         )
