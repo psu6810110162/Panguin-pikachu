@@ -23,6 +23,15 @@ def test_build_projection_with_no_events_marks_every_edge_unplayed():
     projection = dag.build_projection([])
     assert len(projection.edges) == 13
     assert all(e.status == "unplayed" for e in projection.edges)
+
+
+def test_build_projection_ignores_malformed_policy_id_without_crashing():
+    """server-authoritative: policy_id เสียจาก client ต้องไม่ทำ build_projection ล่ม
+    (producer ที่ยัง emit "left"/"right" ก็ไม่ crash) — ถือว่าโซนนั้นยังไม่ถูกเล่น"""
+    events: list[GameEvent] = [_policy("right"), _policy("zoneX-left"), _policy("")]
+    projection = dag.build_projection(events)
+    assert len(projection.edges) == 13
+    assert all(e.status == "unplayed" for e in projection.edges)
     assert all(e.tooltip is None for e in projection.edges)
     assert projection.unplayed_count == 13
     assert projection.correct_count == 0

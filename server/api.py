@@ -119,11 +119,14 @@ def ingest_run(room_code: str) -> tuple[FlaskResponse, int]:
 
     secret: bytes = current_app.config["SYNC_SECRET"]
     nonce_store = current_app.config["NONCE_STORE"]
+    stealth_enabled: bool = current_app.config["STEALTH_ASSESSMENT_ENABLED"]
     # ingest ต้อง commit ก่อน emit เสมอ (ตอนนี้ ingest_signed_run() commit ภายในตัวมันเองอยู่
     # แล้ว) — ถ้า emit ล้มเหลว dashboard แค่ค้างข้อมูลเก่าไปจนกว่า update รอบถัดไป แต่ข้อมูล
     # ใน DB ยังถูกต้องเสมอ ห้ามสลับลำดับเป็น emit ก่อน commit เด็ดขาด เพราะจะทำให้ dashboard
     # โชว์ค่าที่ยังไม่ถูก persist จริง (ถ้า commit ล้มเหลวทีหลัง)
-    run = services.ingest_signed_run(session, payload, secret, nonce_store)
+    run = services.ingest_signed_run(
+        session, payload, secret, nonce_store, stealth_enabled=stealth_enabled
+    )
 
     socketio.emit(
         "leaderboard_update",

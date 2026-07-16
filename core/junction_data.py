@@ -101,3 +101,31 @@ def option_for_policy_id(policy_id: str) -> JunctionOption:
     """The JunctionOption a PolicyChoiceEvent.policy_id refers to."""
     zone, side = parse_policy_id(policy_id)
     return get_junction(zone).option(side)
+
+
+def parse_policy_id_or_none(policy_id: str) -> tuple[int, Side] | None:
+    """Tolerant parse_policy_id — returns None instead of raising on a malformed id.
+
+    See option_for_policy_id_or_none for why scoring must never crash on client input.
+    """
+    try:
+        return parse_policy_id(policy_id)
+    except ValueError:
+        return None
+
+
+def option_for_policy_id_or_none(policy_id: str) -> JunctionOption | None:
+    """Tolerant option_for_policy_id — returns None for a malformed or out-of-range
+    policy_id instead of raising.
+
+    Scoring (core/scoring/stealth.py, dag.py) runs server-side on client-supplied
+    event logs (server-authoritative, docs/adr/006). A malformed/unknown policy_id
+    from a buggy or hostile client must never crash evaluate()/ingest — callers treat
+    None as "not a recognized systemic choice" (non-systemic / skipped). This does NOT
+    excuse producers: game/ must still emit the canonical f"zone{zone}-{side}" (see
+    module docstring) or systemic choices silently score zero.
+    """
+    try:
+        return option_for_policy_id(policy_id)
+    except (ValueError, KeyError):
+        return None

@@ -66,7 +66,20 @@ def export_csv(room_code: str) -> Response:
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["player_name", "distance_m", "respawn_count", "environmental_score", "status"])
+    # net_impact_score/rank ต่อท้าย (append-only) — ห้าม reorder คอลัมน์เดิม สคริปต์ครูที่
+    # อ่าน CSV อยู่แล้วอิง index/ชื่อคอลัมน์เดิมต้องไม่พัง; ค่าเป็น None เมื่อ
+    # STEALTH_ASSESSMENT_ENABLED ปิด (null-safe เหมือน leaderboard_payload)
+    writer.writerow(
+        [
+            "player_name",
+            "distance_m",
+            "respawn_count",
+            "environmental_score",
+            "status",
+            "net_impact_score",
+            "rank",
+        ]
+    )
     for row in services.leaderboard_payload(session):
         writer.writerow(
             [
@@ -75,6 +88,8 @@ def export_csv(room_code: str) -> Response:
                 row["respawn_count"],
                 row["environmental_score"],
                 row["status"],
+                row["net_impact_score"],
+                row["rank"],
             ]
         )
 
