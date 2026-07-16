@@ -648,11 +648,11 @@ class GamePlayScreen(Screen):
 
         self.hud_bg = HudRail(
             orientation="horizontal",
-            size_hint=(0.80, None),
-            height=68,
-            spacing=16,
-            padding=[18, 10, 18, 10],
-            pos_hint={"center_x": 0.60, "top": 0.975},
+            size_hint=(0.90, None),
+            height=64,
+            spacing=8,
+            padding=[14, 8, 14, 8],
+            pos_hint={"center_x": 0.53, "top": 0.975},
         )
 
         self.score_label = Label(
@@ -662,12 +662,16 @@ class GamePlayScreen(Screen):
             font_name="assets/Component_UI/Font/Kenney Future.ttf",
             outline_width=2,
             outline_color=(0, 0, 0, 1),
-            size_hint_x=None,
+            size_hint=(None, None),
+            size=(220, 40),
+            halign="left",
+            valign="middle",
+            text_size=(220, 40),
         )
-        self.score_label.bind(texture_size=self.score_label.setter("size"))
 
-        gem_box = BoxLayout(orientation="horizontal", size_hint=(None, None), height=40, spacing=10)
-        gem_box.bind(minimum_width=gem_box.setter("width"))
+        gem_box = BoxLayout(
+            orientation="horizontal", size_hint=(None, None), size=(108, 40), spacing=4
+        )
 
         gem_tex = CoreImage("assets/Gem/Coin_Gems/spr_coin_strip4.png").texture.get_region(
             0, 0, 16, 16
@@ -675,15 +679,18 @@ class GamePlayScreen(Screen):
         gem_icon = Image(texture=gem_tex, size_hint=(None, None), size=(40, 40))
 
         self.gem_label = Label(
-            text="x 0",
-            font_size="22sp",
+            text="GEMS 0",
+            font_size="15sp",
             bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
             outline_width=2,
             outline_color=(0, 0, 0, 1),
-            size_hint_x=None,
+            size_hint=(None, None),
+            size=(66, 40),
+            halign="left",
+            valign="middle",
+            text_size=(66, 40),
         )
-        self.gem_label.bind(texture_size=self.gem_label.setter("size"))
 
         gem_box.add_widget(gem_icon)
         gem_box.add_widget(self.gem_label)
@@ -691,20 +698,24 @@ class GamePlayScreen(Screen):
         self.hud_bg.add_widget(self.score_label)
         self.hud_bg.add_widget(gem_box)
         self.hearts_label = Label(
-            text=f"Hearts: {self.metrics.hearts}",
-            font_size="18sp",
+            text=f"♥ {self.metrics.hearts}",
+            font_size="20sp",
             bold=True,
-            font_name="assets/Component_UI/Font/Kenney Future.ttf",
-            size_hint_x=None,
+            font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+            color=(1.0, 0.55, 0.75, 1.0),
+            size_hint=(None, None),
+            size=(92, 40),
+            halign="center",
+            valign="middle",
+            text_size=(92, 40),
         )
-        self.hearts_label.bind(texture_size=self.hearts_label.setter("size"))
         self.heat_bar = MeterBar(
             value=self.metrics.heat_meter,
             max_value=self.metrics.max_meter,
             warn_threshold=0.8 * self.metrics.max_meter,
             bar_color=[1, 0.5, 0.2, 1],
             size_hint=(None, None),
-            size=(110, 16),
+            size=(126, 14),
         )
         self.anger_bar = MeterBar(
             value=self.metrics.capitalist_anger,
@@ -712,49 +723,58 @@ class GamePlayScreen(Screen):
             warn_threshold=0.8 * self.metrics.max_meter,
             bar_color=[0.8, 0.2, 0.2, 1],
             size_hint=(None, None),
-            size=(110, 16),
+            size=(126, 14),
         )
 
         def _meter_column(caption, bar):
             column = BoxLayout(
-                orientation="vertical", size_hint=(None, None), size=(110, 40), spacing=2
+                orientation="vertical", size_hint=(None, None), size=(126, 42), spacing=2
             )
             column.add_widget(
                 Label(
                     text=caption,
-                    font_size="12sp",
+                    font_size="11sp",
                     bold=True,
-                    font_name="assets/Component_UI/Font/Kenney Future.ttf",
+                    font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
+                    color=(0.9, 0.95, 1.0, 1.0),
                     size_hint=(1, None),
-                    height=16,
+                    height=20,
+                    halign="center",
+                    valign="middle",
+                    text_size=(126, 20),
                 )
             )
             column.add_widget(bar)
             return column
 
         self.hud_bg.add_widget(self.hearts_label)
-        self.hud_bg.add_widget(_meter_column("HEAT · สิ่งแวดล้อม", self.heat_bar))
+        self.hud_bg.add_widget(_meter_column("HEAT · โลก", self.heat_bar))
         self.hud_bg.add_widget(_meter_column("ANGER · เศรษฐกิจ", self.anger_bar))
         self.meter_hint_label = Label(
-            text="หลอดใดแตะ 100 = แพ้",
-            font_size="11sp",
+            text="แตะ 100 = แพ้",
+            font_size="12sp",
             font_name="assets/Component_UI/Font/NotoSansThai-Regular.ttf",
             color=(0.8, 0.9, 1.0, 0.9),
-            size_hint_x=None,
-            size=(150, 40),
+            size_hint=(None, None),
+            size=(112, 42),
             halign="center",
             valign="middle",
-            text_size=(150, 40),
+            text_size=(112, 42),
         )
         self.hud_bg.add_widget(self.meter_hint_label)
         self.inventory_label = Label(
             text="Items: -",
-            font_size="16sp",
+            font_size="14sp",
             bold=True,
             font_name="assets/Component_UI/Font/Kenney Future.ttf",
-            size_hint_x=None,
+            size_hint=(None, None),
+            size=(270, 40),
+            halign="left",
+            valign="middle",
+            text_size=(270, 40),
+            shorten=True,
+            shorten_from="right",
         )
-        self.inventory_label.bind(texture_size=self.inventory_label.setter("size"))
         self.hud_bg.add_widget(self.inventory_label)
 
         self.add_widget(self.hud_bg)
@@ -1250,7 +1270,7 @@ class GamePlayScreen(Screen):
 
     def _refresh_status_hud(self):
         """Sync hearts label + heat/anger bars กับ RunMetrics ปัจจุบัน — จุดเดียวใช้ทุก path"""
-        self.hearts_label.text = f"Hearts: {self.metrics.hearts}"
+        self.hearts_label.text = f"♥ {self.metrics.hearts}"
         self.heat_bar.value = self.metrics.heat_meter
         self.anger_bar.value = self.metrics.capitalist_anger
 
@@ -1315,7 +1335,7 @@ class GamePlayScreen(Screen):
         dist = self.grid.get_distance_m()
         dist_str = f"{dist / 1000:.1f} km" if dist >= 1000 else f"{dist} m"
         self.score_label.text = f"SCORE: {dist_str}"
-        self.gem_label.text = f"x {self.gems_collected}"
+        self.gem_label.text = f"GEMS {self.gems_collected}"
 
         self.grid.update_obstacles(
             dt, view_radius=15, penguin_pos=(self.penguin.col, self.penguin.row)
