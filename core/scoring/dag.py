@@ -126,6 +126,8 @@ def _zone_choice_status(events: list[GameEvent], zone: int) -> EdgeStatus | None
     """None ถ้ายังไม่มี PolicyChoiceEvent ของโซนนี้เลย (ยังไม่ถึง หรือรอบเล่นจบก่อนถึง)"""
     for e in events:
         if isinstance(e, PolicyChoiceEvent):
+            if e.outcome == "timeout":
+                continue
             event_zone, _ = parse_policy_id(e.policy_id)
             if event_zone == zone:
                 return "correct" if option_for_policy_id(e.policy_id).systemic else "incorrect"

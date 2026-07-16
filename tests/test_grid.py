@@ -45,6 +45,18 @@ def test_step_forward_and_distance():
     assert grid.get_distance_m() == 5
 
 
+def test_tile_trigger_time_is_slow_early_and_accelerates_late():
+    grid = GridManager()
+
+    early = grid.trigger_seconds_for_distance(0)
+    middle = grid.trigger_seconds_for_distance(500)
+    late = grid.trigger_seconds_for_distance(1000)
+
+    assert early >= 2.5
+    assert early > middle > late
+    assert late <= 0.65
+
+
 def test_is_on_path_reflects_path_set():
     grid = GridManager()
     grid.reset()
@@ -161,4 +173,4 @@ def test_repair_path_ahead_of_checkpoint_resets_triggered_tiles_without_removing
     grid.repair_path_ahead_of_checkpoint(*checkpoint)
 
     assert grid.path_set[pos].state == "normal"
-    assert grid.path_set[pos].trigger_timer == 1.2
+    assert grid.path_set[pos].trigger_timer == grid.trigger_seconds_for_distance()

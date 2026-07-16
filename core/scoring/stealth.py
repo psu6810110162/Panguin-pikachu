@@ -71,7 +71,11 @@ def systemic_choice_count(events: list[GameEvent]) -> int:
     return sum(
         1
         for e in events
-        if isinstance(e, PolicyChoiceEvent) and option_for_policy_id(e.policy_id).systemic
+        if (
+            isinstance(e, PolicyChoiceEvent)
+            and e.outcome != "timeout"
+            and option_for_policy_id(e.policy_id).systemic
+        )
     )
 
 
