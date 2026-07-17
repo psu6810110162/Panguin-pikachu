@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "locale": "th",
+  "title": "วิธีเล่น Penguin Dash",
+  "pages": [
+    {
+      "id": "goal_controls",
+      "title": "เป้าหมายและการควบคุม",
+      "kind": "authored",
+      "body": "วิ่งให้ถึง 1,000 เมตร ตัดสินใจ 10 ทางแยกนโยบาย รักษาสมดุลของโลก แล้วเผชิญหน้า Carbon Baron",
+      "controls": [
+        {"keys": "LEFT / RIGHT", "action": "เลี้ยวบนเส้นทาง และเลือกเลนซ้ายหรือขวาที่ทางแยก/บอส"},
+        {"keys": "SPACE", "action": "ใช้ Eco-Seed ที่เก็บไว้ เพื่อลด Heat และซ่อมน้ำแข็งรอบตัว"}
+      ]
+    },
+    {
+      "id": "meters_hearts",
+      "title": "หลอดคู่และหัวใจ",
+      "kind": "derived_meters",
+      "body": "ค่าที่เพิ่มขึ้น (+) ทำให้สถานการณ์แย่ลง ค่าที่ลดลง (−) ทำให้ดีขึ้น ตกเหวจะเสียหัวใจและกลับไป checkpoint หากยังมีหัวใจเหลือ"
+    },
+    {
+      "id": "visual_scaffolding",
+      "title": "ตัวช่วยมองเห็นเส้นทาง",
+      "kind": "scaffolding",
+      "body": "สังเกตสัญญาณก่อนเลี้ยวเพื่อวางแผนการเคลื่อนที่",
+      "scaffolding": [
+        {
+          "id": "neon_pivot",
+          "title": "Neon Pivot Tiles",
+          "description": "ไทล์นีออนที่จุดหักศอก ชี้ตำแหน่งเปลี่ยนทิศทาง",
+          "status": "active"
+        },
+        {
+          "id": "physical_roadblocks",
+          "title": "Physical Roadblocks",
+          "description": "สิ่งกีดขวางบนเส้นทาง เตือนให้กะจังหวะและเลือกเส้นทางอย่างระวัง",
+          "status": "guidance"
+        },
+        {
+          "id": "flashing_chevrons",
+          "title": "Flashing Chevron Signs",
+          "description": "สัญญาณสีส้มบน 3 บล็อกก่อนถึงจุดเลี้ยว",
+          "status": "active"
+        },
+        {
+          "id": "holographic_guide_line",
+          "title": "Holographic Guide Line",
+          "description": "แนวทางนำทางจาก P.E.N.G.U.I.N สำหรับช่วยอ่านเส้นทางล่วงหน้า",
+          "status": "guidance"
+        }
+      ]
+    },
+    {
+      "id": "evidence_items",
+      "title": "หลักฐานวิทยาศาสตร์",
+      "kind": "items",
+      "body": "เก็บหลักฐานระหว่างทางไว้ใน inventory เพื่อเรียนรู้บทบาทของแต่ละแนวทางแก้ปัญหา",
+      "items": [
+        {
+          "item_id": "albedo_data",
+          "display_name": "Albedo Data",
+          "description": "ข้อมูลการสะท้อนแสงของน้ำแข็งขั้วโลก ใช้ตอบบอสเวฟ 1"
+        },
+        {
+          "item_id": "methane_core",
+          "display_name": "Methane Core",
+          "description": "หลักฐานเรื่องก๊าซมีเทน ใช้ตอบบอสเวฟ 2"
+        },
+        {
+          "item_id": "eco_seed",
+          "display_name": "Eco-Seed",
+          "description": "Nature-based Solution ใช้ตอบบอสเวฟ 3 และกด Spacebar ระหว่างวิ่ง"
+        }
+      ]
+    },
+    {
+      "id": "junctions_1_2",
+      "title": "ทางแยกนโยบาย 1–2",
+      "kind": "junctions",
+      "body": "เดินเข้าเลนซ้ายหรือขวาเพื่อเลือกนโยบาย ดูผลต่อ Heat และ Anger ก่อนตัดสินใจ",
+      "zones": [1, 2]
+    },
+    {
+      "id": "junctions_3_4",
+      "title": "ทางแยกนโยบาย 3–4",
+      "kind": "junctions",
+      "body": "ทุกตัวเลือกมี trade-off: ลดผลกระทบต่อโลกอาจทำให้แรงต้านจากนายทุนเพิ่มขึ้น",
+      "zones": [3, 4]
+    },
+    {
+      "id": "junctions_5_6",
+      "title": "ทางแยกนโยบาย 5–6",
+      "kind": "junctions",
+      "body": "อ่านสถานการณ์และเปรียบเทียบผลของทั้งสองเลนก่อนเลือกเส้นทาง",
+      "zones": [5, 6]
+    },
+    {
+      "id": "junctions_7_8",
+      "title": "ทางแยกนโยบาย 7–8",
+      "kind": "junctions",
+      "body": "ตัวเลือก systemic แก้ที่ต้นเหตุและจะส่งผลต่อคะแนนการคิดเชิงระบบ",
+      "zones": [7, 8]
+    },
+    {
+      "id": "junctions_9_10",
+      "title": "ทางแยกนโยบาย 9–10",
+      "kind": "junctions",
+      "body": "ช่วงท้ายเป็นการตัดสินใจที่มีผลต่อหลอดคู่สูง คอยรักษาสมดุลทั้งสองด้าน",
+      "zones": [9, 10]
+    },
+    {
+      "id": "carbon_baron",
+      "title": "Carbon Baron — 3 เวฟ",
+      "kind": "boss",
+      "body": "อ่านข้อความบน Problem Wall แล้วเดินเข้าเลนไอเทมที่แก้ปัญหาได้ถูกต้อง ตอบถูกทำลายเกราะ ตอบผิดเสียหัวใจ"
+    },
+    {
+      "id": "win_loss",
+      "title": "ชนะและแพ้",
+      "kind": "outcomes",
+      "body": "รักษาเส้นทาง หัวใจ และหลอดคู่ให้ปลอดภัยจนจบการต่อสู้",
+      "win": "ทำลายเกราะ Carbon Baron จนเหลือ 0 เพื่อเข้าสู่ Report Card",
+      "loss": "เกมจบทันทีเมื่อหัวใจเหลือ 0 หรือ Heat / Capitalist Anger ถึงขีดสูงสุด",
+      "boss_note": "ระหว่างบอส เลือกผิดจะเสียหัวใจทันทีและไม่มี respawn"
+    },
+    {
+      "id": "scores_dag",
+      "title": "คะแนนและแผนภาพ DAG",
+      "kind": "scoring",
+      "body": "Report Card สรุปการคิดเชิงระบบจากการตัดสินใจ 13 ครั้ง: 10 ทางแยกและ 3 เวฟบอส"
+    }
+  ]
+}

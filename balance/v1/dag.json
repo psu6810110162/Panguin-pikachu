@@ -36,7 +36,7 @@
     {"decision": 8,  "phase": "run",  "from": "fast_fashion",  "to": "waste_pollution","tooltip": "Circular Economy ตัดวงจรขยะที่ต้นทาง"},
     {"decision": 9,  "phase": "run",  "from": "green_space",   "to": "carbon_sink",    "tooltip": "พื้นที่สีเขียวในเมือง = จุดกักเก็บคาร์บอน + ลดอุณหภูมิเมือง"},
     {"decision": 10, "phase": "run",  "from": "fossil_fuel",   "to": "tipping_point",  "tooltip": "ฟอกเขียวไม่ลดมลพิษจริง เสี่ยงทะลุ Tipping Point"},
-    {"decision": 11, "phase": "boss", "from": "albedo",        "to": "global_warming", "tooltip": "น้ำแข็งละลาย → Albedo ลด → โลกร้อนทวีคูณ (หักล้าง Fake News)"},
+    {"decision": 11, "phase": "boss", "from": "albedo",        "to": "global_warming", "tooltip": "น้ำแข็งละลาย -> Albedo ลด -> โลกร้อนทวีคูณ (หักล้าง Fake News)"},
     {"decision": 12, "phase": "boss", "from": "methane",       "to": "global_warming", "tooltip": "มีเทนรุนแรงกว่า CO2 ~80 เท่า — ต้องสกัดมีเทนไม่ใช่ปลูกต้นไม้"},
     {"decision": 13, "phase": "boss", "from": "eco_seed",      "to": "carbon_sink",    "tooltip": "ป่าฟื้นฟูดูดซับความร้อน (Carbon Sink) ดับวิกฤต"}
   ]

@@ -13,7 +13,7 @@
       "wrong_item": "methane_core",
       "on_correct": {"boss_armor": -1},
       "on_wrong": {"hearts": -1},
-      "science": "ค่าการสะท้อนแสงขั้วโลก (Albedo) ลดลงเมื่อน้ำแข็งละลาย → โลกร้อนแบบทวีคูณ"
+      "science": "ค่าการสะท้อนแสงขั้วโลก (Albedo) ลดลงเมื่อน้ำแข็งละลาย -> โลกร้อนแบบทวีคูณ"
     },
     {
       "wave": 2,
@@ -33,7 +33,7 @@
       "wrong_item": "albedo_data",
       "on_correct": {"boss_armor": -1},
       "on_wrong": {"hearts": -1},
-      "science": "ปาเมล็ดพันธุ์ → ป่าโฮโลแกรมดูดซับความร้อน (Carbon Sink / NbS) ดับไฟบอส"
+      "science": "ปาเมล็ดพันธุ์ -> ป่าโฮโลแกรมดูดซับความร้อน (Carbon Sink / NbS) ดับไฟบอส"
     }
   ]
 }

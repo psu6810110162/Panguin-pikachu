@@ -75,3 +75,85 @@ def test_get_personal_best_returns_max_distance(monkeypatch, tmp_path):
 def test_get_personal_best_zero_when_no_runs(monkeypatch, tmp_path):
     db = _fresh_db(monkeypatch, tmp_path)
     assert db.get_personal_best("Nobody") == 0
+
+
+def test_purchase_skin_deducts_once_and_grants_ownership(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.save_game_session("Alice", distance=0, gems=15)
+
+    assert db.purchase_skin("Alice", "Mask Dude", price=10) is True
+
+    assert db.get_gem_balance("Alice") == 5
+    assert db.is_skin_owned("Alice", "Mask Dude") is True
+
+
+def test_purchase_skin_fails_and_leaves_balance_untouched_when_insufficient(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.save_game_session("Alice", distance=0, gems=5)
+
+    assert db.purchase_skin("Alice", "Mask Dude", price=10) is False
+
+    assert db.get_gem_balance("Alice") == 5
+    assert db.is_skin_owned("Alice", "Mask Dude") is False
+
+
+def test_purchase_skin_is_idempotent_on_double_tap(monkeypatch, tmp_path):
+    """Two purchase attempts in a row (simulated double-tap) must deduct the
+    price exactly once — atomicity, not a UI debounce, is the guarantee."""
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.save_game_session("Alice", distance=0, gems=10)
+
+    first = db.purchase_skin("Alice", "Mask Dude", price=10)
+    second = db.purchase_skin("Alice", "Mask Dude", price=10)
+
+    assert first is True
+    assert second is True
+    assert db.get_gem_balance("Alice") == 0
+
+
+def test_purchase_skin_never_drives_balance_negative(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.save_game_session("Alice", distance=0, gems=3)
+
+    db.purchase_skin("Alice", "Mask Dude", price=10)
+
+    assert db.get_gem_balance("Alice") >= 0
+
+
+def test_set_equipped_skin_rejects_unowned_skin(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.get_or_create_player("Alice")
+
+    assert db.set_equipped_skin("Alice", "Mask Dude") is False
+    assert db.get_equipped_skin("Alice") != "Mask Dude"
+
+
+def test_set_equipped_skin_persists_for_owned_skin(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.add_owned_skin("Alice", "Mask Dude")
+
+    assert db.set_equipped_skin("Alice", "Mask Dude") is True
+    assert db.get_equipped_skin("Alice") == "Mask Dude"
+
+
+def test_ensure_default_skin_is_idempotent_and_grants_ownership(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+
+    db.ensure_default_skin("Alice", "Ninja Frog")
+    db.ensure_default_skin("Alice", "Ninja Frog")
+
+    assert db.is_skin_owned("Alice", "Ninja Frog") is True
+
+
+def test_equipped_skin_round_trips_across_a_fresh_connection(monkeypatch, tmp_path):
+    """Simulates app restart: equip, close the connection, reconnect, and the
+    equipped skin must still be there — this is the persistence contract."""
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.add_owned_skin("Alice", "Mask Dude")
+    db.set_equipped_skin("Alice", "Mask Dude")
+    db.close()
+
+    db2 = DatabaseManager()
+    db2.connect()
+
+    assert db2.get_equipped_skin("Alice") == "Mask Dude"

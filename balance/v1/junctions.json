@@ -22,7 +22,7 @@
       "category": "cause",
       "situation": "ปัญหารถติดและควันดำ — ค่ายรถยนต์ล็อบบี้ให้สร้างทางด่วนเพิ่ม",
       "left":  {"label": "อุดหนุนราคารถ EV (รถเท่าเดิม)", "meter_deltas": {"heat": -5, "capitalist_anger": -20}, "systemic": false},
-      "right": {"label": "เก็บภาษีรถติด → รถเมล์ฟรี", "meter_deltas": {"heat": -25, "capitalist_anger": 25}, "systemic": true}
+      "right": {"label": "เก็บภาษีรถติด -> รถเมล์ฟรี", "meter_deltas": {"heat": -25, "capitalist_anger": 25}, "systemic": true}
     },
     {
       "zone": 4,
@@ -63,8 +63,8 @@
       "zone": 9,
       "category": "solution",
       "situation": "แหล่งกักเก็บคาร์บอน (Carbon Sink) — ต้องการปอดของโลกคืน",
-      "left":  {"label": "เปิดเสรีพื้นที่สีเขียวให้เอกชน (สวน→ห้าง)", "meter_deltas": {"heat": 30, "capitalist_anger": -30}, "systemic": false},
-      "right": {"label": "เก็บภาษีที่ดินรกร้าง → ป่ากลางเมือง (NbS)", "meter_deltas": {"heat": -30, "capitalist_anger": 30}, "systemic": true}
+      "left":  {"label": "เปิดเสรีพื้นที่สีเขียวให้เอกชน (สวน->ห้าง)", "meter_deltas": {"heat": 30, "capitalist_anger": -30}, "systemic": false},
+      "right": {"label": "เก็บภาษีที่ดินรกร้าง -> ป่ากลางเมือง (NbS)", "meter_deltas": {"heat": -30, "capitalist_anger": 30}, "systemic": true}
     },
     {
       "zone": 10,
